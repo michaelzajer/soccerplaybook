@@ -10,11 +10,18 @@ import {
 import { firebaseConfig } from "./firebase-config.js";
 import { initBoard } from "./board.js";
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
+// Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
+const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
+const DEMO_KEY = "tacticsDemoTeam";
+
+let auth = null, db = null;
+if (!DEMO) {
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+}
 
 /* ---------------- view routing ---------------- */
 const views = {
@@ -60,9 +67,12 @@ const store = {
 
   save(partial) {
     this.data = { ...(this.data || {}), ...partial };
-    this.emitLocalOnly = true;
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
+      if (DEMO) {
+        try { localStorage.setItem(DEMO_KEY, JSON.stringify(this.data)); } catch (e) {}
+        return;
+      }
       if (!this.uid) return;
       setDoc(doc(db, "teams", this.uid),
         { ...this.data, updatedAt: serverTimestamp() }, { merge: true })
@@ -165,7 +175,18 @@ document.getElementById("setupDone").addEventListener("click", async () => {
   store.save({});
   enterBoard();
 });
-document.getElementById("setupSignOut").addEventListener("click", () => signOut(auth));
+document.getElementById("setupSignOut").addEventListener("click", () => doSignOut());
+
+function doSignOut() {
+  if (DEMO) {
+    if (confirm("Demo mode: signing out clears the team saved on this device. Continue?")) {
+      localStorage.removeItem(DEMO_KEY);
+      location.reload();
+    }
+    return;
+  }
+  signOut(auth);
+}
 
 /* ---------------- board wiring ---------------- */
 let boardStarted = false;
@@ -177,7 +198,8 @@ function enterBoard() {
 }
 
 document.getElementById("menuBtn").addEventListener("click", () => {
-  document.getElementById("menuEmail").textContent = auth.currentUser ? auth.currentUser.email : "";
+  document.getElementById("menuEmail").textContent =
+    DEMO ? "Demo mode — no account yet" : (auth.currentUser ? auth.currentUser.email : "");
   document.getElementById("menuPanel").classList.add("open");
 });
 document.getElementById("closeMenu").addEventListener("click", () =>
@@ -188,30 +210,44 @@ document.getElementById("menuPanel").addEventListener("click", e => {
 });
 document.getElementById("signOutBtn").addEventListener("click", () => {
   document.getElementById("menuPanel").classList.remove("open");
-  signOut(auth);
+  doSignOut();
 });
 
-/* ---------------- auth state ---------------- */
-onAuthStateChanged(auth, async user => {
-  if (!user) {
-    store.detach();
-    show("auth");
-    return;
-  }
-  // load or create team doc
-  let snap;
-  try { snap = await getDoc(doc(db, "teams", user.uid)); }
-  catch (e) { snap = null; }
-  store.attach(user.uid);
-  if (snap && snap.exists()) {
-    store.data = snap.data();
+/* ---------------- boot ---------------- */
+if (DEMO) {
+  setSyncStatus("Demo mode — data stays on this device");
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) {}
+  if (saved && saved.roster && saved.roster.length) {
+    store.data = saved;
     enterBoard();
   } else {
     setupRoster = []; setupNextId = 1;
     renderSetupRoster();
     show("setup");
   }
-});
+} else {
+  onAuthStateChanged(auth, async user => {
+    if (!user) {
+      store.detach();
+      show("auth");
+      return;
+    }
+    // load or create team doc
+    let snap;
+    try { snap = await getDoc(doc(db, "teams", user.uid)); }
+    catch (e) { snap = null; }
+    store.attach(user.uid);
+    if (snap && snap.exists()) {
+      store.data = snap.data();
+      enterBoard();
+    } else {
+      setupRoster = []; setupNextId = 1;
+      renderSetupRoster();
+      show("setup");
+    }
+  });
+}
 
 // keep header in sync with remote team-name changes
 store.subscribe(d => {
