@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#181d1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Tactics Board</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ AUTH VIEW ============ -->
+<section id="authView" class="view">
+  <div class="card">
+    <h1 class="brand">Tactics<span>Board</span></h1>
+    <p class="tag">Set your team. Run your plays.</p>
+    <form id="authForm">
+      <input id="authEmail" type="email" placeholder="Email" autocomplete="email" required>
+      <input id="authPass" type="password" placeholder="Password (6+ characters)" autocomplete="current-password" required minlength="6">
+      <div id="authError" class="err"></div>
+      <button type="submit" class="primary" id="authSubmit">Log in</button>
+    </form>
+    <button class="linkish" id="authSwap">New here? Create an account</button>
+  </div>
+</section>
+
+<!-- ============ TEAM SETUP VIEW ============ -->
+<section id="setupView" class="view">
+  <div class="card">
+    <h1 class="brand">Team setup</h1>
+    <p class="tag">Name your team and add your squad. You can change all of this later.</p>
+    <input id="teamName" type="text" placeholder="Team name" maxlength="40">
+    <div class="addRow">
+      <input id="suName" placeholder="Player name" autocomplete="off">
+      <input id="suPos" placeholder="POS" maxlength="3" autocomplete="off" list="posList">
+      <button type="button" id="suAdd">Add</button>
+    </div>
+    <div id="suList" class="rosterList"></div>
+    <div id="setupError" class="err"></div>
+    <button class="primary" id="setupDone">Start coaching</button>
+    <button class="linkish" id="setupSignOut">Sign out</button>
+  </div>
+</section>
+
+<!-- ============ BOARD VIEW ============ -->
+<section id="boardView" class="view">
+  <header>
+    <h1 id="hdrTeam">Tactics</h1>
+    <div class="spacer"></div>
+    <select id="squad">
+      <option value="11">11 v 11</option>
+      <option value="9">9 v 9</option>
+    </select>
+    <select id="formation"></select>
+    <button class="chip" id="squadBtn">Squad</button>
+    <button class="chip" id="oppToggle">Opp</button>
+    <button class="chip" id="resetBtn">Reset</button>
+    <button class="chip" id="menuBtn">⋯</button>
+  </header>
+
+  <main><div id="board">
+    <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
+    <canvas id="ink"></canvas>
+  </div></main>
+
+  <div id="bench"></div>
+  <div id="dragGhost"></div>
+
+  <footer>
+    <button class="mode on" data-mode="move"><span class="glyph">✥</span>Move</button>
+    <button class="mode" data-mode="run">
+      <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8"/><path d="M14 3 L20 8 L14 13"/></svg>Run
+    </button>
+    <button class="mode" data-mode="pass">
+      <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="3 3"/><path d="M14 3 L20 8 L14 13"/></svg>Pass
+    </button>
+    <button class="mode" data-mode="draw">
+      <svg class="icon" viewBox="0 0 24 16"><path d="M2 12 C8 2, 14 14, 22 4"/></svg>Draw
+    </button>
+    <button class="act" id="undoBtn"><span class="glyph">↩</span>Undo</button>
+    <button class="act" id="clearBtn"><span class="glyph">✕</span>Clear</button>
+  </footer>
+
+  <!-- squad sheet -->
+  <div id="squadPanel" class="overlay">
+    <div class="sheet">
+      <h2>My Squad</h2>
+      <input id="editTeamName" type="text" placeholder="Team name" maxlength="40">
+      <div class="addRow">
+        <input id="inName" placeholder="Player name" autocomplete="off">
+        <input id="inPos" placeholder="POS" maxlength="3" autocomplete="off" list="posList">
+        <button type="button" id="addPlayer">Add</button>
+      </div>
+      <div id="rosterList" class="rosterList"></div>
+      <div class="hint">Drag players from the bench onto the pitch, or pick a formation to auto-place them. Drag a player off the bottom of the pitch to bench them.</div>
+      <button class="close" id="closeSquad">Done</button>
+    </div>
+  </div>
+
+  <!-- menu sheet -->
+  <div id="menuPanel" class="overlay">
+    <div class="sheet">
+      <h2>Account</h2>
+      <div class="hint" id="menuEmail"></div>
+      <div class="hint" id="syncStatus"></div>
+      <button class="close" id="signOutBtn">Sign out</button>
+      <button class="close" id="closeMenu">Back</button>
+    </div>
+  </div>
+</section>
+
+<datalist id="posList">
+  <option value="GK"><option value="LB"><option value="CB"><option value="RB">
+  <option value="LWB"><option value="RWB"><option value="CDM"><option value="CM">
+  <option value="CAM"><option value="LM"><option value="RM"><option value="LW">
+  <option value="RW"><option value="ST"><option value="CF">
+</datalist>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

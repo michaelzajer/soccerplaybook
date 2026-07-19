@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tactics Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --frame:#181d1a;
+    --frame-2:#232a26;
+    --chalk:rgba(255,255,255,.92);
+    --grass-a:#2e7c4a;
+    --grass-b:#297042;
+    --team:#ffd400;
+    --team-ink:#161616;
+    --opp:#e8442f;
+    --opp-ink:#fff;
+    --accent:#ffd400;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--frame);
+    font-family:'Barlow Condensed',system-ui,sans-serif;
+    color:#e8e8e4;
+    display:flex;flex-direction:column;
+    height:100dvh;overflow:hidden;
+    user-select:none;-webkit-user-select:none;
+  }
+
+  /* ---------- top bar ---------- */
+  header{
+    display:flex;align-items:center;gap:6px;
+    padding:8px 12px;flex:0 0 auto;flex-wrap:wrap;
+  }
+  header h1{
+    font-size:18px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--accent);white-space:nowrap;
+  }
+  header .spacer{flex:1}
+  select,.chip{
+    background:var(--frame-2);color:#e8e8e4;border:1px solid #3a443e;
+    border-radius:8px;padding:6px 10px;font-family:inherit;font-size:15px;
+    font-weight:600;letter-spacing:.03em;appearance:none;
+  }
+  .chip{cursor:pointer}
+  .chip.on{background:var(--accent);color:#161616;border-color:var(--accent)}
+
+  /* ---------- board ---------- */
+  main{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;padding:0 8px}
+  #board{
+    position:relative;height:100%;max-height:100%;
+    aspect-ratio:68/105;max-width:100%;
+    border-radius:10px;overflow:hidden;
+    box-shadow:0 0 0 3px #101412, 0 8px 30px rgba(0,0,0,.5);
+    background:repeating-linear-gradient(
+      to bottom,
+      var(--grass-a) 0, var(--grass-a) 8.333%,
+      var(--grass-b) 8.333%, var(--grass-b) 16.666%
+    );
+    touch-action:none;
+  }
+  #lines{position:absolute;inset:0;width:100%;height:100%}
+  #ink{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ---------- tokens ---------- */
+  .tok{
+    position:absolute;display:flex;align-items:center;justify-content:center;
+    transform:translate(-50%,-50%);
+    width:clamp(26px,8.5%,44px);aspect-ratio:1;
+    border-radius:50%;
+    font-weight:700;font-size:clamp(11px,2vh,15px);
+    letter-spacing:.02em;
+    cursor:grab;touch-action:none;
+    transition:left .35s ease,top .35s ease;
+    box-shadow:0 2px 4px rgba(0,0,0,.45), inset 0 -3px 0 rgba(0,0,0,.22), inset 0 2px 2px rgba(255,255,255,.35);
+  }
+  .tok.dragging{transition:none;cursor:grabbing;z-index:30;box-shadow:0 6px 14px rgba(0,0,0,.5), inset 0 -3px 0 rgba(0,0,0,.22)}
+  .tok.team{background:var(--team);color:var(--team-ink)}
+  .tok.opp{background:var(--opp);color:var(--opp-ink)}
+  .tok .pname{
+    position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    margin-top:2px;font-size:clamp(9px,1.6vh,12px);font-weight:600;
+    color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.8);
+    white-space:nowrap;pointer-events:none;line-height:1;
+  }
+  .tok.ball{
+    width:clamp(18px,5.5%,30px);
+    background:radial-gradient(circle at 35% 30%,#fff 0 55%,#d9d9d9 100%);
+    color:#111;box-shadow:0 2px 4px rgba(0,0,0,.5);
+  }
+  .tok.ball::after{content:"";width:38%;height:38%;background:#111;border-radius:50%;
+    clip-path:polygon(50% 0,95% 35%,78% 90%,22% 90%,5% 35%)}
+  body.drawing .tok{pointer-events:none}
+
+  /* ---------- bench ---------- */
+  #bench{
+    flex:0 0 auto;display:flex;gap:8px;align-items:flex-start;
+    padding:6px 12px 2px;overflow-x:auto;min-height:0;
+    scrollbar-width:none;
+  }
+  #bench::-webkit-scrollbar{display:none}
+  #bench:empty{display:none}
+  .btok{
+    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;
+    cursor:grab;touch-action:none;
+  }
+  .btok .disc{
+    width:34px;height:34px;border-radius:50%;
+    background:var(--team);color:var(--team-ink);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;
+    box-shadow:0 2px 4px rgba(0,0,0,.45), inset 0 -3px 0 rgba(0,0,0,.22), inset 0 2px 2px rgba(255,255,255,.35);
+  }
+  .btok .bname{font-size:11px;font-weight:600;color:#cfcfc9;line-height:1;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dragGhost{
+    position:fixed;z-index:100;pointer-events:none;display:none;
+    width:38px;height:38px;border-radius:50%;transform:translate(-50%,-50%);
+    background:var(--team);color:var(--team-ink);
+    align-items:center;justify-content:center;font-weight:700;font-size:14px;
+    box-shadow:0 6px 14px rgba(0,0,0,.5);
+  }
+
+  /* ---------- bottom bar ---------- */
+  footer{
+    flex:0 0 auto;display:flex;gap:6px;align-items:center;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+  .mode,.act{
+    flex:1;background:var(--frame-2);border:1px solid #3a443e;color:#e8e8e4;
+    border-radius:10px;padding:10px 4px;font-family:inherit;
+    font-size:15px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    cursor:pointer;text-align:center;
+  }
+  .mode.on{background:var(--accent);color:#161616;border-color:var(--accent)}
+  .act{flex:0 0 auto;padding:10px 14px}
+  .mode .glyph,.act .glyph{display:block;font-size:16px;line-height:1;margin-bottom:2px;font-weight:400}
+  svg.icon{width:22px;height:14px;display:block;margin:0 auto 2px}
+  svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round}
+
+  /* ---------- squad panel ---------- */
+  #squadPanel{
+    position:fixed;inset:0;z-index:50;display:none;
+    background:rgba(0,0,0,.55);
+    align-items:flex-end;justify-content:center;
+  }
+  #squadPanel.open{display:flex}
+  .sheet{
+    background:var(--frame-2);width:100%;max-width:480px;
+    border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+    max-height:80dvh;display:flex;flex-direction:column;gap:10px;
+  }
+  .sheet h2{font-size:17px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+  .addRow{display:flex;gap:6px}
+  .addRow input{
+    background:var(--frame);border:1px solid #3a443e;border-radius:8px;
+    color:#e8e8e4;font-family:inherit;font-size:16px;padding:8px 10px;min-width:0;
+  }
+  #inName{flex:1}
+  #inPos{width:70px;text-transform:uppercase;text-align:center}
+  .addRow button{
+    background:var(--accent);color:#161616;border:none;border-radius:8px;
+    font-family:inherit;font-weight:700;font-size:15px;padding:8px 14px;cursor:pointer;
+  }
+  #rosterList{overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+  .rrow{
+    display:flex;align-items:center;gap:10px;
+    background:var(--frame);border-radius:8px;padding:7px 10px;
+  }
+  .rrow .rpos{
+    width:40px;height:26px;border-radius:6px;background:var(--team);color:#161616;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto;
+  }
+  .rrow .rname{flex:1;font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rrow .del{
+    background:none;border:none;color:#8a948e;font-size:18px;cursor:pointer;padding:2px 6px;font-family:inherit;
+  }
+  .sheet .close{
+    background:var(--frame);border:1px solid #3a443e;color:#e8e8e4;border-radius:10px;
+    padding:10px;font-family:inherit;font-size:15px;font-weight:600;
+    letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
+  }
+  .hint{font-size:13px;color:#8a948e;font-weight:500}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tactics</h1>
+  <div class="spacer"></div>
+  <select id="squad">
+    <option value="11">11 v 11</option>
+    <option value="9">9 v 9</option>
+  </select>
+  <select id="formation"></select>
+  <button class="chip" id="squadBtn">Squad</button>
+  <button class="chip" id="oppToggle">Opp</button>
+  <button class="chip" id="resetBtn">Reset</button>
+</header>
+
+<main><div id="board">
+  <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
+  <canvas id="ink"></canvas>
+</div></main>
+
+<div id="bench"></div>
+<div id="dragGhost"></div>
+
+<footer>
+  <button class="mode on" data-mode="move">
+    <span class="glyph">✥</span>Move
+  </button>
+  <button class="mode" data-mode="run">
+    <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8"/><path d="M14 3 L20 8 L14 13"/></svg>Run
+  </button>
+  <button class="mode" data-mode="pass">
+    <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="3 3"/><path d="M14 3 L20 8 L14 13"/></svg>Pass
+  </button>
+  <button class="mode" data-mode="draw">
+    <svg class="icon" viewBox="0 0 24 16"><path d="M2 12 C8 2, 14 14, 22 4"/></svg>Draw
+  </button>
+  <button class="act" id="undoBtn"><span class="glyph">↩</span>Undo</button>
+  <button class="act" id="clearBtn"><span class="glyph">✕</span>Clear</button>
+</footer>
+
+<!-- squad panel -->
+<div id="squadPanel">
+  <div class="sheet">
+    <h2>My Squad</h2>
+    <div class="addRow">
+      <input id="inName" placeholder="Player name" autocomplete="off">
+      <input id="inPos" placeholder="POS" maxlength="3" autocomplete="off" list="posList">
+      <button id="addPlayer">Add</button>
+    </div>
+    <datalist id="posList">
+      <option value="GK"><option value="LB"><option value="CB"><option value="RB">
+      <option value="LWB"><option value="RWB"><option value="CDM"><option value="CM">
+      <option value="CAM"><option value="LM"><option value="RM"><option value="LW">
+      <option value="RW"><option value="ST"><option value="CF">
+    </datalist>
+    <div id="rosterList"></div>
+    <div class="hint">Drag players from the bench onto the pitch, or pick a formation to auto-place them. Drag a player off the bottom of the pitch to bench them.</div>
+    <button class="close" id="closeSquad">Done</button>
+  </div>
+</div>
+
+<script>
+/* ---------------- pitch markings ---------------- */
+const NS='http://www.w3.org/2000/svg';
+const lines=document.getElementById('lines');
+function mark(el,attrs){const n=document.createElementNS(NS,el);for(const k in attrs)n.setAttribute(k,attrs[k]);n.setAttribute('stroke','rgba(255,255,255,.85)');n.setAttribute('stroke-width','0.45');n.setAttribute('fill','none');n.setAttribute('vector-effect','non-scaling-stroke');lines.appendChild(n);}
+mark('rect',{x:1,y:1,width:66,height:103,rx:.4});
+mark('line',{x1:1,y1:52.5,x2:67,y2:52.5});
+mark('circle',{cx:34,cy:52.5,r:9.15});
+mark('circle',{cx:34,cy:52.5,r:.6,fill:'rgba(255,255,255,.85)'});
+[[1,false],[104,true]].forEach(([edge,flip])=>{
+  const dir=flip?-1:1;
+  mark('rect',{x:34-20.16,y:flip?edge-16.5:edge,width:40.32,height:16.5});
+  mark('rect',{x:34-9.16,y:flip?edge-5.5:edge,width:18.32,height:5.5});
+  mark('circle',{cx:34,cy:edge+dir*11,r:.6,fill:'rgba(255,255,255,.85)'});
+  const y=edge+dir*16.5;
+  mark('path',{d:`M ${34-7.3} ${y} A 9.15 9.15 0 0 ${flip?1:0} ${34+7.3} ${y}`});
+});
+
+/* ---------------- formations: [x, y, position label] ---------------- */
+const FORMATIONS={
+  '11':{
+    '4-3-3':[[50,93,'GK'],[16,79,'LB'],[38,81,'CB'],[62,81,'CB'],[84,79,'RB'],[30,62,'CM'],[50,66,'CDM'],[70,62,'CM'],[18,42,'LW'],[50,38,'ST'],[82,42,'RW']],
+    '4-4-2':[[50,93,'GK'],[16,79,'LB'],[38,81,'CB'],[62,81,'CB'],[84,79,'RB'],[14,60,'LM'],[38,63,'CM'],[62,63,'CM'],[86,60,'RM'],[38,40,'ST'],[62,40,'ST']],
+    '4-2-3-1':[[50,93,'GK'],[16,79,'LB'],[38,81,'CB'],[62,81,'CB'],[84,79,'RB'],[38,66,'CDM'],[62,66,'CDM'],[20,50,'LW'],[50,47,'CAM'],[80,50,'RW'],[50,33,'ST']],
+    '3-5-2':[[50,93,'GK'],[28,81,'CB'],[50,83,'CB'],[72,81,'CB'],[10,60,'LWB'],[30,64,'CM'],[50,60,'CDM'],[70,64,'CM'],[90,60,'RWB'],[40,40,'ST'],[60,40,'ST']]
+  },
+  '9':{
+    '3-2-3':[[50,93,'GK'],[25,79,'LB'],[50,81,'CB'],[75,79,'RB'],[35,62,'CM'],[65,62,'CM'],[22,42,'LW'],[50,38,'ST'],[78,42,'RW']],
+    '3-3-2':[[50,93,'GK'],[25,79,'LB'],[50,81,'CB'],[75,79,'RB'],[25,60,'LM'],[50,63,'CM'],[75,60,'RM'],[38,40,'ST'],[62,40,'ST']],
+    '2-3-3':[[50,93,'GK'],[35,81,'CB'],[65,81,'CB'],[25,62,'LM'],[50,64,'CM'],[75,62,'RM'],[22,42,'LW'],[50,38,'ST'],[78,42,'RW']]
+  }
+};
+
+/* ---------------- state ---------------- */
+const board=document.getElementById('board');
+const bench=document.getElementById('bench');
+const ghost=document.getElementById('dragGhost');
+const squadSel=document.getElementById('squad');
+const formSel=document.getElementById('formation');
+const oppToggle=document.getElementById('oppToggle');
+
+let roster=[];            // [{id, name, pos}]
+let placed={};            // id -> {x, y}  (normalised, on pitch)
+let showOpp=false;
+let oppTokens=[];         // opp + ball live as DOM tokens
+let teamTokens={};        // id -> {el, x, y}
+let ballToken=null;
+let nextId=1;
+
+const STORE='tacticsBoardV2';
+function save(){
+  try{localStorage.setItem(STORE,JSON.stringify({
+    roster,placed,showOpp,nextId,
+    squad:squadSel.value,formation:formSel.value
+  }));}catch(e){}
+}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(STORE));
+    if(!d)return;
+    roster=d.roster||[];placed=d.placed||{};showOpp=!!d.showOpp;nextId=d.nextId||roster.length+1;
+    if(d.squad&&FORMATIONS[d.squad])squadSel.value=d.squad;
+    fillFormationOptions();
+    if(d.formation&&FORMATIONS[squadSel.value][d.formation])formSel.value=d.formation;
+  }catch(e){}
+}
+
+/* ---------------- token helpers ---------------- */
+function makeTok(cls,label,name){
+  const el=document.createElement('div');
+  el.className='tok '+cls;el.textContent=label;
+  if(name){const s=document.createElement('span');s.className='pname';s.textContent=name;el.appendChild(s);}
+  board.appendChild(el);
+  return el;
+}
+function setPos(el,x,y){el.style.left=(x*100)+'%';el.style.top=(y*100)+'%';}
+
+/* ---------------- team rendering ---------------- */
+function firstName(n){return n.trim().split(/\s+/)[0]||n;}
+function renderTeam(){
+  // remove tokens for players no longer placed / in roster
+  for(const id in teamTokens){
+    if(!placed[id]||!roster.find(p=>p.id==id)){teamTokens[id].el.remove();delete teamTokens[id];}
+  }
+  for(const p of roster){
+    const pos=placed[p.id];
+    if(!pos)continue;
+    let t=teamTokens[p.id];
+    if(!t){
+      const el=makeTok('team',p.pos,firstName(p.name));
+      t=teamTokens[p.id]={el};
+      enableTeamDrag(t,p.id);
+    }
+    t.el.childNodes[0].textContent=p.pos;
+    t.el.querySelector('.pname').textContent=firstName(p.name);
+    setPos(t.el,pos.x,pos.y);
+  }
+  renderBench();
+}
+function renderBench(){
+  bench.innerHTML='';
+  for(const p of roster){
+    if(placed[p.id])continue;
+    const b=document.createElement('div');
+    b.className='btok';b.dataset.id=p.id;
+    b.innerHTML=`<div class="disc">${p.pos}</div><div class="bname">${firstName(p.name)}</div>`;
+    enableBenchDrag(b,p);
+    bench.appendChild(b);
+  }
+}
+
+/* ---------------- opposition + ball ---------------- */
+function buildOpp(){
+  oppTokens.forEach(t=>t.remove());oppTokens=[];
+  const slots=FORMATIONS[squadSel.value][formSel.value];
+  for(const [x,y,pos] of slots){
+    const el=makeTok('opp',pos);
+    setPos(el,(100-x)/100,(100-y)/100);
+    el.style.display=showOpp?'flex':'none';
+    enableFreeDrag(el);
+    oppTokens.push(el);
+  }
+}
+function buildBall(reset){
+  if(!ballToken){ballToken=makeTok('ball','');enableFreeDrag(ballToken);}
+  if(reset)setPos(ballToken,.5,.5);
+}
+
+/* ---------------- formation auto-placement ---------------- */
+function applyFormation(){
+  const slots=FORMATIONS[squadSel.value][formSel.value];
+  placed={};
+  const pool=[...roster];
+  const assigned=new Array(slots.length).fill(null);
+  // pass 1: exact position match
+  slots.forEach((s,i)=>{
+    const idx=pool.findIndex(p=>p.pos===s[2]);
+    if(idx>-1)assigned[i]=pool.splice(idx,1)[0];
+  });
+  // pass 2: fill remaining slots in roster order
+  slots.forEach((s,i)=>{
+    if(!assigned[i]&&pool.length)assigned[i]=pool.shift();
+  });
+  slots.forEach((s,i)=>{
+    if(assigned[i])placed[assigned[i].id]={x:s[0]/100,y:s[1]/100};
+  });
+  renderTeam();buildOpp();save();
+}
+
+/* ---------------- dragging ---------------- */
+let mode='move';
+function clamp01(v){return Math.min(1,Math.max(0,v));}
+
+function enableFreeDrag(el){
+  el.addEventListener('pointerdown',e=>{
+    if(mode!=='move')return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+    const r=board.getBoundingClientRect();
+    const mv=ev=>setPos(el,clamp01((ev.clientX-r.left)/r.width),clamp01((ev.clientY-r.top)/r.height));
+    const up=()=>{
+      el.classList.remove('dragging');
+      el.removeEventListener('pointermove',mv);
+      el.removeEventListener('pointerup',up);
+      el.removeEventListener('pointercancel',up);
+    };
+    el.addEventListener('pointermove',mv);
+    el.addEventListener('pointerup',up);
+    el.addEventListener('pointercancel',up);
+  });
+}
+
+function enableTeamDrag(t,id){
+  t.el.addEventListener('pointerdown',e=>{
+    if(mode!=='move')return;
+    e.preventDefault();
+    t.el.setPointerCapture(e.pointerId);
+    t.el.classList.add('dragging');
+    const r=board.getBoundingClientRect();
+    let lastY=e.clientY;
+    const mv=ev=>{
+      lastY=ev.clientY;
+      const x=clamp01((ev.clientX-r.left)/r.width);
+      const y=clamp01((ev.clientY-r.top)/r.height);
+      placed[id]={x,y};setPos(t.el,x,y);
+    };
+    const up=()=>{
+      t.el.classList.remove('dragging');
+      t.el.removeEventListener('pointermove',mv);
+      t.el.removeEventListener('pointerup',up);
+      t.el.removeEventListener('pointercancel',up);
+      // dropped below the pitch -> back to bench
+      if(lastY>r.bottom+10){delete placed[id];renderTeam();}
+      save();
+    };
+    t.el.addEventListener('pointermove',mv);
+    t.el.addEventListener('pointerup',up);
+    t.el.addEventListener('pointercancel',up);
+  });
+}
+
+function enableBenchDrag(el,p){
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    ghost.textContent=p.pos;
+    ghost.style.display='flex';
+    ghost.style.left=e.clientX+'px';ghost.style.top=e.clientY+'px';
+    const mv=ev=>{ghost.style.left=ev.clientX+'px';ghost.style.top=ev.clientY+'px';};
+    const up=ev=>{
+      ghost.style.display='none';
+      el.removeEventListener('pointermove',mv);
+      el.removeEventListener('pointerup',up);
+      el.removeEventListener('pointercancel',up);
+      const r=board.getBoundingClientRect();
+      if(ev.clientX>=r.left&&ev.clientX<=r.right&&ev.clientY>=r.top&&ev.clientY<=r.bottom){
+        placed[p.id]={x:clamp01((ev.clientX-r.left)/r.width),y:clamp01((ev.clientY-r.top)/r.height)};
+        renderTeam();save();
+      }
+    };
+    el.addEventListener('pointermove',mv);
+    el.addEventListener('pointerup',up);
+    el.addEventListener('pointercancel',up);
+  });
+}
+
+/* ---------------- drawing ---------------- */
+const canvas=document.getElementById('ink');
+const ctx=canvas.getContext('2d');
+let strokes=[];
+let current=null;
+
+function resizeCanvas(){
+  const r=board.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=r.width*dpr;canvas.height=r.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  redraw();
+}
+function redraw(){
+  const r=board.getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height);
+  for(const s of strokes)paint(s,r);
+  if(current)paint(current,r);
+}
+function paint(s,r){
+  const pts=s.pts;if(pts.length<2)return;
+  ctx.lineWidth=3;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.strokeStyle='rgba(255,255,255,.95)';
+  ctx.setLineDash(s.mode==='pass'?[9,8]:[]);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0]*r.width,pts[0][1]*r.height);
+  for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0]*r.width,pts[i][1]*r.height);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if(s.mode==='run'||s.mode==='pass'){
+    const n=pts.length;
+    let a=pts[Math.max(0,n-6)],b=pts[n-1];
+    const bx=b[0]*r.width,by=b[1]*r.height;
+    const ang=Math.atan2(by-a[1]*r.height,bx-a[0]*r.width);
+    const L=12;
+    ctx.beginPath();
+    ctx.moveTo(bx-L*Math.cos(ang-0.5),by-L*Math.sin(ang-0.5));
+    ctx.lineTo(bx,by);
+    ctx.lineTo(bx-L*Math.cos(ang+0.5),by-L*Math.sin(ang+0.5));
+    ctx.stroke();
+  }
+}
+board.addEventListener('pointerdown',e=>{
+  if(mode==='move')return;
+  e.preventDefault();
+  board.setPointerCapture(e.pointerId);
+  const r=board.getBoundingClientRect();
+  current={mode,pts:[[ (e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height ]]};
+  const mv=ev=>{
+    current.pts.push([(ev.clientX-r.left)/r.width,(ev.clientY-r.top)/r.height]);
+    redraw();
+  };
+  const up=()=>{
+    if(current&&current.pts.length>1)strokes.push(current);
+    current=null;redraw();
+    board.removeEventListener('pointermove',mv);
+    board.removeEventListener('pointerup',up);
+    board.removeEventListener('pointercancel',up);
+  };
+  board.addEventListener('pointermove',mv);
+  board.addEventListener('pointerup',up);
+  board.addEventListener('pointercancel',up);
+});
+
+/* ---------------- squad panel ---------------- */
+const panel=document.getElementById('squadPanel');
+const inName=document.getElementById('inName');
+const inPos=document.getElementById('inPos');
+function renderRoster(){
+  const list=document.getElementById('rosterList');
+  list.innerHTML='';
+  for(const p of roster){
+    const row=document.createElement('div');
+    row.className='rrow';
+    row.innerHTML=`<div class="rpos">${p.pos}</div><div class="rname">${p.name}</div><button class="del" aria-label="Remove">✕</button>`;
+    row.querySelector('.del').addEventListener('click',()=>{
+      roster=roster.filter(x=>x.id!==p.id);
+      delete placed[p.id];
+      renderRoster();renderTeam();save();
+    });
+    list.appendChild(row);
+  }
+}
+document.getElementById('addPlayer').addEventListener('click',()=>{
+  const name=inName.value.trim();
+  const pos=(inPos.value.trim()||'?').toUpperCase();
+  if(!name)return;
+  roster.push({id:nextId++,name,pos});
+  inName.value='';inPos.value='';inName.focus();
+  renderRoster();renderBench();save();
+});
+inPos.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addPlayer').click();});
+inName.addEventListener('keydown',e=>{if(e.key==='Enter')inPos.focus();});
+document.getElementById('squadBtn').addEventListener('click',()=>{renderRoster();panel.classList.add('open');});
+document.getElementById('closeSquad').addEventListener('click',()=>panel.classList.remove('open'));
+panel.addEventListener('click',e=>{if(e.target===panel)panel.classList.remove('open');});
+
+/* ---------------- controls ---------------- */
+document.querySelectorAll('.mode').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.mode').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    mode=b.dataset.mode;
+    document.body.classList.toggle('drawing',mode!=='move');
+  });
+});
+document.getElementById('undoBtn').addEventListener('click',()=>{strokes.pop();redraw();});
+document.getElementById('clearBtn').addEventListener('click',()=>{strokes=[];redraw();});
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  strokes=[];redraw();applyFormation();buildBall(true);
+});
+oppToggle.addEventListener('click',()=>{
+  showOpp=!showOpp;
+  oppToggle.classList.toggle('on',showOpp);
+  oppTokens.forEach(el=>el.style.display=showOpp?'flex':'none');
+  save();
+});
+function fillFormationOptions(){
+  const names=Object.keys(FORMATIONS[squadSel.value]);
+  formSel.innerHTML=names.map(n=>`<option>${n}</option>`).join('');
+}
+squadSel.addEventListener('change',()=>{fillFormationOptions();applyFormation();buildBall(true);});
+formSel.addEventListener('change',()=>{applyFormation();});
+window.addEventListener('resize',resizeCanvas);
+
+/* ---------------- init ---------------- */
+fillFormationOptions();
+load();
+oppToggle.classList.toggle('on',showOpp);
+renderTeam();
+buildOpp();
+buildBall(true);
+resizeCanvas();
+// first run with no roster: prompt squad setup
+if(!roster.length)document.getElementById('squadBtn').classList.add('on');
+</script>
+</body>
+</html>
