@@ -7,12 +7,15 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=16";
-import { initBoard } from "./board.js?v=16";
+import { firebaseConfig } from "./firebase-config.js?v=17";
+import { initBoard } from "./board.js?v=17";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
 const DEMO_KEY = "tacticsDemoTeam";
+// Guest mode: user chose "try without an account" -> same device-only storage.
+let guest = false;
+const isLocal = () => DEMO || guest;
 
 let auth = null, db = null;
 if (!DEMO) {
@@ -69,7 +72,7 @@ const store = {
     this.data = { ...(this.data || {}), ...partial };
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
-      if (DEMO) {
+      if (isLocal()) {
         try { localStorage.setItem(DEMO_KEY, JSON.stringify(this.data)); } catch (e) {}
         return;
       }
@@ -178,6 +181,13 @@ document.getElementById("setupDone").addEventListener("click", async () => {
 document.getElementById("setupSignOut").addEventListener("click", () => doSignOut());
 
 function doSignOut() {
+  if (guest) {
+    // back to the front door; guest data stays on the device
+    guest = false;
+    store.data = null;
+    show("auth");
+    return;
+  }
   if (DEMO) {
     if (confirm("Demo mode: signing out clears the team saved on this device. Continue?")) {
       localStorage.removeItem(DEMO_KEY);
@@ -199,7 +209,10 @@ function enterBoard() {
 
 document.getElementById("menuBtn").addEventListener("click", () => {
   document.getElementById("menuEmail").textContent =
-    DEMO ? "Demo mode — no account yet" : (auth.currentUser ? auth.currentUser.email : "");
+    guest ? "Guest — data saved on this device only"
+    : DEMO ? "Demo mode — no account yet"
+    : (auth.currentUser ? auth.currentUser.email : "");
+  document.getElementById("signOutBtn").textContent = guest ? "Sign up / Log in" : "Sign out";
   document.getElementById("menuPanel").classList.add("open");
 });
 document.getElementById("closeMenu").addEventListener("click", () =>
@@ -212,6 +225,28 @@ document.getElementById("signOutBtn").addEventListener("click", () => {
   document.getElementById("menuPanel").classList.remove("open");
   doSignOut();
 });
+
+/* ---------------- guest mode ---------------- */
+function loadLocalTeam() {
+  try { return JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) { return null; }
+}
+function enterGuest() {
+  guest = true;
+  setSyncStatus("Guest mode — data stays on this device");
+  const saved = loadLocalTeam();
+  if (saved && saved.roster && saved.roster.length) {
+    store.data = saved;
+    enterBoard();
+  } else {
+    setupRoster = []; setupNextId = 1;
+    renderSetupRoster();
+    show("setup");
+  }
+  // show the guest nudges in the squad and drills sheets
+  document.querySelectorAll(".guestNote").forEach(el => el.hidden = false);
+}
+const guestBtn = document.getElementById("guestBtn");
+if (guestBtn) guestBtn.addEventListener("click", enterGuest);
 
 /* ---------------- boot ---------------- */
 if (DEMO) {
@@ -230,9 +265,11 @@ if (DEMO) {
   onAuthStateChanged(auth, async user => {
     if (!user) {
       store.detach();
-      show("auth");
+      if (!guest) show("auth");
       return;
     }
+    guest = false;
+    document.querySelectorAll(".guestNote").forEach(el => el.hidden = true);
     // load or create team doc
     let snap;
     try { snap = await getDoc(doc(db, "teams", user.uid)); }
@@ -242,6 +279,15 @@ if (DEMO) {
       store.data = snap.data();
       enterBoard();
     } else {
+      // brand-new account: migrate any guest team saved on this device
+      const local = loadLocalTeam();
+      if (local && local.roster && local.roster.length) {
+        store.data = local;
+        store.save({});                       // now writes to Firestore
+        try { localStorage.removeItem(DEMO_KEY); } catch (e) {}
+        enterBoard();
+        return;
+      }
       setupRoster = []; setupNextId = 1;
       renderSetupRoster();
       show("setup");

@@ -27,6 +27,7 @@
       <button type="submit" class="primary" id="authSubmit">Log in</button>
     </form>
     <button class="linkish" id="authSwap">New here? Create an account</button>
+    <button class="linkish" id="guestBtn">Try it without an account →</button>
   </div>
 </section>
 
@@ -124,6 +125,7 @@
         <button type="button" id="addPlayer">Add</button>
       </div>
       <div id="rosterList" class="rosterList"></div>
+      <div class="hint guestNote" id="squadGuestNote" hidden>Guest mode: your squad only lives on this device. Create a free account to keep it and use it anywhere.</div>
       <div class="hint">Pick a formation to auto-place players. Drag between pitch and bench to sub.</div>
       <button class="close" id="closeSquad">Done</button>
     </div>
@@ -138,6 +140,7 @@
         <button type="button" id="saveDrillBtn">Save</button>
       </div>
       <div id="drillList" class="rosterList"></div>
+      <div class="hint guestNote" id="drillGuestNote" hidden>Guest mode: drills only live on this device. Create a free account to keep them and use them anywhere.</div>
       <div class="hint">Save saves what is on the pitch now. Tap a drill to load it.</div>
       <button class="close" id="closeDrills">Done</button>
     </div>
@@ -162,6 +165,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=16"></script>
+<script type="module" src="js/app.js?v=17"></script>
 </body>
 </html>
