@@ -53,6 +53,13 @@
   <header>
     <h1 id="hdrTeam">Tactics</h1>
     <div class="spacer"></div>
+    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
+  </header>
+  <div id="controls">
+    <div class="seg" id="viewSeg">
+      <button class="on" data-view="team">Team</button>
+      <button data-view="drills">Drills</button>
+    </div>
     <select id="squad">
       <option value="11">11 v 11</option>
       <option value="9">9 v 9</option>
@@ -60,16 +67,32 @@
     <select id="formation"></select>
     <button class="chip" id="squadBtn">Squad</button>
     <button class="chip" id="oppToggle">Opp</button>
+    <button class="chip" id="drillLibBtn">Library</button>
     <button class="chip" id="resetBtn">Reset</button>
-    <button class="chip" id="menuBtn">⋯</button>
-  </header>
+  </div>
 
   <main><div id="board">
     <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
     <canvas id="ink"></canvas>
   </div></main>
 
-  <div id="bench"></div>
+  <div id="benchZone">
+    <span class="benchLabel">Bench</span>
+    <div id="bench"></div>
+  </div>
+  <div id="drillTray">
+    <span class="benchLabel">Kit</span>
+    <div class="trayItems">
+      <div class="titem" data-kind="cone"><div class="tico"><div class="cone"></div></div><span>Cone</span></div>
+      <div class="titem" data-kind="disc"><div class="tico"><div class="disc"></div></div><span>Marker</span></div>
+      <div class="titem" data-kind="pole"><div class="tico"><div class="pole"></div></div><span>Pole</span></div>
+      <div class="titem" data-kind="dball"><div class="tico"><div class="dball"></div></div><span>Ball</span></div>
+      <div class="titem" data-kind="att"><div class="tico"><div class="att"></div></div><span>Player</span></div>
+      <div class="titem" data-kind="def"><div class="tico"><div class="def"></div></div><span>Opp</span></div>
+      <div class="titem" data-kind="goal"><div class="tico"><div class="goal"></div></div><span>Goal</span></div>
+      <div class="titem" data-kind="mini"><div class="tico"><div class="mini"></div></div><span>Mini goal</span></div>
+    </div>
+  </div>
   <div id="dragGhost"></div>
 
   <footer>
@@ -79,6 +102,9 @@
     </button>
     <button class="mode" data-mode="pass">
       <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="3 3"/><path d="M14 3 L20 8 L14 13"/></svg>Pass
+    </button>
+    <button class="mode" data-mode="dribble">
+      <svg class="icon" viewBox="0 0 24 16"><path d="M2 8 q2 -5 4 0 t4 0 t4 0 t4 0"/><path d="M15 3 L21 8 L15 13"/></svg>Dribble
     </button>
     <button class="mode" data-mode="draw">
       <svg class="icon" viewBox="0 0 24 16"><path d="M2 12 C8 2, 14 14, 22 4"/></svg>Draw
@@ -98,8 +124,22 @@
         <button type="button" id="addPlayer">Add</button>
       </div>
       <div id="rosterList" class="rosterList"></div>
-      <div class="hint">Drag players from the bench onto the pitch, or pick a formation to auto-place them. Drag a player off the bottom of the pitch to bench them.</div>
+      <div class="hint">Pick a formation to auto-place players. Drag between pitch and bench to sub.</div>
       <button class="close" id="closeSquad">Done</button>
+    </div>
+  </div>
+
+  <!-- drills sheet -->
+  <div id="drillPanel" class="overlay">
+    <div class="sheet">
+      <h2>Drills</h2>
+      <div class="addRow">
+        <input id="drillName" placeholder="Drill name" maxlength="40" autocomplete="off">
+        <button type="button" id="saveDrillBtn">Save</button>
+      </div>
+      <div id="drillList" class="rosterList"></div>
+      <div class="hint">Save saves what is on the pitch now. Tap a drill to load it.</div>
+      <button class="close" id="closeDrills">Done</button>
     </div>
   </div>
 
@@ -122,6 +162,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=15"></script>
 </body>
 </html>

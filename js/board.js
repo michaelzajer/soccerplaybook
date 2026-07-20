@@ -199,20 +199,27 @@ export function initBoard(store) {
       t.el.setPointerCapture(e.pointerId);
       t.el.classList.add("dragging"); dragging = true;
       const r = board.getBoundingClientRect();
-      let lastY = e.clientY;
+      const benchZone = document.getElementById("benchZone");
+      let lastX = e.clientX, lastY = e.clientY;
       const b = bstate();
       const mv = ev => {
-        lastY = ev.clientY;
+        lastX = ev.clientX; lastY = ev.clientY;
         const x = clamp01((ev.clientX - r.left) / r.width);
         const y = clamp01((ev.clientY - r.top) / r.height);
         b.placed[id] = { x, y }; setPos(t.el, x, y);
+        const bz = benchZone.getBoundingClientRect();
+        benchZone.classList.toggle("dropTarget",
+          lastX >= bz.left && lastX <= bz.right && lastY >= bz.top && lastY <= bz.bottom);
       };
       const up = () => {
         t.el.classList.remove("dragging"); dragging = false;
         t.el.removeEventListener("pointermove", mv);
         t.el.removeEventListener("pointerup", up);
         t.el.removeEventListener("pointercancel", up);
-        if (lastY > r.bottom + 10) { delete b.placed[id]; renderTeam(); }
+        benchZone.classList.remove("dropTarget");
+        const bz = benchZone.getBoundingClientRect();
+        const overBench = lastX >= bz.left && lastX <= bz.right && lastY >= bz.top && lastY <= bz.bottom;
+        if (overBench || lastY > r.bottom + 10) { delete b.placed[id]; renderTeam(); }
         saveBoard();
       };
       t.el.addEventListener("pointermove", mv);
@@ -236,10 +243,25 @@ export function initBoard(store) {
         el.removeEventListener("pointercancel", up);
         const r = board.getBoundingClientRect();
         if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-          bstate().placed[p.id] = {
-            x: clamp01((ev.clientX - r.left) / r.width),
-            y: clamp01((ev.clientY - r.top) / r.height)
-          };
+          const b = bstate();
+          const x = clamp01((ev.clientX - r.left) / r.width);
+          const y = clamp01((ev.clientY - r.top) / r.height);
+          // dropped on an on-pitch teammate? substitute: sub takes their spot, they go to the bench
+          let swapId = null, best = 28; // px radius
+          for (const q of roster()) {
+            const pos = b.placed[q.id];
+            if (!pos) continue;
+            const dx = pos.x * r.width - (ev.clientX - r.left);
+            const dy = pos.y * r.height - (ev.clientY - r.top);
+            const d = Math.hypot(dx, dy);
+            if (d < best) { best = d; swapId = q.id; }
+          }
+          if (swapId !== null) {
+            b.placed[p.id] = { ...b.placed[swapId] };
+            delete b.placed[swapId];
+          } else {
+            b.placed[p.id] = { x, y };
+          }
           renderTeam(); saveBoard();
         }
       };
@@ -260,6 +282,13 @@ export function initBoard(store) {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = r.width * dpr; canvas.height = r.height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // keep bench and drill tray no wider than the pitch, centred beneath it
+    if (r.width > 0) {
+      for (const id of ["benchZone", "drillTray"]) {
+        const el = document.getElementById(id);
+        if (el) el.style.width = Math.round(r.width) + "px";
+      }
+    }
     redraw();
   }
   function redraw() {
@@ -268,17 +297,48 @@ export function initBoard(store) {
     for (const s of strokes) paint(s, r);
     if (current) paint(current, r);
   }
+  // resample a stroke into a wavy line (dribble notation)
+  function wavyPoints(pts, r) {
+    const P = pts.map(p => [p[0] * r.width, p[1] * r.height]);
+    const amp = 3.2, wavelength = 14, step = 3;
+    const out = [P[0]];
+    let dist = 0;
+    for (let i = 1; i < P.length; i++) {
+      const [x0, y0] = P[i - 1], [x1, y1] = P[i];
+      const seg = Math.hypot(x1 - x0, y1 - y0);
+      if (!seg) continue;
+      const n = Math.max(1, Math.floor(seg / step));
+      const perp = Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2;
+      for (let j = 1; j <= n; j++) {
+        const t = j / n;
+        const d = dist + seg * t;
+        const off = amp * Math.sin((d / wavelength) * 2 * Math.PI);
+        out.push([
+          x0 + (x1 - x0) * t + off * Math.cos(perp),
+          y0 + (y1 - y0) * t + off * Math.sin(perp)
+        ]);
+      }
+      dist += seg;
+    }
+    return out;
+  }
   function paint(s, r) {
     const pts = s.pts; if (pts.length < 2) return;
     ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.strokeStyle = "rgba(255,255,255,.95)";
     ctx.setLineDash(s.mode === "pass" ? [9, 8] : []);
     ctx.beginPath();
-    ctx.moveTo(pts[0][0] * r.width, pts[0][1] * r.height);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] * r.width, pts[i][1] * r.height);
+    if (s.mode === "dribble") {
+      const w = wavyPoints(pts, r);
+      ctx.moveTo(w[0][0], w[0][1]);
+      for (let i = 1; i < w.length; i++) ctx.lineTo(w[i][0], w[i][1]);
+    } else {
+      ctx.moveTo(pts[0][0] * r.width, pts[0][1] * r.height);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] * r.width, pts[i][1] * r.height);
+    }
     ctx.stroke();
     ctx.setLineDash([]);
-    if (s.mode === "run" || s.mode === "pass") {
+    if (s.mode === "run" || s.mode === "pass" || s.mode === "dribble") {
       const n = pts.length;
       const a = pts[Math.max(0, n - 6)], bp = pts[n - 1];
       const bx = bp[0] * r.width, by = bp[1] * r.height;
@@ -382,6 +442,7 @@ export function initBoard(store) {
   document.getElementById("undoBtn").addEventListener("click", () => { strokes.pop(); redraw(); });
   document.getElementById("clearBtn").addEventListener("click", () => { strokes = []; redraw(); });
   document.getElementById("resetBtn").addEventListener("click", () => {
+    if (drillsMode) { clearDrillItems(); strokes = []; redraw(); return; }
     strokes = []; redraw(); applyFormation(); buildBall(true);
   });
   oppToggle.addEventListener("click", () => {
@@ -407,6 +468,205 @@ export function initBoard(store) {
     applyFormation();
   });
   window.addEventListener("resize", resizeCanvas);
+
+  /* ---------------- drills mode ---------------- */
+  let drillsMode = false;
+  let drillItems = [];        // {kind, x, y, el}
+  let teamStrokes = [];       // parked while in drills mode
+  let drillStrokes = [];      // parked while in team mode
+  const drillTray = document.getElementById("drillTray");
+
+  function setDrillsMode(on) {
+    if (on === drillsMode) return;
+    drillsMode = on;
+    document.body.classList.toggle("drillsMode", on);
+    document.querySelectorAll("#viewSeg button").forEach(b =>
+      b.classList.toggle("on", (b.dataset.view === "drills") === on));
+    if (on) { teamStrokes = strokes; strokes = drillStrokes; }
+    else { drillStrokes = strokes; strokes = teamStrokes; }
+    redraw();
+    if (on) requestAnimationFrame(updateTrayFades);
+  }
+  document.querySelectorAll("#viewSeg button").forEach(b =>
+    b.addEventListener("click", () => setDrillsMode(b.dataset.view === "drills")));
+
+  // edge fade hints on the kit tray when items are off-screen
+  const trayScroller = drillTray.querySelector(".trayItems");
+  function updateTrayFades() {
+    drillTray.classList.toggle("fadeL", trayScroller.scrollLeft > 4);
+    drillTray.classList.toggle("fadeR",
+      trayScroller.scrollLeft + trayScroller.clientWidth < trayScroller.scrollWidth - 4);
+  }
+  trayScroller.addEventListener("scroll", updateTrayFades);
+  window.addEventListener("resize", () => requestAnimationFrame(updateTrayFades));
+
+  function shapeEl(kind) {
+    const s = document.createElement("div");
+    s.className = kind; s.style.pointerEvents = "none";
+    return s;
+  }
+  function addDrillItem(kind, x, y) {
+    const el = document.createElement("div");
+    el.className = "ditem d-" + kind;
+    el.appendChild(shapeEl(kind));
+    board.appendChild(el);
+    setPos(el, x, y);
+    const item = { kind, x, y, el };
+    drillItems.push(item);
+    enableDrillDrag(item);
+    return item;
+  }
+  function clearDrillItems() {
+    drillItems.forEach(i => i.el.remove());
+    drillItems = [];
+  }
+  function enableDrillDrag(item) {
+    item.el.addEventListener("pointerdown", e => {
+      if (mode !== "move") return;
+      e.preventDefault();
+      item.el.setPointerCapture(e.pointerId);
+      item.el.classList.add("dragging"); dragging = true;
+      const r = board.getBoundingClientRect();
+      let lastX = e.clientX, lastY = e.clientY;
+      const mv = ev => {
+        lastX = ev.clientX; lastY = ev.clientY;
+        item.x = clamp01((ev.clientX - r.left) / r.width);
+        item.y = clamp01((ev.clientY - r.top) / r.height);
+        setPos(item.el, item.x, item.y);
+        const tz = drillTray.getBoundingClientRect();
+        drillTray.classList.toggle("dropTarget",
+          lastX >= tz.left && lastX <= tz.right && lastY >= tz.top && lastY <= tz.bottom);
+      };
+      const up = () => {
+        item.el.classList.remove("dragging"); dragging = false;
+        item.el.removeEventListener("pointermove", mv);
+        item.el.removeEventListener("pointerup", up);
+        item.el.removeEventListener("pointercancel", up);
+        drillTray.classList.remove("dropTarget");
+        const tz = drillTray.getBoundingClientRect();
+        if ((lastX >= tz.left && lastX <= tz.right && lastY >= tz.top && lastY <= tz.bottom)
+            || lastY > r.bottom + 10) {
+          item.el.remove();
+          drillItems = drillItems.filter(i => i !== item);
+        }
+      };
+      item.el.addEventListener("pointermove", mv);
+      item.el.addEventListener("pointerup", up);
+      item.el.addEventListener("pointercancel", up);
+    });
+  }
+
+  // drag new pieces from the tray onto the pitch;
+  // a mostly-horizontal drag scrolls the tray instead (mouse and touch)
+  document.querySelectorAll(".titem").forEach(el => {
+    el.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      const kind = el.dataset.kind;
+      const sx = e.clientX, sy = e.clientY;
+      const startScroll = trayScroller.scrollLeft;
+      let gesture = null; // "drag" | "scroll"
+      const startGhost = () => {
+        ghost.textContent = "";
+        ghost.style.background = "transparent";
+        ghost.style.boxShadow = "none";
+        ghost.appendChild(shapeEl(kind));
+        ghost.style.display = "flex";
+      };
+      const mv = ev => {
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if (!gesture) {
+          if (Math.hypot(dx, dy) < 6) return;
+          gesture = Math.abs(dx) > Math.abs(dy) ? "scroll" : "drag";
+          if (gesture === "drag") startGhost();
+        }
+        if (gesture === "scroll") {
+          trayScroller.scrollLeft = startScroll - dx;
+        } else {
+          ghost.style.left = ev.clientX + "px"; ghost.style.top = ev.clientY + "px";
+        }
+      };
+      const up = ev => {
+        ghost.style.display = "none";
+        ghost.innerHTML = "";
+        ghost.style.background = ""; ghost.style.boxShadow = "";
+        el.removeEventListener("pointermove", mv);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("pointercancel", up);
+        if (gesture !== "drag") return;
+        const r = board.getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+          addDrillItem(kind,
+            clamp01((ev.clientX - r.left) / r.width),
+            clamp01((ev.clientY - r.top) / r.height));
+        }
+      };
+      el.addEventListener("pointermove", mv);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+    });
+  });
+
+  /* ---------------- drill library ---------------- */
+  // Firestore cannot store nested arrays, so stroke points are flattened on save.
+  const flatStroke = s => ({ mode: s.mode, pts: s.pts.flat() });
+  function unflatStroke(s) {
+    const pts = [];
+    for (let i = 0; i + 1 < s.pts.length; i += 2) pts.push([s.pts[i], s.pts[i + 1]]);
+    return { mode: s.mode, pts };
+  }
+  const drillPanel = document.getElementById("drillPanel");
+  const drillNameIn = document.getElementById("drillName");
+
+  function drills() { return (store.data && store.data.drills) || []; }
+  function renderDrillList() {
+    const list = document.getElementById("drillList");
+    list.innerHTML = "";
+    for (const d of drills()) {
+      const row = document.createElement("div");
+      row.className = "rrow";
+      const rn = document.createElement("div");
+      rn.className = "rname"; rn.textContent = d.name;
+      const del = document.createElement("button");
+      del.className = "del"; del.textContent = "✕";
+      del.setAttribute("aria-label", "Delete drill");
+      del.addEventListener("click", ev => {
+        ev.stopPropagation();
+        store.data.drills = drills().filter(x => x.id !== d.id);
+        store.save({ drills: store.data.drills });
+        renderDrillList();
+      });
+      row.append(rn, del);
+      row.addEventListener("click", () => { loadDrill(d); drillPanel.classList.remove("open"); });
+      list.appendChild(row);
+    }
+  }
+  function loadDrill(d) {
+    setDrillsMode(true);
+    clearDrillItems();
+    (d.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y));
+    strokes = (d.strokes || []).map(unflatStroke);
+    redraw();
+  }
+  document.getElementById("saveDrillBtn").addEventListener("click", () => {
+    const name = drillNameIn.value.trim() || ("Drill " + (drills().length + 1));
+    const d = {
+      id: Date.now(),
+      name,
+      items: drillItems.map(({ kind, x, y }) => ({ kind, x, y })),
+      strokes: strokes.map(flatStroke)
+    };
+    store.data.drills = [...drills(), d];
+    store.save({ drills: store.data.drills });
+    drillNameIn.value = "";
+    renderDrillList();
+  });
+  document.getElementById("drillLibBtn").addEventListener("click", () => {
+    renderDrillList();
+    drillPanel.classList.add("open");
+  });
+  document.getElementById("closeDrills").addEventListener("click", () => drillPanel.classList.remove("open"));
+  drillPanel.addEventListener("click", e => { if (e.target === drillPanel) drillPanel.classList.remove("open"); });
 
   /* ---------------- remote updates ---------------- */
   store.subscribe(() => {

@@ -7,8 +7,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
-import { initBoard } from "./board.js";
+import { firebaseConfig } from "./firebase-config.js?v=15";
+import { initBoard } from "./board.js?v=15";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
