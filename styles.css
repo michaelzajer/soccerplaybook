@@ -101,23 +101,42 @@ header .spacer{flex:1}
 #controls{
   display:flex;gap:6px;align-items:center;
   padding:8px 16px;flex:0 0 auto;
-  overflow-x:auto;scrollbar-width:none;
 }
-#controls::-webkit-scrollbar{display:none}
+#controls .spacer{flex:1}
 
 select,.chip{
   flex:0 0 auto;
   background:var(--surface);color:var(--ink);border:1px solid var(--line);
-  border-radius:var(--r-pill);padding:6px 13px;font-family:inherit;font-size:var(--t-sm);
-  font-weight:600;letter-spacing:.04em;appearance:none;height:31px;line-height:1;
+  border-radius:var(--r-pill);padding:4px 11px;font-family:inherit;font-size:12px;
+  font-weight:600;letter-spacing:.04em;appearance:none;height:28px;line-height:1;
 }
 select:focus{outline:none;border-color:var(--line-strong)}
-.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;flex:0 0 auto;height:31px}
-.seg button{border:none;background:transparent;color:var(--ink-dim);border-radius:var(--r-pill);padding:0 13px;font-size:var(--t-sm);font-weight:600;letter-spacing:.04em;line-height:1}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;flex:0 0 auto;height:28px}
+.seg button{border:none;background:transparent;color:var(--ink-dim);border-radius:var(--r-pill);padding:0 11px;font-size:12px;font-weight:600;letter-spacing:.04em;line-height:1}
 .seg button.on{background:var(--accent);color:var(--team-ink)}
 .chip:hover{border-color:var(--line-strong)}
 .chip.on{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
-.iconChip{width:31px;padding:0;text-align:center;font-size:var(--t-md)}
+.iconChip{width:28px;padding:0;text-align:center;font-size:13px}
+
+/* ---------- board dropdown menu ---------- */
+.dropdown{position:relative;flex:0 0 auto}
+.menuList{
+  position:absolute;right:0;top:34px;z-index:45;
+  display:none;flex-direction:column;gap:2px;
+  min-width:170px;padding:6px;
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-md);
+  box-shadow:0 14px 40px rgba(0,0,0,.5);
+}
+.menuList.open{display:flex;animation:fadeIn .12s ease}
+.menuList button{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:none;border:none;color:var(--ink);
+  text-align:left;padding:9px 11px;border-radius:8px;
+  font-size:14px;font-weight:600;letter-spacing:.03em;
+}
+.menuList button:hover{background:var(--surface-2)}
+.menuList button.on::after{content:"✓";color:var(--accent);font-weight:700}
 
 /* ---------- board ---------- */
 main{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;padding:2px 12px}
@@ -150,6 +169,8 @@ main{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-he
   border:1.5px solid rgba(0,0,0,.2);
   box-shadow:0 3px 8px rgba(0,0,0,.35);
 }
+/* invisible enlarged hit area — small to look at, easy to grab */
+.tok::before{content:"";position:absolute;inset:-11px;border-radius:50%}
 .tok.dragging{transition:none;cursor:grabbing;z-index:30;box-shadow:0 8px 18px rgba(0,0,0,.5)}
 .tok.team{background:var(--team);color:var(--team-ink)}
 .tok.opp{background:var(--opp);color:var(--opp-ink)}
@@ -226,7 +247,10 @@ body.drawing .tok{pointer-events:none}
 }
 #drillTray.dropTarget{border-color:#ff7b6b;background:rgba(255,69,58,.06)}
 body.drillsMode #squad,body.drillsMode #formation,body.drillsMode #squadBtn,
-body.drillsMode #oppToggle,body.drillsMode #benchZone{display:none}
+body.drillsMode #oppToggle,body.drillsMode #namesToggle,body.drillsMode #benchZone{display:none}
+#board.hideNames .pname{display:none}
+#drillLibBtn{display:none}
+body.drillsMode #drillLibBtn{display:flex}
 body.drillsMode #drillLibBtn{display:block}
 body.drillsMode #drillTray{display:flex}
 body.drillsMode .tok{display:none !important}
@@ -283,6 +307,7 @@ body:not(.drillsMode) .ditem{display:none}
   filter:drop-shadow(0 3px 4px rgba(0,0,0,.35));
   transition:left .2s ease,top .2s ease;
 }
+.ditem::before{content:"";position:absolute;inset:-11px;border-radius:50%}
 .ditem.dragging{transition:none;z-index:30;cursor:grabbing}
 body.drawing .ditem{pointer-events:none}
 

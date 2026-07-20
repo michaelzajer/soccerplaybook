@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 
@@ -66,10 +66,17 @@
       <option value="9">9 v 9</option>
     </select>
     <select id="formation"></select>
-    <button class="chip" id="squadBtn">Squad</button>
-    <button class="chip" id="oppToggle">Opp</button>
-    <button class="chip" id="drillLibBtn">Library</button>
-    <button class="chip" id="resetBtn">Reset</button>
+    <div class="spacer"></div>
+    <div class="dropdown">
+      <button class="chip iconChip" id="ctlMenuBtn" aria-label="Board menu">☰</button>
+      <div id="ctlMenu" class="menuList">
+        <button id="squadBtn">My squad…</button>
+        <button id="namesToggle">Player names</button>
+        <button id="oppToggle">Opposition</button>
+        <button id="drillLibBtn">Drill library…</button>
+        <button id="resetBtn">Reset board</button>
+      </div>
+    </div>
   </div>
 
   <main><div id="board">
@@ -165,6 +172,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=17"></script>
+<script type="module" src="js/app.js?v=20"></script>
 </body>
 </html>

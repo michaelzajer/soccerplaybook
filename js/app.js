@@ -7,8 +7,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=17";
-import { initBoard } from "./board.js?v=17";
+import { firebaseConfig } from "./firebase-config.js?v=20";
+import { initBoard } from "./board.js?v=20";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
@@ -56,8 +56,10 @@ const store = {
     if (this.unsubscribe) this.unsubscribe();
     this.unsubscribe = onSnapshot(doc(db, "teams", uid), snap => {
       if (!snap.exists()) return;
-      // ignore echoes of our own pending writes
-      if (snap.metadata.hasPendingWrites) return;
+      // ignore echoes of our own pending writes, and any snapshot that
+      // arrives while local changes are still waiting to be written —
+      // otherwise a stale server copy can undo a drag mid-flight
+      if (snap.metadata.hasPendingWrites || this.dirty) return;
       this.data = snap.data();
       this.emit();
       setSyncStatus(snap.metadata.fromCache ? "Offline — changes saved on this device" : "Synced");
@@ -70,16 +72,19 @@ const store = {
 
   save(partial) {
     this.data = { ...(this.data || {}), ...partial };
+    this.dirty = true;
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       if (isLocal()) {
         try { localStorage.setItem(DEMO_KEY, JSON.stringify(this.data)); } catch (e) {}
+        this.dirty = false;
         return;
       }
       if (!this.uid) return;
       setDoc(doc(db, "teams", this.uid),
         { ...this.data, updatedAt: serverTimestamp() }, { merge: true })
-        .catch(() => setSyncStatus("Offline — changes saved on this device"));
+        .then(() => { this.dirty = false; })
+        .catch(() => { this.dirty = false; setSyncStatus("Offline — changes saved on this device"); });
     }, 600);
   }
 };
@@ -303,7 +308,22 @@ store.subscribe(d => {
   }
 });
 
-/* ---------------- service worker ---------------- */
+/* ---------------- service worker + self-update ---------------- */
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      reg.update();
+      // re-check whenever the app comes back to the foreground
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update();
+      });
+    }).catch(() => {});
+  });
+  // when a new service worker takes over, reload once to pick up new code
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
 }

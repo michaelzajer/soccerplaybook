@@ -51,6 +51,7 @@ export function initBoard(store) {
   const squadSel = document.getElementById("squad");
   const formSel = document.getElementById("formation");
   const oppToggle = document.getElementById("oppToggle");
+  const namesToggle = document.getElementById("namesToggle");
 
   const roster = () => (store.data && store.data.roster) || [];
   const bstate = () => {
@@ -143,6 +144,9 @@ export function initBoard(store) {
     if (squadSel.value !== b.squad) { squadSel.value = b.squad; fillFormationOptions(); }
     if (formSel.value !== b.formation) formSel.value = b.formation;
     oppToggle.classList.toggle("on", b.showOpp);
+    const namesOn = b.showNames !== false;   // default on
+    namesToggle.classList.toggle("on", namesOn);
+    board.classList.toggle("hideNames", !namesOn);
   }
   function renderAll() {
     syncControls();
@@ -431,6 +435,23 @@ export function initBoard(store) {
   panel.addEventListener("click", e => { if (e.target === panel) panel.classList.remove("open"); });
 
   /* ---------------- controls ---------------- */
+  const ctlMenuBtn = document.getElementById("ctlMenuBtn");
+  const ctlMenu = document.getElementById("ctlMenu");
+  ctlMenuBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    ctlMenu.classList.toggle("open");
+  });
+  document.addEventListener("click", e => {
+    if (!ctlMenu.contains(e.target)) ctlMenu.classList.remove("open");
+  });
+  // choosing an action that opens a sheet (or resets) closes the menu;
+  // toggles stay open so state changes are visible
+  ctlMenu.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (b && ["squadBtn", "drillLibBtn", "resetBtn"].includes(b.id))
+      ctlMenu.classList.remove("open");
+  });
+
   document.querySelectorAll(".mode").forEach(b => {
     b.addEventListener("click", () => {
       document.querySelectorAll(".mode").forEach(x => x.classList.remove("on"));
@@ -444,6 +465,12 @@ export function initBoard(store) {
   document.getElementById("resetBtn").addEventListener("click", () => {
     if (drillsMode) { clearDrillItems(); strokes = []; redraw(); return; }
     strokes = []; redraw(); applyFormation(); buildBall(true);
+  });
+  namesToggle.addEventListener("click", () => {
+    const b = bstate();
+    b.showNames = b.showNames === false;   // flip: undefined/true -> false, false -> true
+    syncControls();
+    saveBoard();
   });
   oppToggle.addEventListener("click", () => {
     const b = bstate();
