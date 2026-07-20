@@ -1,6 +1,6 @@
 {
-  "name": "Tactics Board",
-  "short_name": "Tactics",
+  "name": "Soccer Play Book",
+  "short_name": "Play Book",
   "description": "Set your team. Run your plays.",
   "start_url": "./",
   "scope": "./",

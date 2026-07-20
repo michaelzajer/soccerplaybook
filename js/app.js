@@ -7,8 +7,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=15";
-import { initBoard } from "./board.js?v=15";
+import { firebaseConfig } from "./firebase-config.js?v=16";
+import { initBoard } from "./board.js?v=16";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
@@ -191,7 +191,7 @@ function doSignOut() {
 /* ---------------- board wiring ---------------- */
 let boardStarted = false;
 function enterBoard() {
-  document.getElementById("hdrTeam").textContent = store.data.teamName || "Tactics";
+  document.getElementById("hdrTeam").textContent = store.data.teamName || "Soccer Play Book";
   show("board");
   if (!boardStarted) { initBoard(store); boardStarted = true; }
   else store.emit();

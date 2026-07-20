@@ -1,4 +1,4 @@
-# Tactics Board
+# Soccer Play Book
 
 A mobile-first soccer tactics board. Coaches sign up, set up their team and squad, then drag players into formations, sketch runs and passes, and everything syncs to their account — with offline support on the pitch.
 
