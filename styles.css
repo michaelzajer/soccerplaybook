@@ -107,36 +107,29 @@ header .spacer{flex:1}
 select,.chip{
   flex:0 0 auto;
   background:var(--surface);color:var(--ink);border:1px solid var(--line);
-  border-radius:var(--r-pill);padding:4px 11px;font-family:inherit;font-size:12px;
-  font-weight:600;letter-spacing:.04em;appearance:none;height:28px;line-height:1;
+  border-radius:var(--r-pill);padding:5px 12px;font-family:inherit;font-size:13px;
+  font-weight:600;letter-spacing:.04em;appearance:none;height:31px;line-height:1;
 }
 select:focus{outline:none;border-color:var(--line-strong)}
-.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;flex:0 0 auto;height:28px}
-.seg button{border:none;background:transparent;color:var(--ink-dim);border-radius:var(--r-pill);padding:0 11px;font-size:12px;font-weight:600;letter-spacing:.04em;line-height:1}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;flex:0 0 auto;height:31px}
+.seg button{border:none;background:transparent;color:var(--ink-dim);border-radius:var(--r-pill);padding:0 12px;font-size:13px;font-weight:600;letter-spacing:.04em;line-height:1}
 .seg button.on{background:var(--accent);color:var(--team-ink)}
+.seg .chev{display:none;font-size:10px;line-height:1;opacity:.75}
+.seg button.on .chev{display:inline}
 .chip:hover{border-color:var(--line-strong)}
 .chip.on{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
-.iconChip{width:28px;padding:0;text-align:center;font-size:13px}
+.iconChip{width:31px;padding:0;text-align:center;font-size:14px}
 
-/* ---------- board dropdown menu ---------- */
-.dropdown{position:relative;flex:0 0 auto}
-.menuList{
-  position:absolute;right:0;top:34px;z-index:45;
-  display:none;flex-direction:column;gap:2px;
-  min-width:170px;padding:6px;
-  background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-md);
-  box-shadow:0 14px 40px rgba(0,0,0,.5);
-}
-.menuList.open{display:flex;animation:fadeIn .12s ease}
-.menuList button{
+/* ---------- board options sheet ---------- */
+.menuSheet{display:flex;flex-direction:column;gap:6px}
+.menuSheet button{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  background:none;border:none;color:var(--ink);
-  text-align:left;padding:9px 11px;border-radius:8px;
-  font-size:14px;font-weight:600;letter-spacing:.03em;
+  background:var(--bg);border:1px solid var(--line);color:var(--ink);
+  text-align:left;padding:13px 14px;border-radius:var(--r-md);
+  font-size:var(--t-md);font-weight:600;letter-spacing:.03em;
 }
-.menuList button:hover{background:var(--surface-2)}
-.menuList button.on::after{content:"✓";color:var(--accent);font-weight:700}
+.menuSheet button:hover{border-color:var(--line-strong)}
+.menuSheet button.on::after{content:"✓";color:var(--accent);font-weight:700}
 
 /* ---------- board ---------- */
 main{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;padding:2px 12px}
@@ -246,8 +239,9 @@ body.drawing .tok{pointer-events:none}
   transition:border-color .15s ease,background .15s ease;
 }
 #drillTray.dropTarget{border-color:#ff7b6b;background:rgba(255,69,58,.06)}
-body.drillsMode #squad,body.drillsMode #formation,body.drillsMode #squadBtn,
-body.drillsMode #oppToggle,body.drillsMode #namesToggle,body.drillsMode #benchZone{display:none}
+body.drillsMode #squad,body.drillsMode #formation,body.drillsMode #reformBtn,
+body.drillsMode #squadBtn,body.drillsMode #oppToggle,body.drillsMode #namesToggle,
+body.drillsMode #shareTeamBtn,body.drillsMode #benchZone{display:none}
 #board.hideNames .pname{display:none}
 #drillLibBtn{display:none}
 body.drillsMode #drillLibBtn{display:flex}
@@ -394,3 +388,54 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 }
 .sheet .close:hover{border-color:var(--line-strong)}
 .hint{font-size:var(--t-sm);color:var(--ink-dim);font-weight:500}
+
+/* ---------- game configuration sheet ---------- */
+.gameSheet{overflow-y:auto}
+.gameSheet .gcard{border:none;padding:0 0 6px;border-bottom:1px solid var(--line);border-radius:0}
+.gameSheet .gcard:last-of-type{border-bottom:none}
+.seg button[data-view="game"] .chev{display:inline}
+.gcard{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:14px;
+  display:flex;flex-direction:column;gap:10px;flex:0 0 auto;
+}
+.gcard h2{font-size:var(--t-sm);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.tlab input,.tlab select,.tlab textarea{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);
+  color:var(--ink);font-family:inherit;font-size:15px;padding:9px 10px;width:100%;
+}
+.tlab input:focus,.tlab select:focus,.tlab textarea:focus{outline:none;border-color:var(--accent)}
+.tlab textarea{resize:vertical;min-height:80px}
+#gPitchPreview{
+  width:100%;max-width:230px;margin:0 auto;display:block;
+  border-radius:10px;border:1px solid rgba(255,255,255,.1);
+  cursor:pointer;
+}
+.segRow{display:flex;gap:6px}
+.segRow button{
+  flex:1;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-dim);
+  border-radius:var(--r-pill);padding:8px;font-size:var(--t-sm);font-weight:700;letter-spacing:.05em;
+}
+.segRow button.on{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
+
+/* ---------- match timer ---------- */
+.timerBig{font-size:52px;font-weight:700;text-align:center;letter-spacing:.06em;line-height:1;font-variant-numeric:tabular-nums}
+.timerBig.alerting{color:var(--accent)}
+.timerMeta{text-align:center}
+.cfgRow{display:flex;gap:8px}
+.tlab{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--ink-dim)}
+.tlab select,.tlab input{height:38px;border-radius:var(--r-md);padding:0 10px;font-size:15px}
+.timerBtns{display:flex;gap:6px}
+.timerBtns .primary{flex:1.4;padding:10px}
+.timerBtns .close{flex:1}
+#timerChip,#subsChip{font-variant-numeric:tabular-nums}
+.chip.live{border-color:var(--accent);color:var(--accent)}
+.chip.subsDue{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
+/* game chips belong to the game pitch view only */
+#gameChip,#gameCfgChip,#timerChip,#subsChip{display:none}
+body.gameView #gameChip:not([hidden]),body.gameView #gameCfgChip:not([hidden]),
+body.gameView #timerChip:not([hidden]),body.gameView #subsChip:not([hidden]){display:block}
+
+/* per-drill row actions */
+.rrow .shr{background:none;border:none;color:var(--ink-dim);font-size:15px;padding:2px 6px;flex:0 0 auto}
+.rrow .shr:hover{color:var(--accent)}

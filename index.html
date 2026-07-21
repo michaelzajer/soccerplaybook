@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20">
+<link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
 
@@ -58,31 +58,90 @@
   </header>
   <div id="controls">
     <div class="seg" id="viewSeg">
-      <button class="on" data-view="team">Team</button>
-      <button data-view="drills">Drills</button>
+      <button class="on" data-view="team">Team <span class="chev">⌄</span></button>
+      <button data-view="game">Game day <span class="chev">⌄</span></button>
+      <button data-view="drills">Drills <span class="chev">⌄</span></button>
     </div>
     <select id="squad">
       <option value="11">11 v 11</option>
       <option value="9">9 v 9</option>
     </select>
     <select id="formation"></select>
+    <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
     <div class="spacer"></div>
-    <div class="dropdown">
-      <button class="chip iconChip" id="ctlMenuBtn" aria-label="Board menu">☰</button>
-      <div id="ctlMenu" class="menuList">
-        <button id="squadBtn">My squad…</button>
-        <button id="namesToggle">Player names</button>
-        <button id="oppToggle">Opposition</button>
-        <button id="drillLibBtn">Drill library…</button>
-        <button id="resetBtn">Reset board</button>
-      </div>
-    </div>
+    <button class="chip" id="gameChip" hidden>vs</button>
+    <button class="chip iconChip" id="gameCfgChip" hidden aria-label="Game configuration">…</button>
+    <button class="chip" id="timerChip" hidden>00:00</button>
+    <button class="chip" id="subsChip" hidden>Subs 10:00</button>
   </div>
 
   <main><div id="board">
     <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
     <canvas id="ink"></canvas>
   </div></main>
+
+  <!-- game configuration sheet -->
+  <div id="gamePanel" class="overlay">
+   <div class="sheet gameSheet">
+    <div class="gcard">
+      <h2>Game details</h2>
+      <div class="cfgRow">
+        <label class="tlab">Date<input type="date" id="gDate"></label>
+        <label class="tlab">Kick-off<input type="time" id="gTime"></label>
+      </div>
+      <label class="tlab">Opposition<input type="text" id="gOpp" placeholder="Who are you playing?" maxlength="40"></label>
+      <label class="tlab">Notes<textarea id="gNotes" rows="4" placeholder="Game notes — tactics, reminders, who is away…"></textarea></label>
+      <button class="primary" id="gSaveBtn">Save game</button>
+    </div>
+    <div class="gcard">
+      <h2>Line-up</h2>
+      <canvas id="gPitchPreview"></canvas>
+      <div class="hint" id="gLineupInfo">Not captured yet</div>
+      <div class="timerBtns">
+        <button class="close" id="gCapture">Capture current board</button>
+        <button class="close" id="gRestore" hidden>Load onto board</button>
+        <button class="close" id="gShare">Share team sheet</button>
+      </div>
+    </div>
+    <div class="gcard">
+      <h2>Game timer</h2>
+      <div class="segRow" id="periodSeg"></div>
+      <div class="timerBig" id="timerDisplay">00:00</div>
+      <div class="hint timerMeta" id="timerMeta"></div>
+      <div class="cfgRow">
+        <label class="tlab">Periods
+          <select id="cfgPeriods">
+            <option value="2">2 halves</option>
+            <option value="4">4 quarters</option>
+          </select>
+        </label>
+        <label class="tlab">Minutes each
+          <input id="cfgMinutes" type="number" inputmode="numeric" min="5" max="60" value="30">
+        </label>
+      </div>
+      <div class="timerBtns">
+        <button class="primary" id="timerStart">Start</button>
+        <button class="close" id="timerReset">Reset</button>
+      </div>
+      <div class="hint">Tap a period to switch between them — each keeps its own clock.</div>
+    </div>
+    <div class="gcard">
+      <h2>Subs timer</h2>
+      <div class="timerBig" id="subsDisplay">10:00</div>
+      <div class="cfgRow">
+        <label class="tlab">Rotate every (minutes)
+          <input id="cfgSubInt" type="number" inputmode="numeric" min="1" max="30" value="10">
+        </label>
+      </div>
+      <div class="timerBtns">
+        <button class="primary" id="subsStart">Start</button>
+        <button class="close" id="subsReset">Reset</button>
+      </div>
+      <div class="hint">Independent of the game timer. Counts down, alerts, and restarts automatically. The countdown shows on the Team view while running.</div>
+    </div>
+    <button class="close" id="closeGame">Back to pitch</button>
+   </div>
+  </div>
 
   <div id="benchZone">
     <span class="benchLabel">Bench</span>
@@ -138,6 +197,33 @@
     </div>
   </div>
 
+  <!-- board options sheet -->
+  <div id="ctlMenuPanel" class="overlay">
+    <div class="sheet">
+      <h2 id="ctlMenuTitle">Team options</h2>
+      <div class="menuSheet">
+        <button id="squadBtn">My squad…</button>
+        <button id="namesToggle">Player names</button>
+        <button id="oppToggle">Opposition</button>
+        <button id="shareTeamBtn">Share team sheet…</button>
+        <button id="drillLibBtn">Drill library…</button>
+        <button id="resetBtn">Reset board</button>
+      </div>
+      <button class="close" id="closeCtlMenu">Done</button>
+    </div>
+  </div>
+
+  <!-- saved games sheet -->
+  <div id="gamesPanel" class="overlay">
+    <div class="sheet">
+      <h2>Game day</h2>
+      <button class="close" id="newGameBtn">Set up new game</button>
+      <div id="gamesList" class="rosterList"></div>
+      <div class="hint">Tap a saved game to open its line-up on the pitch. Use the … chip to get back to its details.</div>
+      <button class="close" id="closeGames">Done</button>
+    </div>
+  </div>
+
   <!-- drills sheet -->
   <div id="drillPanel" class="overlay">
     <div class="sheet">
@@ -172,6 +258,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=20"></script>
+<script type="module" src="js/app.js?v=32"></script>
 </body>
 </html>

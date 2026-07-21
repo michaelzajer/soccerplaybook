@@ -304,7 +304,10 @@ export function initBoard(store) {
   // resample a stroke into a wavy line (dribble notation)
   function wavyPoints(pts, r) {
     const P = pts.map(p => [p[0] * r.width, p[1] * r.height]);
-    const amp = 3.2, wavelength = 14, step = 3;
+    // proportional so the wave reads the same on screen and in share images
+    const amp = Math.max(2.6, r.width * 0.0095);
+    const wavelength = Math.max(11, r.width * 0.041);
+    const step = Math.max(2.5, r.width * 0.009);
     const out = [P[0]];
     let dist = 0;
     for (let i = 1; i < P.length; i++) {
@@ -435,21 +438,18 @@ export function initBoard(store) {
   panel.addEventListener("click", e => { if (e.target === panel) panel.classList.remove("open"); });
 
   /* ---------------- controls ---------------- */
-  const ctlMenuBtn = document.getElementById("ctlMenuBtn");
-  const ctlMenu = document.getElementById("ctlMenu");
-  ctlMenuBtn.addEventListener("click", e => {
-    e.stopPropagation();
-    ctlMenu.classList.toggle("open");
-  });
-  document.addEventListener("click", e => {
-    if (!ctlMenu.contains(e.target)) ctlMenu.classList.remove("open");
-  });
-  // choosing an action that opens a sheet (or resets) closes the menu;
-  // toggles stay open so state changes are visible
-  ctlMenu.addEventListener("click", e => {
+  const ctlMenuPanel = document.getElementById("ctlMenuPanel");
+  document.getElementById("closeCtlMenu").addEventListener("click", () =>
+    ctlMenuPanel.classList.remove("open"));
+  ctlMenuPanel.addEventListener("click", e => {
+    if (e.target === ctlMenuPanel) ctlMenuPanel.classList.remove("open");
+    // actions that open another sheet (or reset) close this one; toggles keep it open
     const b = e.target.closest("button");
     if (b && ["squadBtn", "drillLibBtn", "resetBtn"].includes(b.id))
-      ctlMenu.classList.remove("open");
+      ctlMenuPanel.classList.remove("open");
+  });
+  document.getElementById("reformBtn").addEventListener("click", () => {
+    applyFormation();   // players back to standard shape; drawings stay
   });
 
   document.querySelectorAll(".mode").forEach(b => {
@@ -499,23 +499,83 @@ export function initBoard(store) {
   /* ---------------- drills mode ---------------- */
   let drillsMode = false;
   let drillItems = [];        // {kind, x, y, el}
-  let teamStrokes = [];       // parked while in drills mode
-  let drillStrokes = [];      // parked while in team mode
+  // one sketch buffer per view; `strokes` always points at the active one
+  const strokeBufs = { team: strokes, game: [], drills: [] };
+  let teamStash = null;       // team board parked while the game view is active
   const drillTray = document.getElementById("drillTray");
 
-  function setDrillsMode(on) {
-    if (on === drillsMode) return;
-    drillsMode = on;
-    document.body.classList.toggle("drillsMode", on);
-    document.querySelectorAll("#viewSeg button").forEach(b =>
-      b.classList.toggle("on", (b.dataset.view === "drills") === on));
-    if (on) { teamStrokes = strokes; strokes = drillStrokes; }
-    else { drillStrokes = strokes; strokes = teamStrokes; }
-    redraw();
-    if (on) requestAnimationFrame(updateTrayFades);
+  let currentView = "team";
+  function applyGameLineup() {
+    const b = bstate(), g = gday();
+    if (!g.lineup) {
+      // first time on this game's pitch: start from the current board
+      g.lineup = {
+        formation: b.formation, squad: b.squad,
+        placed: JSON.parse(JSON.stringify(b.placed)), at: Date.now()
+      };
+      saveGday();
+    }
+    b.squad = g.lineup.squad; b.formation = g.lineup.formation;
+    b.placed = JSON.parse(JSON.stringify(g.lineup.placed));
   }
+  function syncBoardToLineup() {
+    const b = bstate(), g = gday();
+    if (!g.lineup) return;
+    g.lineup.squad = b.squad; g.lineup.formation = b.formation;
+    g.lineup.placed = JSON.parse(JSON.stringify(b.placed));
+    saveGday();
+  }
+  function setView(v) {
+    if (v === currentView) return;
+    strokeBufs[currentView] = strokes;
+    if (currentView === "game") {          // leaving the game pitch
+      syncBoardToLineup();
+      if (teamStash) {
+        const b = bstate();
+        b.squad = teamStash.squad; b.formation = teamStash.formation;
+        b.placed = teamStash.placed; teamStash = null;
+        saveBoard();
+      }
+    }
+    if (v === "game") {                    // entering the game pitch
+      const b = bstate();
+      teamStash = {
+        squad: b.squad, formation: b.formation,
+        placed: JSON.parse(JSON.stringify(b.placed))
+      };
+      applyGameLineup();
+    }
+    currentView = v;
+    strokes = strokeBufs[v];
+    drillsMode = v === "drills";
+    document.body.classList.toggle("drillsMode", drillsMode);
+    document.body.classList.toggle("gameView", v === "game");
+    document.querySelectorAll("#viewSeg button").forEach(b =>
+      b.classList.toggle("on", b.dataset.view === v));
+    renderAll();
+    redraw();
+    if (drillsMode) requestAnimationFrame(updateTrayFades);
+    window.dispatchEvent(new Event("resize")); // re-measure board
+  }
+  function setDrillsMode(on) { setView(on ? "drills" : "team"); }
+  // tap an inactive segment to switch views; tap the active one for its options
   document.querySelectorAll("#viewSeg button").forEach(b =>
-    b.addEventListener("click", () => setDrillsMode(b.dataset.view === "drills")));
+    b.addEventListener("click", () => {
+      const v = b.dataset.view;
+      if (v === "game") {
+        // Game day is a menu, not a view: always show the games dropdown
+        renderGamesList();
+        document.getElementById("gamesPanel").classList.add("open");
+        return;
+      }
+      if (v === currentView) {
+        document.getElementById("ctlMenuTitle").textContent =
+          v === "drills" ? "Drill options" : "Team options";
+        document.getElementById("ctlMenuPanel").classList.add("open");
+      } else {
+        setView(v);
+      }
+    }));
 
   // edge fade hints on the kit tray when items are off-screen
   const trayScroller = drillTray.querySelector(".trayItems");
@@ -654,6 +714,10 @@ export function initBoard(store) {
       row.className = "rrow";
       const rn = document.createElement("div");
       rn.className = "rname"; rn.textContent = d.name;
+      const shr = document.createElement("button");
+      shr.className = "shr"; shr.textContent = "↗";
+      shr.setAttribute("aria-label", "Share drill");
+      shr.addEventListener("click", ev => { ev.stopPropagation(); shareDrill(d); });
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "✕";
       del.setAttribute("aria-label", "Delete drill");
@@ -663,7 +727,7 @@ export function initBoard(store) {
         store.save({ drills: store.data.drills });
         renderDrillList();
       });
-      row.append(rn, del);
+      row.append(rn, shr, del);
       row.addEventListener("click", () => { loadDrill(d); drillPanel.classList.remove("open"); });
       list.appendChild(row);
     }
@@ -695,15 +759,500 @@ export function initBoard(store) {
   document.getElementById("closeDrills").addEventListener("click", () => drillPanel.classList.remove("open"));
   drillPanel.addEventListener("click", e => { if (e.target === drillPanel) drillPanel.classList.remove("open"); });
 
+  /* ---------------- share as image ---------------- */
+  function drawPitchPNG(c, W, H) {
+    const bandH = H / 12;
+    for (let i = 0; i < 12; i++) {
+      c.fillStyle = i % 2 ? "#297042" : "#2e7c4a";
+      c.fillRect(0, i * bandH, W, bandH + 1);
+    }
+    const sx = W / 68, sy = H / 105;
+    c.strokeStyle = "rgba(255,255,255,.9)";
+    c.fillStyle = "rgba(255,255,255,.9)";
+    c.lineWidth = Math.max(2, W * 0.004);
+    c.strokeRect(1 * sx, 1 * sy, 66 * sx, 103 * sy);
+    c.beginPath(); c.moveTo(1 * sx, 52.5 * sy); c.lineTo(67 * sx, 52.5 * sy); c.stroke();
+    c.beginPath(); c.arc(34 * sx, 52.5 * sy, 9.15 * sx, 0, 7); c.stroke();
+    c.beginPath(); c.arc(34 * sx, 52.5 * sy, 2.5, 0, 7); c.fill();
+    [[1, 1], [104, -1]].forEach(([edge, dir]) => {
+      const top = dir > 0 ? edge : edge - 16.5;
+      c.strokeRect((34 - 20.16) * sx, top * sy, 40.32 * sx, 16.5 * sy);
+      const top2 = dir > 0 ? edge : edge - 5.5;
+      c.strokeRect((34 - 9.16) * sx, top2 * sy, 18.32 * sx, 5.5 * sy);
+      c.beginPath(); c.arc(34 * sx, (edge + dir * 11) * sy, 2.5, 0, 7); c.fill();
+    });
+  }
+  function drawStrokePNG(c, W, H, s) {
+    if (!s.pts || s.pts.length < 2) return;
+    c.strokeStyle = "rgba(255,255,255,.95)";
+    c.lineWidth = W * 0.008; c.lineCap = "round"; c.lineJoin = "round";
+    c.setLineDash(s.mode === "pass" ? [W * 0.022, W * 0.02] : []);
+    let pts = s.pts;
+    if (s.mode === "dribble") {
+      const fake = { width: W, height: H };
+      pts = wavyPoints(s.pts, fake);
+      c.beginPath(); c.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    } else {
+      c.beginPath(); c.moveTo(pts[0][0] * W, pts[0][1] * H);
+      for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0] * W, pts[i][1] * H);
+    }
+    c.stroke(); c.setLineDash([]);
+    if (["run", "pass", "dribble"].includes(s.mode)) {
+      const raw = s.pts, n = raw.length;
+      const a = raw[Math.max(0, n - 6)], b = raw[n - 1];
+      const bx = b[0] * W, by = b[1] * H;
+      const ang = Math.atan2(by - a[1] * H, bx - a[0] * W);
+      const L = W * 0.028;
+      c.beginPath();
+      c.moveTo(bx - L * Math.cos(ang - .5), by - L * Math.sin(ang - .5));
+      c.lineTo(bx, by);
+      c.lineTo(bx - L * Math.cos(ang + .5), by - L * Math.sin(ang + .5));
+      c.stroke();
+    }
+  }
+  function tokenPNG(c, W, x, y, r, fill, ink, label, name) {
+    c.beginPath(); c.arc(x, y, r, 0, 7);
+    c.fillStyle = fill; c.fill();
+    c.lineWidth = Math.max(1.5, r * 0.09); c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
+    c.fillStyle = ink; c.font = `700 ${Math.round(r * 0.82)}px 'Barlow Condensed',sans-serif`;
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(label, x, y + r * 0.05);
+    if (name) {
+      c.font = `600 ${Math.round(r * 0.66)}px 'Barlow Condensed',sans-serif`;
+      c.fillStyle = "#fff";
+      c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = 4;
+      c.fillText(name, x, y + r * 1.75);
+      c.shadowBlur = 0;
+    }
+  }
+  function makeShareCanvas(title, subtitle) {
+    const W = 1080, HEAD = 110, H = Math.round(W * 105 / 68);
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H + HEAD;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#101411"; c.fillRect(0, 0, W, HEAD);
+    c.fillStyle = "#ffd60a"; c.textAlign = "left"; c.textBaseline = "middle";
+    c.font = "700 44px 'Barlow Condensed',sans-serif";
+    c.fillText(title.toUpperCase(), 36, HEAD / 2 - (subtitle ? 14 : 0));
+    if (subtitle) {
+      c.fillStyle = "#95a09a"; c.font = "600 28px 'Barlow Condensed',sans-serif";
+      c.fillText(subtitle, 36, HEAD / 2 + 26);
+    }
+    c.translate(0, HEAD);
+    return { cv, c, W, H };
+  }
+  async function shareCanvas(cv, filename, title) {
+    const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+    const file = new File([blob], filename, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title }); return; } catch (e) {
+        if (e.name === "AbortError") return; // user cancelled
+      }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  async function shareTeamSheet() {
+    const b = bstate();
+    const teamName = store.data.teamName || "My team";
+    const g = (store.data && store.data.gameday) || {};
+    let sub = b.formation + "  ·  " + b.squad + " v " + b.squad;
+    if (g.opp) sub += "  ·  vs " + g.opp;
+    if (g.date) {
+      const d = new Date(g.date + "T" + (g.time || "00:00"));
+      if (!isNaN(d)) sub += "  ·  " + d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) +
+        (g.time ? " " + g.time : "");
+    }
+    const { cv, c, W, H } = makeShareCanvas(teamName, sub);
+    drawPitchPNG(c, W, H);
+    const cur = (currentView === "team" || currentView === "game") ? strokes : strokeBufs.team;
+    cur.forEach(s => drawStrokePNG(c, W, H, s));
+    const r = W * 0.032;
+    const showNames = b.showNames !== false;
+    if (b.showOpp) {
+      oppTokens.forEach(el => {
+        const x = parseFloat(el.style.left) / 100 * W;
+        const y = parseFloat(el.style.top) / 100 * H;
+        tokenPNG(c, W, x, y, r, "#ff453a", "#fff", el.childNodes[0].textContent || "");
+      });
+    }
+    for (const p of roster()) {
+      const pos = b.placed[p.id]; if (!pos) continue;
+      tokenPNG(c, W, pos.x * W, pos.y * H, r, "#ffd60a", "#171717", p.pos,
+        showNames ? firstName(p.name) : null);
+    }
+    if (ballToken) {
+      const x = parseFloat(ballToken.style.left) / 100 * W;
+      const y = parseFloat(ballToken.style.top) / 100 * H;
+      c.beginPath(); c.arc(x, y, r * 0.55, 0, 7); c.fillStyle = "#fff"; c.fill();
+    }
+    await shareCanvas(cv, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
+  }
+  function drillPiecePNG(c, W, kind, x, y) {
+    const u = W * 0.016; // base unit
+    c.save(); c.translate(x, y);
+    if (kind === "cone") {
+      c.fillStyle = "#ff8a14";
+      c.beginPath(); c.moveTo(0, -u); c.lineTo(u * .9, u); c.lineTo(-u * .9, u); c.closePath(); c.fill();
+    } else if (kind === "disc") {
+      c.fillStyle = "#2f9bff"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
+      c.lineWidth = 3; c.strokeStyle = "rgba(255,255,255,.55)"; c.stroke();
+    } else if (kind === "pole") {
+      c.fillStyle = "#ff453a"; c.fillRect(-u * .18, -u * 1.4, u * .36, u * 2.8);
+      c.fillStyle = "#fff";
+      c.fillRect(-u * .18, -u * .9, u * .36, u * .5);
+      c.fillRect(-u * .18, u * .1, u * .36, u * .5);
+    } else if (kind === "dball") {
+      c.fillStyle = "#fff"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
+      c.fillStyle = "#111"; c.beginPath(); c.arc(0, 0, u * .3, 0, 7); c.fill();
+    } else if (kind === "att" || kind === "def") {
+      c.fillStyle = kind === "att" ? "#ffd60a" : "#ff453a";
+      c.beginPath(); c.arc(0, 0, u, 0, 7); c.fill();
+      c.lineWidth = 2.5; c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
+    } else if (kind === "goal" || kind === "mini") {
+      const w = kind === "goal" ? u * 4 : u * 2.4, h = kind === "goal" ? u * 1.6 : u * 1.1;
+      c.lineWidth = kind === "goal" ? 6 : 4;
+      c.strokeStyle = kind === "goal" ? "#fff" : "#ffa02e";
+      c.beginPath();
+      c.moveTo(-w / 2, h / 2); c.lineTo(-w / 2, -h / 2); c.lineTo(w / 2, -h / 2); c.lineTo(w / 2, h / 2);
+      c.stroke();
+    }
+    c.restore();
+  }
+  async function shareDrill(d) {
+    const { cv, c, W, H } = makeShareCanvas(d.name, (store.data.teamName || "") + "  ·  drill");
+    drawPitchPNG(c, W, H);
+    (d.strokes || []).map(unflatStroke).forEach(s => drawStrokePNG(c, W, H, s));
+    (d.items || []).forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H));
+    await shareCanvas(cv, d.name.replace(/\s+/g, "-").toLowerCase() + "-drill.png", d.name);
+  }
+  document.getElementById("shareTeamBtn").addEventListener("click", () => {
+    document.getElementById("ctlMenuPanel").classList.remove("open");
+    shareTeamSheet();
+  });
+
+  /* ---------------- game day: details ---------------- */
+  function gday() {
+    if (!store.data.gameday)
+      store.data.gameday = { date: "", time: "", opp: "", notes: "", lineup: null };
+    return store.data.gameday;
+  }
+  let gdaySaveTimer = null;
+  function saveGday() { store.save({ gameday: gday() }); }
+  [["gDate", "date"], ["gTime", "time"], ["gOpp", "opp"], ["gNotes", "notes"]].forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    el.addEventListener("input", () => {
+      gday()[key] = el.value;
+      clearTimeout(gdaySaveTimer);
+      gdaySaveTimer = setTimeout(saveGday, 700);
+    });
+  });
+  function renderGameday() {
+    const g = gday();
+    const set = (id, v) => {
+      const el = document.getElementById(id);
+      if (document.activeElement !== el) el.value = v || "";
+    };
+    set("gDate", g.date); set("gTime", g.time); set("gOpp", g.opp); set("gNotes", g.notes);
+    document.getElementById("gLineupInfo").textContent = g.lineup
+      ? `Captured ${new Date(g.lineup.at).toLocaleString()} · ${g.lineup.formation} (${g.lineup.squad} v ${g.lineup.squad}) — tap the pitch to open it on the board`
+      : "Showing the current board — capture it to save this game's line-up. Tap the pitch to edit.";
+    document.getElementById("gRestore").hidden = !g.lineup;
+    const gameChip = document.getElementById("gameChip");
+    gameChip.hidden = !(g.opp || g.date);
+    if (!gameChip.hidden) gameChip.textContent = g.opp ? "vs " + g.opp : "Game";
+    document.getElementById("gameCfgChip").hidden = false; // CSS limits it to the game view
+    renderGamePitch();
+  }
+  const gamePanel = document.getElementById("gamePanel");
+  function openGameCfg() {
+    renderGameday();
+    gamePanel.classList.add("open");
+  }
+  function closeGameCfg() { gamePanel.classList.remove("open"); }
+  document.getElementById("gameChip").addEventListener("click", openGameCfg);
+  document.getElementById("gameCfgChip").addEventListener("click", openGameCfg);
+  document.getElementById("closeGame").addEventListener("click", closeGameCfg);
+  gamePanel.addEventListener("click", e => { if (e.target === gamePanel) closeGameCfg(); });
+  document.getElementById("gSaveBtn").addEventListener("click", () => {
+    upsertCurrentGame();
+    renderGameday();          // chips reflect the saved game
+    const btn = document.getElementById("gSaveBtn");
+    btn.textContent = "Saved ✓";
+    setTimeout(() => {
+      btn.textContent = "Save game";
+      closeGameCfg();         // back to whichever pitch you came from
+    }, 700);
+  });
+  function renderGamePitch() {
+    const cv = document.getElementById("gPitchPreview");
+    if (!cv || !cv.getContext) return;
+    const g = gday(), b = bstate();
+    const placed = g.lineup ? g.lineup.placed : b.placed;
+    const W = 460, H = Math.round(W * 105 / 68);
+    cv.width = W; cv.height = H;
+    const c = cv.getContext("2d");
+    if (!c || !c.fillRect) return;
+    drawPitchPNG(c, W, H);
+    const r = W * 0.04;
+    for (const p of roster()) {
+      const pos = placed[p.id]; if (!pos) continue;
+      tokenPNG(c, W, pos.x * W, pos.y * H, r, "#ffd60a", "#171717", p.pos);
+    }
+  }
+  function restoreLineup() {
+    closeGameCfg();
+    if (currentView !== "game") setView("game");
+    else { applyGameLineup(); renderAll(); }
+  }
+  document.getElementById("gRestore").addEventListener("click", restoreLineup);
+  document.getElementById("gPitchPreview").addEventListener("click", restoreLineup);
+
+  /* ---------------- saved games library ---------------- */
+  const gamesPanel = document.getElementById("gamesPanel");
+  function games() { return (store.data && store.data.games) || []; }
+  function gameLabel(g) {
+    let d = "";
+    if (g.date) {
+      const dt = new Date(g.date + "T00:00");
+      if (!isNaN(dt)) d = dt.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    }
+    return (g.opp ? "vs " + g.opp : "Game") + (d ? " · " + d : "") + (g.time ? " " + g.time : "");
+  }
+  function upsertCurrentGame() {
+    const g = gday();
+    if (!g.opp && !g.date && !g.notes && !g.lineup) return; // nothing worth saving
+    if (!g.id) g.id = Date.now();
+    const list = games().filter(x => x.id !== g.id);
+    list.push(JSON.parse(JSON.stringify(g)));
+    list.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    store.data.games = list;
+    store.save({ games: list });
+  }
+  function renderGamesList() {
+    const list = document.getElementById("gamesList");
+    list.innerHTML = "";
+    for (const g of games()) {
+      const row = document.createElement("div");
+      row.className = "rrow";
+      const rn = document.createElement("div");
+      rn.className = "rname"; rn.textContent = gameLabel(g);
+      const del = document.createElement("button");
+      del.className = "del"; del.textContent = "✕";
+      del.setAttribute("aria-label", "Delete game");
+      del.addEventListener("click", ev => {
+        ev.stopPropagation();
+        store.data.games = games().filter(x => x.id !== g.id);
+        store.save({ games: store.data.games });
+        renderGamesList();
+      });
+      row.append(rn, del);
+      row.addEventListener("click", () => {
+        if (currentView === "game") syncBoardToLineup(); // keep edits to the game being left
+        upsertCurrentGame();   // archive it
+        store.data.gameday = JSON.parse(JSON.stringify(g));
+        saveGday();
+        renderGameday();
+        gamesPanel.classList.remove("open");
+        // straight to this game's pitch; details sit behind the … chip
+        if (currentView === "game") { applyGameLineup(); renderAll(); redraw(); }
+        else setView("game");
+      });
+      list.appendChild(row);
+    }
+    if (!games().length) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = "No saved games yet.";
+      list.appendChild(empty);
+    }
+  }
+  document.getElementById("newGameBtn").addEventListener("click", () => {
+    if (currentView === "game") syncBoardToLineup();
+    upsertCurrentGame();   // archive the current one first
+    setView("team");
+    store.data.gameday = { date: "", time: "", opp: "", notes: "", lineup: null };
+    saveGday();
+    renderGameday();
+    gamesPanel.classList.remove("open");
+    openGameCfg();         // straight into the setup form
+  });
+  document.getElementById("closeGames").addEventListener("click", () => gamesPanel.classList.remove("open"));
+  gamesPanel.addEventListener("click", e => { if (e.target === gamesPanel) gamesPanel.classList.remove("open"); });
+  document.getElementById("gCapture").addEventListener("click", () => {
+    const b = bstate();
+    gday().lineup = {
+      formation: b.formation, squad: b.squad,
+      placed: JSON.parse(JSON.stringify(b.placed)), at: Date.now()
+    };
+    saveGday(); renderGameday();
+  });
+  document.getElementById("gShare").addEventListener("click", () => shareTeamSheet());
+
+  /* ---------------- game timer ---------------- */
+  const TKEY = "spbGameTimer";
+  let gt = { running: false, startAt: 0, period: 1, base: {}, cfg: { periods: 2, mins: 30 } };
+  try {
+    const t = JSON.parse(localStorage.getItem(TKEY));
+    if (t && t.cfg && t.base) gt = t;
+  } catch (e) {}
+  const timerDisplay = document.getElementById("timerDisplay");
+  const timerMeta = document.getElementById("timerMeta");
+  const timerChip = document.getElementById("timerChip");
+  const timerStartBtn = document.getElementById("timerStart");
+  const cfgPeriods = document.getElementById("cfgPeriods");
+  const cfgMinutes = document.getElementById("cfgMinutes");
+
+  function gtSave() { try { localStorage.setItem(TKEY, JSON.stringify(gt)); } catch (e) {} }
+  function gtElapsed() { return (gt.base[gt.period] || 0) + (gt.running ? Date.now() - gt.startAt : 0); }
+  function fmt(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  }
+  let audioCtx = null;
+  function beep(n = 2) {
+    if (n > 0) try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < n; i++) {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.value = 880; g.gain.value = 0.25;
+        const t0 = audioCtx.currentTime + i * 0.3;
+        o.start(t0); o.stop(t0 + 0.18);
+      }
+    } catch (e) {}
+    else try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    if (n > 0 && navigator.vibrate) navigator.vibrate([220, 90, 220]);
+  }
+  const plabel = () => gt.cfg.periods === 4 ? "Q" : "H";
+  function renderPeriodSeg() {
+    const cont = document.getElementById("periodSeg");
+    cont.innerHTML = "";
+    for (let i = 1; i <= gt.cfg.periods; i++) {
+      const b = document.createElement("button");
+      b.textContent = plabel() + i;
+      b.classList.toggle("on", gt.period === i);
+      b.addEventListener("click", () => {
+        if (gt.running) { gt.base[gt.period] = gtElapsed(); gt.running = false; }
+        gt.period = i;
+        gtSave(); renderPeriodSeg(); gtTick();
+      });
+      cont.appendChild(b);
+    }
+  }
+  function gtTick() {
+    const endMs = gt.cfg.mins * 60000;
+    let el = gtElapsed();
+    if (gt.running && el >= endMs) {
+      gt.running = false; gt.base[gt.period] = endMs; el = endMs;
+      beep(4); gtSave();
+    }
+    const ended = el >= endMs;
+    timerDisplay.textContent = fmt(el);
+    timerDisplay.classList.toggle("alerting", ended);
+    timerMeta.textContent = ended
+      ? `End of ${plabel()}${gt.period}`
+      : `${plabel()}${gt.period} · ${fmt(el)} of ${gt.cfg.mins}:00`;
+    timerStartBtn.textContent = gt.running ? "Pause" : (el > 0 && !ended ? "Resume" : "Start");
+    timerChip.hidden = false;
+    timerChip.textContent = `${gt.running ? "⏸" : "▶"} ${plabel()}${gt.period} ${fmt(el)}`;
+    timerChip.classList.toggle("live", gt.running);
+  }
+  function gtToggle() {
+    const endMs = gt.cfg.mins * 60000;
+    if (!gt.running && gtElapsed() >= endMs) return;
+    if (gt.running) { gt.base[gt.period] = gtElapsed(); gt.running = false; }
+    else { gt.running = true; gt.startAt = Date.now(); beep(0); }
+    gtSave(); gtTick();
+  }
+  timerStartBtn.addEventListener("click", gtToggle);
+  document.getElementById("timerReset").addEventListener("click", () => {
+    gt = { running: false, startAt: 0, period: 1, base: {}, cfg: gt.cfg };
+    gtSave(); renderPeriodSeg(); gtTick();
+  });
+  cfgPeriods.addEventListener("change", () => {
+    gt.cfg.periods = +cfgPeriods.value;
+    if (gt.period > gt.cfg.periods) gt.period = gt.cfg.periods;
+    gtSave(); renderPeriodSeg(); gtTick();
+  });
+  cfgMinutes.addEventListener("change", () => {
+    gt.cfg.mins = Math.max(1, +cfgMinutes.value || 30);
+    gtSave(); gtTick();
+  });
+  cfgPeriods.value = String(gt.cfg.periods);
+  cfgMinutes.value = String(gt.cfg.mins);
+  timerChip.addEventListener("click", gtToggle);
+
+  /* ---------------- subs timer (independent) ---------------- */
+  const SKEY = "spbSubsTimer";
+  let st = { running: false, startAt: 0, base: 0, int: 10 };
+  try {
+    const t = JSON.parse(localStorage.getItem(SKEY));
+    if (t && t.int) st = t;
+  } catch (e) {}
+  const subsDisplay = document.getElementById("subsDisplay");
+  const subsChip = document.getElementById("subsChip");
+  const subsStartBtn = document.getElementById("subsStart");
+  const cfgSubInt = document.getElementById("cfgSubInt");
+
+  function stSave() { try { localStorage.setItem(SKEY, JSON.stringify(st)); } catch (e) {} }
+  function stRemaining() {
+    const el = st.base + (st.running ? Date.now() - st.startAt : 0);
+    return st.int * 60000 - el;
+  }
+  function stTick() {
+    let rem = stRemaining();
+    if (st.running && rem <= 0) {
+      beep(3);
+      st.base = 0; st.startAt = Date.now();   // roll straight into the next interval
+      stSave();
+      rem = stRemaining();
+      subsChip.classList.add("subsDue");
+      setTimeout(() => subsChip.classList.remove("subsDue"), 8000);
+    }
+    subsDisplay.textContent = fmt(rem);
+    subsStartBtn.textContent = st.running ? "Pause" : (st.base > 0 ? "Resume" : "Start");
+    subsChip.hidden = false;
+    subsChip.textContent = `${st.running ? "⏸" : "▶"} Subs ${fmt(rem)}`;
+    subsChip.classList.toggle("live", st.running);
+  }
+  function stToggle() {
+    if (st.running) { st.base += Date.now() - st.startAt; st.running = false; }
+    else {
+      st.int = Math.max(1, +cfgSubInt.value || st.int || 10);
+      st.running = true; st.startAt = Date.now();
+      beep(0);
+    }
+    stSave(); stTick();
+  }
+  subsStartBtn.addEventListener("click", stToggle);
+  document.getElementById("subsReset").addEventListener("click", () => {
+    st = { running: false, startAt: 0, base: 0, int: st.int };
+    stSave(); stTick();
+  });
+  cfgSubInt.addEventListener("change", () => {
+    st.int = Math.max(1, +cfgSubInt.value || 10);
+    st.base = 0; stSave(); stTick();
+  });
+  cfgSubInt.value = String(st.int);
+  subsChip.addEventListener("click", stToggle);
+
+  setInterval(() => { gtTick(); stTick(); }, 500);
+  renderPeriodSeg();
+
   /* ---------------- remote updates ---------------- */
   store.subscribe(() => {
     if (dragging) return;      // do not fight the coach's thumb
     renderAll();
+    renderGameday();
   });
 
   /* ---------------- init ---------------- */
   fillFormationOptions();
   renderAll();
+  renderGameday();
   buildBall(true);
   resizeCanvas();
 }

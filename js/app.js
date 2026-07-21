@@ -7,8 +7,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=20";
-import { initBoard } from "./board.js?v=20";
+import { firebaseConfig } from "./firebase-config.js?v=32";
+import { initBoard } from "./board.js?v=32";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
@@ -58,8 +58,12 @@ const store = {
       if (!snap.exists()) return;
       // ignore echoes of our own pending writes, and any snapshot that
       // arrives while local changes are still waiting to be written —
-      // otherwise a stale server copy can undo a drag mid-flight
-      if (snap.metadata.hasPendingWrites || this.dirty) return;
+      // otherwise a stale server copy can undo a drag mid-flight.
+      // The dirty guard expires after 5s so a tab can never wedge itself
+      // on stale data if a write is slow or lost.
+      const dirtyFresh = this.dirty && (Date.now() - (this.dirtySince || 0) < 5000);
+      if (snap.metadata.hasPendingWrites || dirtyFresh) return;
+      this.dirty = false;
       this.data = snap.data();
       this.emit();
       setSyncStatus(snap.metadata.fromCache ? "Offline — changes saved on this device" : "Synced");
@@ -73,6 +77,7 @@ const store = {
   save(partial) {
     this.data = { ...(this.data || {}), ...partial };
     this.dirty = true;
+    this.dirtySince = Date.now();
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       if (isLocal()) {
@@ -299,6 +304,20 @@ if (DEMO) {
     }
   });
 }
+
+// returning to the foreground: pull the latest server state before any
+// further saves, so a backgrounded tab cannot overwrite newer data
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  if (DEMO || guest || !store.uid || store.dirty) return;
+  try {
+    const snap = await getDoc(doc(db, "teams", store.uid));
+    if (snap.exists() && !store.dirty) {
+      store.data = snap.data();
+      store.emit();
+    }
+  } catch (e) {}
+});
 
 // keep header in sync with remote team-name changes
 store.subscribe(d => {
