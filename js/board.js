@@ -130,9 +130,12 @@ export function initBoard(store) {
       el.className = "btok";
       const disc = document.createElement("div");
       disc.className = "disc"; disc.textContent = p.pos;
-      const nm = document.createElement("div");
-      nm.className = "bname"; nm.textContent = firstName(p.name);
-      el.append(disc, nm);
+      el.append(disc);
+      if (b.showNames !== false) {
+        const nm = document.createElement("div");
+        nm.className = "bname"; nm.textContent = firstName(p.name);
+        el.append(nm);
+      }
       enableBenchDrag(el, p);
       bench.appendChild(el);
     }
@@ -498,6 +501,7 @@ export function initBoard(store) {
     const b = bstate();
     b.showNames = b.showNames === false;   // flip: undefined/true -> false, false -> true
     syncControls();
+    renderBench();
     saveBoard();
   });
   oppToggle.addEventListener("click", () => {
