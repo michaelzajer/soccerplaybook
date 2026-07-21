@@ -7,8 +7,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=32";
-import { initBoard } from "./board.js?v=32";
+import { firebaseConfig } from "./firebase-config.js?v=36";
+import { initBoard } from "./board.js?v=36";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
@@ -86,8 +86,11 @@ const store = {
         return;
       }
       if (!this.uid) return;
+      // full replace, NOT merge: merge deep-combines nested maps, so removed
+      // players (benched / reset) were never deleted server-side and kept
+      // resurrecting on the next sync echo
       setDoc(doc(db, "teams", this.uid),
-        { ...this.data, updatedAt: serverTimestamp() }, { merge: true })
+        { ...this.data, updatedAt: serverTimestamp() })
         .then(() => { this.dirty = false; })
         .catch(() => { this.dirty = false; setSyncStatus("Offline — changes saved on this device"); });
     }, 600);

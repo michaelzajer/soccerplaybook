@@ -9,11 +9,12 @@
   --ink-faint:#5d675f;
   --grass-a:#2e7c4a;
   --grass-b:#297042;
-  --team:#ffd60a;
-  --team-ink:#171717;
+  --team:#2563eb;
+  --team-ink:#ffffff;
   --opp:#ff453a;
   --opp-ink:#fff;
-  --accent:#ffd60a;
+  --accent:#3b82f6;
+  --accent-ink:#ffffff;
   --r-lg:20px;
   --r-md:12px;
   --r-pill:999px;
@@ -70,7 +71,7 @@ button:active{transform:scale(.96)}
 .card input:focus,.sheet input:focus{outline:none;border-color:var(--accent)}
 .card input::placeholder,.sheet input::placeholder{color:var(--ink-faint)}
 button.primary{
-  background:var(--accent);color:var(--team-ink);border:none;border-radius:var(--r-pill);
+  background:var(--accent);color:var(--accent-ink);border:none;border-radius:var(--r-pill);
   font-weight:700;font-size:var(--t-md);letter-spacing:.06em;
   text-transform:uppercase;padding:11px;
 }
@@ -85,24 +86,62 @@ button.primary:disabled{opacity:.5}
 
 /* ---------- top bar ---------- */
 header{
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;gap:6px;
   padding:12px 16px 2px;flex:0 0 auto;
   padding-top:calc(12px + env(safe-area-inset-top));
 }
 header h1{
   font-size:var(--t-lg);font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--ink);white-space:nowrap;
-  max-width:60vw;overflow:hidden;text-overflow:ellipsis;
+  max-width:70vw;overflow:hidden;text-overflow:ellipsis;
 }
-header h1::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;
-  background:var(--accent);margin-right:8px;vertical-align:2px}
+header h1::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;
+  background:var(--team);margin-right:8px;vertical-align:2px;
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.25)}
 header .spacer{flex:1}
 
 #controls{
   display:flex;gap:6px;align-items:center;
-  padding:8px 16px;flex:0 0 auto;
+  padding:8px 16px 4px;flex:0 0 auto;
 }
-#controls .spacer{flex:1}
+#controls .seg{flex:1}
+#controls .seg button{flex:1;text-align:center}
+
+/* ---------- match bar (game view only) ---------- */
+#matchBar{
+  display:none;align-items:center;gap:4px;
+  margin:4px 16px 0;padding:4px;flex:0 0 auto;
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-md);
+}
+body.gameView #matchBar{display:flex}
+#matchBar button{
+  background:none;border:none;color:var(--ink);font-family:inherit;
+  font-weight:600;font-size:14px;padding:8px 10px;border-radius:8px;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#matchBar [hidden]{display:none}
+#gameChip{
+  flex:1;text-align:left;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;
+}
+#timerChip,#subsChip{background:var(--bg);border:1px solid var(--line)}
+#matchBar button.live{border-color:var(--accent);color:var(--accent)}
+#matchBar button.subsDue{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#gameCfgChip{color:var(--ink-dim);padding:8px 12px}
+#gameCfgChip:hover{color:var(--ink)}
+
+/* ---------- floating pitch tools ---------- */
+#pitchTools{
+  position:absolute;top:8px;right:8px;z-index:5;
+  display:flex;gap:6px;
+}
+#pitchTools select,#pitchTools .chip{
+  background:rgba(16,20,17,.72);border-color:rgba(255,255,255,.16);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  color:#fff;
+}
+body.drillsMode #pitchTools{display:none}
 
 select,.chip{
   flex:0 0 auto;
@@ -113,11 +152,11 @@ select,.chip{
 select:focus{outline:none;border-color:var(--line-strong)}
 .seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;flex:0 0 auto;height:31px}
 .seg button{border:none;background:transparent;color:var(--ink-dim);border-radius:var(--r-pill);padding:0 12px;font-size:13px;font-weight:600;letter-spacing:.04em;line-height:1}
-.seg button.on{background:var(--accent);color:var(--team-ink)}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
 .seg .chev{display:none;font-size:10px;line-height:1;opacity:.75}
 .seg button.on .chev{display:inline}
 .chip:hover{border-color:var(--line-strong)}
-.chip.on{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .iconChip{width:31px;padding:0;text-align:center;font-size:14px}
 
 /* ---------- board options sheet ---------- */
@@ -272,7 +311,7 @@ body:not(.drillsMode) .ditem{display:none}
 /* drill piece shapes — sized as % of their container so they scale
    with the pitch (on-pitch) and stay tidy in the tray (fixed .tico box) */
 .cone{width:72%;aspect-ratio:9/8;background:linear-gradient(#ffa02e,#ff7a00);clip-path:polygon(50% 0,90% 100%,10% 100%)}
-.disc{width:62%;aspect-ratio:1;border-radius:50%;background:#2f9bff;border:2px solid rgba(255,255,255,.55)}
+.disc{width:62%;aspect-ratio:1;border-radius:50%;background:#ffd60a;border:2px solid rgba(255,255,255,.55)}
 .pole{width:20%;height:100%;border-radius:3px;background:repeating-linear-gradient(#ff453a 0 22%,#fff 22% 44%)}
 .dball{width:62%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 55%,#d9d9d9 100%);position:relative}
 .dball::after{content:"";position:absolute;inset:30%;background:#111;border-radius:50%;clip-path:polygon(50% 0,95% 35%,78% 90%,22% 90%,5% 35%)}
@@ -324,7 +363,7 @@ footer{
   text-align:center;line-height:1;
 }
 .mode:hover,.act:hover{color:var(--ink)}
-.mode.on{background:var(--accent);color:var(--team-ink)}
+.mode.on{background:var(--accent);color:var(--accent-ink)}
 .act{border-left:1px solid var(--line);border-radius:0}
 .act:first-of-type{margin-left:3px}
 .act:last-of-type{border-radius:0 var(--r-pill) var(--r-pill) 0}
@@ -355,7 +394,7 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 #inName,#suName{flex:1}
 #inPos,#suPos{width:64px;flex:0 0 64px;text-transform:uppercase;text-align:center}
 .addRow button{
-  background:var(--accent);color:var(--team-ink);border:none;border-radius:var(--r-md);
+  background:var(--accent);color:var(--accent-ink);border:none;border-radius:var(--r-md);
   font-weight:700;font-size:var(--t-sm);padding:8px 14px;
 }
 .rosterList{
@@ -416,7 +455,7 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
   flex:1;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-dim);
   border-radius:var(--r-pill);padding:8px;font-size:var(--t-sm);font-weight:700;letter-spacing:.05em;
 }
-.segRow button.on{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
+.segRow button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 
 /* ---------- match timer ---------- */
 .timerBig{font-size:52px;font-weight:700;text-align:center;letter-spacing:.06em;line-height:1;font-variant-numeric:tabular-nums}
@@ -425,16 +464,10 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 .cfgRow{display:flex;gap:8px}
 .tlab{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--ink-dim)}
 .tlab select,.tlab input{height:38px;border-radius:var(--r-md);padding:0 10px;font-size:15px}
+.tlab input[type="color"]{padding:3px;cursor:pointer;background:var(--bg);border:1px solid var(--line);width:100%}
 .timerBtns{display:flex;gap:6px}
 .timerBtns .primary{flex:1.4;padding:10px}
 .timerBtns .close{flex:1}
-#timerChip,#subsChip{font-variant-numeric:tabular-nums}
-.chip.live{border-color:var(--accent);color:var(--accent)}
-.chip.subsDue{background:var(--accent);color:var(--team-ink);border-color:var(--accent)}
-/* game chips belong to the game pitch view only */
-#gameChip,#gameCfgChip,#timerChip,#subsChip{display:none}
-body.gameView #gameChip:not([hidden]),body.gameView #gameCfgChip:not([hidden]),
-body.gameView #timerChip:not([hidden]),body.gameView #subsChip:not([hidden]){display:block}
 
 /* per-drill row actions */
 .rrow .shr{background:none;border:none;color:var(--ink-dim);font-size:15px;padding:2px 6px;flex:0 0 auto}

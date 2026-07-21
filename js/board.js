@@ -54,6 +54,20 @@ export function initBoard(store) {
   const namesToggle = document.getElementById("namesToggle");
 
   const roster = () => (store.data && store.data.roster) || [];
+  function colors() {
+    const c = (store.data && store.data.colors) || {};
+    return { team: c.team || "#2563eb", opp: c.opp || "#ff453a" };
+  }
+  function inkFor(hex) {
+    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b2 = parseInt(hex.slice(5, 7), 16);
+    return (r * 299 + g * 587 + b2 * 114) / 1000 > 140 ? "#171717" : "#ffffff";
+  }
+  function applyColors() {
+    const c = colors();
+    const rs = document.documentElement.style;
+    rs.setProperty("--team", c.team); rs.setProperty("--team-ink", inkFor(c.team));
+    rs.setProperty("--opp", c.opp); rs.setProperty("--opp-ink", inkFor(c.opp));
+  }
   const bstate = () => {
     if (!store.data.board) store.data.board = { squad: "11", formation: "4-3-3", showOpp: false, placed: {} };
     return store.data.board;
@@ -149,6 +163,7 @@ export function initBoard(store) {
     board.classList.toggle("hideNames", !namesOn);
   }
   function renderAll() {
+    applyColors();
     syncControls();
     renderTeam();
     buildOpp();
@@ -431,8 +446,21 @@ export function initBoard(store) {
   });
   document.getElementById("squadBtn").addEventListener("click", () => {
     editTeamName.value = store.data.teamName || "";
+    const c = colors();
+    document.getElementById("teamColor").value = c.team;
+    document.getElementById("oppColor").value = c.opp;
     renderRoster();
     panel.classList.add("open");
+  });
+  ["teamColor", "oppColor"].forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
+      store.data.colors = {
+        team: document.getElementById("teamColor").value,
+        opp: document.getElementById("oppColor").value
+      };
+      store.save({ colors: store.data.colors });
+      applyColors();
+    });
   });
   document.getElementById("closeSquad").addEventListener("click", () => panel.classList.remove("open"));
   panel.addEventListener("click", e => { if (e.target === panel) panel.classList.remove("open"); });
@@ -871,16 +899,17 @@ export function initBoard(store) {
     cur.forEach(s => drawStrokePNG(c, W, H, s));
     const r = W * 0.032;
     const showNames = b.showNames !== false;
+    const col = colors();
     if (b.showOpp) {
       oppTokens.forEach(el => {
         const x = parseFloat(el.style.left) / 100 * W;
         const y = parseFloat(el.style.top) / 100 * H;
-        tokenPNG(c, W, x, y, r, "#ff453a", "#fff", el.childNodes[0].textContent || "");
+        tokenPNG(c, W, x, y, r, col.opp, inkFor(col.opp), el.childNodes[0].textContent || "");
       });
     }
     for (const p of roster()) {
       const pos = b.placed[p.id]; if (!pos) continue;
-      tokenPNG(c, W, pos.x * W, pos.y * H, r, "#ffd60a", "#171717", p.pos,
+      tokenPNG(c, W, pos.x * W, pos.y * H, r, col.team, inkFor(col.team), p.pos,
         showNames ? firstName(p.name) : null);
     }
     if (ballToken) {
@@ -897,7 +926,7 @@ export function initBoard(store) {
       c.fillStyle = "#ff8a14";
       c.beginPath(); c.moveTo(0, -u); c.lineTo(u * .9, u); c.lineTo(-u * .9, u); c.closePath(); c.fill();
     } else if (kind === "disc") {
-      c.fillStyle = "#2f9bff"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
+      c.fillStyle = "#ffd60a"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
       c.lineWidth = 3; c.strokeStyle = "rgba(255,255,255,.55)"; c.stroke();
     } else if (kind === "pole") {
       c.fillStyle = "#ff453a"; c.fillRect(-u * .18, -u * 1.4, u * .36, u * 2.8);
@@ -908,7 +937,7 @@ export function initBoard(store) {
       c.fillStyle = "#fff"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
       c.fillStyle = "#111"; c.beginPath(); c.arc(0, 0, u * .3, 0, 7); c.fill();
     } else if (kind === "att" || kind === "def") {
-      c.fillStyle = kind === "att" ? "#ffd60a" : "#ff453a";
+      c.fillStyle = kind === "att" ? colors().team : colors().opp;
       c.beginPath(); c.arc(0, 0, u, 0, 7); c.fill();
       c.lineWidth = 2.5; c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
     } else if (kind === "goal" || kind === "mini") {
@@ -961,9 +990,8 @@ export function initBoard(store) {
       : "Showing the current board — capture it to save this game's line-up. Tap the pitch to edit.";
     document.getElementById("gRestore").hidden = !g.lineup;
     const gameChip = document.getElementById("gameChip");
-    gameChip.hidden = !(g.opp || g.date);
-    if (!gameChip.hidden) gameChip.textContent = g.opp ? "vs " + g.opp : "Game";
-    document.getElementById("gameCfgChip").hidden = false; // CSS limits it to the game view
+    gameChip.textContent = g.opp ? "vs " + g.opp : "Game day";
+    document.getElementById("gameCfgChip").hidden = false; // CSS limits the bar to the game view
     renderGamePitch();
   }
   const gamePanel = document.getElementById("gamePanel");
@@ -997,9 +1025,10 @@ export function initBoard(store) {
     if (!c || !c.fillRect) return;
     drawPitchPNG(c, W, H);
     const r = W * 0.04;
+    const col = colors();
     for (const p of roster()) {
       const pos = placed[p.id]; if (!pos) continue;
-      tokenPNG(c, W, pos.x * W, pos.y * H, r, "#ffd60a", "#171717", p.pos);
+      tokenPNG(c, W, pos.x * W, pos.y * H, r, col.team, inkFor(col.team), p.pos);
     }
   }
   function restoreLineup() {

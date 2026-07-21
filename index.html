@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=32">
+<link rel="stylesheet" href="styles.css?v=36">
 </head>
 <body>
 
@@ -62,22 +62,22 @@
       <button data-view="game">Game day <span class="chev">⌄</span></button>
       <button data-view="drills">Drills <span class="chev">⌄</span></button>
     </div>
-    <select id="squad">
-      <option value="11">11 v 11</option>
-      <option value="9">9 v 9</option>
-    </select>
-    <select id="formation"></select>
-    <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
-    <div class="spacer"></div>
-    <button class="chip" id="gameChip" hidden>vs</button>
-    <button class="chip iconChip" id="gameCfgChip" hidden aria-label="Game configuration">…</button>
-    <button class="chip" id="timerChip" hidden>00:00</button>
-    <button class="chip" id="subsChip" hidden>Subs 10:00</button>
+  </div>
+
+  <div id="matchBar">
+    <button id="gameChip">Game</button>
+    <button id="timerChip" hidden>00:00</button>
+    <button id="subsChip" hidden>Subs 10:00</button>
+    <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
   </div>
 
   <main><div id="board">
     <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
     <canvas id="ink"></canvas>
+    <div id="pitchTools">
+      <select id="formation"></select>
+      <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
+    </div>
   </div></main>
 
   <!-- game configuration sheet -->
@@ -185,6 +185,20 @@
     <div class="sheet">
       <h2>My Squad</h2>
       <input id="editTeamName" type="text" placeholder="Team name" maxlength="40">
+      <div class="cfgRow">
+        <label class="tlab">Squad size
+          <select id="squad">
+            <option value="11">11 v 11</option>
+            <option value="9">9 v 9</option>
+          </select>
+        </label>
+        <label class="tlab">Team colour
+          <input type="color" id="teamColor" value="#2563eb">
+        </label>
+        <label class="tlab">Opposition
+          <input type="color" id="oppColor" value="#ff453a">
+        </label>
+      </div>
       <div class="addRow">
         <input id="inName" placeholder="Player name" autocomplete="off">
         <input id="inPos" placeholder="POS" maxlength="3" autocomplete="off" list="posList">
@@ -258,6 +272,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=32"></script>
+<script type="module" src="js/app.js?v=36"></script>
 </body>
 </html>
