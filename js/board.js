@@ -479,8 +479,14 @@ export function initBoard(store) {
     if (b && ["squadBtn", "drillLibBtn", "resetBtn"].includes(b.id))
       ctlMenuPanel.classList.remove("open");
   });
+  function clearDrillBoard() {
+    clearDrillItems();
+    strokes.length = 0;   // clear the active buffer in place, whatever it points at
+    redraw();
+  }
   document.getElementById("reformBtn").addEventListener("click", () => {
-    applyFormation();   // players back to standard shape; drawings stay
+    if (drillsMode) { clearDrillBoard(); return; }   // drills: ⟳ clears the pitch
+    applyFormation();   // team: players back to standard shape; drawings stay
   });
 
   document.querySelectorAll(".mode").forEach(b => {
@@ -494,7 +500,7 @@ export function initBoard(store) {
   document.getElementById("undoBtn").addEventListener("click", () => { strokes.pop(); redraw(); });
   document.getElementById("clearBtn").addEventListener("click", () => { strokes = []; redraw(); });
   document.getElementById("resetBtn").addEventListener("click", () => {
-    if (drillsMode) { clearDrillItems(); strokes = []; redraw(); return; }
+    if (drillsMode) { clearDrillBoard(); return; }
     strokes = []; redraw(); applyFormation(); buildBall(true);
   });
   namesToggle.addEventListener("click", () => {
@@ -582,6 +588,9 @@ export function initBoard(store) {
     drillsMode = v === "drills";
     document.body.classList.toggle("drillsMode", drillsMode);
     document.body.classList.toggle("gameView", v === "game");
+    const rb = document.getElementById("reformBtn");
+    rb.setAttribute("aria-label", drillsMode ? "Clear pitch" : "Reset formation");
+    rb.setAttribute("title", drillsMode ? "Clear the pitch" : "Reset players to formation");
     document.querySelectorAll("#viewSeg button").forEach(b =>
       b.classList.toggle("on", b.dataset.view === v));
     renderAll();
@@ -603,6 +612,8 @@ export function initBoard(store) {
       if (v === currentView) {
         document.getElementById("ctlMenuTitle").textContent =
           v === "drills" ? "Drill options" : "Team options";
+        document.getElementById("resetBtn").textContent =
+          v === "drills" ? "Clear pitch" : "Reset board";
         document.getElementById("ctlMenuPanel").classList.add("open");
       } else {
         setView(v);

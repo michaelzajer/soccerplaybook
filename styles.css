@@ -278,7 +278,7 @@ body.drawing .tok{pointer-events:none}
   transition:border-color .15s ease,background .15s ease;
 }
 #drillTray.dropTarget{border-color:#ff7b6b;background:rgba(255,69,58,.06)}
-body.drillsMode #squad,body.drillsMode #formation,body.drillsMode #reformBtn,
+body.drillsMode #squad,body.drillsMode #formation,
 body.drillsMode #squadBtn,body.drillsMode #oppToggle,body.drillsMode #namesToggle,
 body.drillsMode #shareTeamBtn,body.drillsMode #benchZone{display:none}
 #board.hideNames .pname{display:none}
