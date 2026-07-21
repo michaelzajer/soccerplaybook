@@ -282,6 +282,18 @@ body.drillsMode #squad,body.drillsMode #formation,body.drillsMode #reformBtn,
 body.drillsMode #squadBtn,body.drillsMode #oppToggle,body.drillsMode #namesToggle,
 body.drillsMode #shareTeamBtn,body.drillsMode #benchZone{display:none}
 #board.hideNames .pname{display:none}
+.presetLabel{font-size:11px;font-weight:600;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin:2px 0 6px}
+.presetRow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.presetChip{background:var(--bg);color:var(--ink);border:1px solid var(--line-strong);border-radius:var(--r-pill);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.presetChip:active{border-color:var(--accent);color:var(--accent)}
+.diTrains{color:var(--accent);font-size:13px;font-weight:600;margin:-4px 0 12px}
+.diLabel{font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 5px}
+.diSetup{margin:0;font-size:14px;line-height:1.45;color:var(--ink)}
+.diList{margin:0;padding-left:20px}
+.diList li{font-size:14px;line-height:1.5;color:var(--ink);margin-bottom:3px}
+.diPoints li{color:var(--ink-dim)}
+#drillInfoPanel .primary{margin-top:16px}
+#drillInfoPanel .sheet{overflow-y:auto}
 #drillLibBtn{display:none}
 body.drillsMode #drillLibBtn{display:flex}
 body.drillsMode #drillLibBtn{display:block}

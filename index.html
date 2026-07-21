@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=37">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 
@@ -242,14 +242,32 @@
   <div id="drillPanel" class="overlay">
     <div class="sheet">
       <h2>Drills</h2>
+      <div class="presetLabel">Starter drills</div>
+      <div id="presetRow" class="presetRow"></div>
       <div class="addRow">
         <input id="drillName" placeholder="Drill name" maxlength="40" autocomplete="off">
         <button type="button" id="saveDrillBtn">Save</button>
       </div>
       <div id="drillList" class="rosterList"></div>
       <div class="hint guestNote" id="drillGuestNote" hidden>Guest mode: drills only live on this device. Create a free account to keep them and use them anywhere.</div>
-      <div class="hint">Save saves what is on the pitch now. Tap a drill to load it.</div>
+      <div class="hint">Save saves what is on the pitch now. Tap a saved drill to load it.</div>
       <button class="close" id="closeDrills">Done</button>
+    </div>
+  </div>
+
+  <!-- drill instructions sheet -->
+  <div id="drillInfoPanel" class="overlay">
+    <div class="sheet">
+      <h2 id="diTitle">Drill</h2>
+      <div class="diTrains" id="diTrains"></div>
+      <div class="diLabel">Set-up</div>
+      <p class="diSetup" id="diSetup"></p>
+      <div class="diLabel">How it runs</div>
+      <ol class="diList" id="diSteps"></ol>
+      <div class="diLabel">Coaching points</div>
+      <ul class="diList diPoints" id="diCoaching"></ul>
+      <button class="primary" id="diLoadBtn">Load onto pitch</button>
+      <button class="close" id="diClose">Back</button>
     </div>
   </div>
 
@@ -272,6 +290,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=37"></script>
+<script type="module" src="js/app.js?v=40"></script>
 </body>
 </html>

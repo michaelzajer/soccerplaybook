@@ -737,7 +737,270 @@ export function initBoard(store) {
   const drillPanel = document.getElementById("drillPanel");
   const drillNameIn = document.getElementById("drillName");
 
+  // Built-in starter drills. Coordinates are normalised 0..1 on a portrait pitch
+  // (y=0 is the top goal). Tapping loads onto the board; the coach can tweak and Save.
+  const PRESET_DRILLS = [
+    {
+      // 5 attackers keep the ball off 2 defenders inside a marked box.
+      // Ball circulates round the edge, then a split pass cuts the middle.
+      name: "Rondo 5v2",
+      info: {
+        trains: "Possession under pressure, first touch, scanning",
+        setup: "Mark a 15x15m box. Five players spread around the edge, two defenders inside.",
+        steps: [
+          "Outside players keep the ball, one or two touch.",
+          "Circulate around the edge, then split the two defenders when a gap opens.",
+          "A defender who wins it or forces it out swaps with the player at fault."
+        ],
+        coaching: [
+          "Open your body to see the next pass before the ball arrives.",
+          "First touch away from pressure.",
+          "Move after you pass — do not stand still."
+        ]
+      },
+      items: [
+        { kind: "disc", x: 0.26, y: 0.28 }, { kind: "disc", x: 0.74, y: 0.28 },
+        { kind: "disc", x: 0.74, y: 0.72 }, { kind: "disc", x: 0.26, y: 0.72 },
+        { kind: "att", x: 0.30, y: 0.42 }, { kind: "att", x: 0.50, y: 0.26 },
+        { kind: "att", x: 0.70, y: 0.42 }, { kind: "att", x: 0.62, y: 0.70 },
+        { kind: "att", x: 0.38, y: 0.70 },
+        { kind: "def", x: 0.46, y: 0.48 }, { kind: "def", x: 0.56, y: 0.55 },
+        { kind: "dball", x: 0.32, y: 0.44 }
+      ],
+      strokes: [
+        { mode: "pass", pts: [[0.30, 0.42], [0.50, 0.26]] },
+        { mode: "pass", pts: [[0.50, 0.26], [0.70, 0.42]] },
+        { mode: "pass", pts: [[0.70, 0.42], [0.38, 0.70]] },   // split pass
+        { mode: "pass", pts: [[0.38, 0.70], [0.62, 0.70]] },
+        { mode: "pass", pts: [[0.62, 0.70], [0.30, 0.42]] }
+      ]
+    },
+    {
+      // Midfielder sets to the winger, deep player overlaps outside,
+      // winger dribbles the byline and crosses for the striker to finish.
+      name: "Overlap & Cross",
+      info: {
+        trains: "Wide combination play, overlapping runs, crossing and finishing",
+        setup: "One channel down the right, goal at the top. Feeder starts centrally with the ball, striker in front, winger wide.",
+        steps: [
+          "Feeder passes into the striker's feet.",
+          "Striker sets it out wide to the winger.",
+          "Feeder overlaps outside the winger.",
+          "Winger drives to the byline and crosses.",
+          "Striker attacks the cross to finish."
+        ],
+        coaching: [
+          "Time the overlap — go as the set pass is played.",
+          "Weight and disguise the set-up pass.",
+          "Attack the cross at the near post, do not wait for it."
+        ]
+      },
+      items: [
+        { kind: "goal", x: 0.50, y: 0.10 },
+        { kind: "cone", x: 0.34, y: 0.68 }, { kind: "cone", x: 0.66, y: 0.68 },
+        { kind: "att", x: 0.50, y: 0.84 }, { kind: "att", x: 0.50, y: 0.54 },
+        { kind: "att", x: 0.75, y: 0.62 },
+        { kind: "def", x: 0.50, y: 0.16 },
+        { kind: "dball", x: 0.50, y: 0.86 }
+      ],
+      strokes: [
+        { mode: "pass", pts: [[0.50, 0.84], [0.50, 0.56]] },   // feeder to striker
+        { mode: "pass", pts: [[0.50, 0.56], [0.73, 0.62]] },   // set out to winger
+        { mode: "run", pts: [[0.50, 0.84], [0.68, 0.72], [0.82, 0.46]] }, // overlap
+        { mode: "dribble", pts: [[0.75, 0.62], [0.82, 0.44], [0.85, 0.30]] }, // byline
+        { mode: "pass", pts: [[0.85, 0.30], [0.52, 0.20]] },   // cross
+        { mode: "run", pts: [[0.50, 0.56], [0.49, 0.24]] }     // striker attacks it
+      ]
+    },
+    {
+      // Weave the poles, beat a defender, finish. Second striker follows
+      // in for the rebound.
+      name: "Slalom & Finish",
+      info: {
+        trains: "Close control at speed, beating a player, finishing",
+        setup: "Four poles staggered from the edge of the box, a passive defender inside, goal at the top. Players queue at the start with a ball each.",
+        steps: [
+          "Dribble through the poles with close control.",
+          "Accelerate out of the last pole and beat the defender.",
+          "Finish low across the keeper.",
+          "A second player follows in for any rebound."
+        ],
+        coaching: [
+          "Small touches through the poles, both feet.",
+          "Change of pace on the exit.",
+          "Head up before the shot — pick your spot."
+        ]
+      },
+      items: [
+        { kind: "goal", x: 0.50, y: 0.10 },
+        { kind: "pole", x: 0.44, y: 0.78 }, { kind: "pole", x: 0.58, y: 0.70 },
+        { kind: "pole", x: 0.44, y: 0.62 }, { kind: "pole", x: 0.58, y: 0.54 },
+        { kind: "def", x: 0.50, y: 0.40 },
+        { kind: "att", x: 0.50, y: 0.86 }, { kind: "att", x: 0.28, y: 0.44 },
+        { kind: "dball", x: 0.50, y: 0.88 }
+      ],
+      strokes: [
+        { mode: "dribble", pts: [
+          [0.50, 0.86], [0.36, 0.80], [0.56, 0.72], [0.38, 0.64],
+          [0.58, 0.56], [0.40, 0.46], [0.58, 0.36]
+        ] },
+        { mode: "pass", pts: [[0.58, 0.36], [0.50, 0.13]] },   // shot
+        { mode: "run", pts: [[0.28, 0.44], [0.44, 0.22]] }     // follow in
+      ]
+    },
+    {
+      // Two attackers against one defender plus a keeper. Carry, combine
+      // around the defender, finish; second attacker fills the far post.
+      name: "2v1 to Goal",
+      info: {
+        trains: "Attacking overloads, decision making, finishing",
+        setup: "Start from cones about 25m out, one defender between the attackers and goal, keeper in.",
+        steps: [
+          "Ball carrier drives at the defender to commit them.",
+          "Release the second attacker at the right moment.",
+          "Support runner finishes first time.",
+          "Carrier continues to the far post for any rebound."
+        ],
+        coaching: [
+          "Draw the defender in before releasing the pass.",
+          "Do not pass too early — make the decision for them.",
+          "Talk to each other on the run."
+        ]
+      },
+      items: [
+        { kind: "goal", x: 0.50, y: 0.10 },
+        { kind: "cone", x: 0.30, y: 0.82 }, { kind: "cone", x: 0.70, y: 0.82 },
+        { kind: "att", x: 0.40, y: 0.76 }, { kind: "att", x: 0.62, y: 0.70 },
+        { kind: "def", x: 0.50, y: 0.46 }, { kind: "def", x: 0.50, y: 0.16 },
+        { kind: "dball", x: 0.40, y: 0.78 }
+      ],
+      strokes: [
+        { mode: "dribble", pts: [[0.40, 0.76], [0.44, 0.54]] },
+        { mode: "pass", pts: [[0.44, 0.54], [0.62, 0.48]] },   // release the 2nd man
+        { mode: "run", pts: [[0.62, 0.70], [0.60, 0.42]] },
+        { mode: "pass", pts: [[0.60, 0.42], [0.52, 0.14]] },   // shot
+        { mode: "run", pts: [[0.44, 0.54], [0.44, 0.24]] }     // far post support
+      ]
+    },
+    {
+      // Winger delivers from wide; near- and far-post runners time their
+      // movement to attack the cross.
+      name: "Crossing & Finishing",
+      info: {
+        trains: "Delivery from wide areas, timing runs, first-time finishing",
+        setup: "Winger wide with a supply of balls, two strikers central, keeper in goal.",
+        steps: [
+          "Winger drives to the byline and crosses.",
+          "Near-post runner attacks the front space.",
+          "Far-post runner holds, then arrives behind.",
+          "Finish first time."
+        ],
+        coaching: [
+          "Delay the runs until the cross is struck.",
+          "Attack the ball, do not wait for it.",
+          "Keep near and far post runners separated."
+        ]
+      },
+      items: [
+        { kind: "goal", x: 0.50, y: 0.10 },
+        { kind: "cone", x: 0.72, y: 0.70 }, { kind: "cone", x: 0.74, y: 0.46 },
+        { kind: "att", x: 0.80, y: 0.58 }, { kind: "att", x: 0.42, y: 0.36 },
+        { kind: "att", x: 0.60, y: 0.40 },
+        { kind: "def", x: 0.50, y: 0.16 },
+        { kind: "dball", x: 0.80, y: 0.60 }
+      ],
+      strokes: [
+        { mode: "dribble", pts: [[0.80, 0.58], [0.84, 0.42], [0.86, 0.28]] },
+        { mode: "pass", pts: [[0.86, 0.28], [0.50, 0.22]] },   // cross
+        { mode: "run", pts: [[0.42, 0.36], [0.40, 0.20]] },    // near post
+        { mode: "run", pts: [[0.60, 0.40], [0.58, 0.22]] }     // far post
+      ]
+    },
+    {
+      // Third-man run: A into the pivot, pivot releases C who has timed a
+      // run beyond, C finishes. Classic penetrating combination.
+      name: "Third-Man Run",
+      info: {
+        trains: "Penetrating combinations, timing of runs, playing forward",
+        setup: "Player A on the ball deep, a pivot in front of them, player C wide and high ready to run. Goal at the top.",
+        steps: [
+          "A plays into the pivot's feet.",
+          "As the ball travels, C bursts beyond the line.",
+          "Pivot releases C first time in behind.",
+          "C finishes — C is the third man who receives the penetrating pass."
+        ],
+        coaching: [
+          "C's run starts as the first pass is played, not after.",
+          "One touch from the pivot to keep the tempo.",
+          "Run beyond the defence, not to feet."
+        ]
+      },
+      items: [
+        { kind: "goal", x: 0.50, y: 0.10 },
+        { kind: "cone", x: 0.36, y: 0.70 }, { kind: "cone", x: 0.64, y: 0.70 },
+        { kind: "att", x: 0.50, y: 0.84 }, { kind: "att", x: 0.52, y: 0.56 },
+        { kind: "att", x: 0.78, y: 0.66 },
+        { kind: "def", x: 0.50, y: 0.16 },
+        { kind: "dball", x: 0.50, y: 0.86 }
+      ],
+      strokes: [
+        { mode: "pass", pts: [[0.50, 0.84], [0.52, 0.58]] },   // A to pivot
+        { mode: "run", pts: [[0.78, 0.66], [0.66, 0.48], [0.58, 0.38]] }, // third-man run
+        { mode: "pass", pts: [[0.52, 0.56], [0.60, 0.40]] },   // pivot releases C
+        { mode: "pass", pts: [[0.60, 0.40], [0.50, 0.14]] }    // finish
+      ]
+    }
+  ];
+  function loadPreset(p) {
+    setDrillsMode(true);
+    clearDrillItems();
+    (p.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y));
+    strokes = (p.strokes || []).map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]) }));
+    redraw();
+  }
+
   function drills() { return (store.data && store.data.drills) || []; }
+  function renderPresetRow() {
+    const row = document.getElementById("presetRow");
+    if (!row || row.childElementCount) return;   // build once
+    for (const p of PRESET_DRILLS) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "presetChip";
+      chip.textContent = p.name;
+      chip.addEventListener("click", () => showDrillInfo(p));
+      row.appendChild(chip);
+    }
+  }
+  const drillInfoPanel = document.getElementById("drillInfoPanel");
+  function fillList(el, items) {
+    el.innerHTML = "";
+    (items || []).forEach(t => {
+      const li = document.createElement("li");
+      li.textContent = t;
+      el.appendChild(li);
+    });
+  }
+  function showDrillInfo(p) {
+    const info = p.info || {};
+    document.getElementById("diTitle").textContent = p.name;
+    document.getElementById("diTrains").textContent = info.trains || "";
+    document.getElementById("diSetup").textContent = info.setup || "";
+    fillList(document.getElementById("diSteps"), info.steps);
+    fillList(document.getElementById("diCoaching"), info.coaching);
+    const loadBtn = document.getElementById("diLoadBtn");
+    loadBtn.onclick = () => {
+      loadPreset(p);
+      drillInfoPanel.classList.remove("open");
+      drillPanel.classList.remove("open");
+    };
+    drillInfoPanel.classList.add("open");
+  }
+  document.getElementById("diClose").addEventListener("click",
+    () => drillInfoPanel.classList.remove("open"));
+  drillInfoPanel.addEventListener("click", e => {
+    if (e.target === drillInfoPanel) drillInfoPanel.classList.remove("open");
+  });
   function renderDrillList() {
     const list = document.getElementById("drillList");
     list.innerHTML = "";
@@ -785,6 +1048,7 @@ export function initBoard(store) {
     renderDrillList();
   });
   document.getElementById("drillLibBtn").addEventListener("click", () => {
+    renderPresetRow();
     renderDrillList();
     drillPanel.classList.add("open");
   });
