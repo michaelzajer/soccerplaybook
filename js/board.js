@@ -350,7 +350,7 @@ export function initBoard(store) {
   function paint(s, r) {
     const pts = s.pts; if (pts.length < 2) return;
     ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.strokeStyle = "rgba(255,255,255,.95)";
+    ctx.strokeStyle = s.color || "rgba(255,255,255,.95)";
     ctx.setLineDash(s.mode === "pass" ? [9, 8] : []);
     ctx.beginPath();
     if (s.mode === "dribble") {
@@ -382,6 +382,7 @@ export function initBoard(store) {
     board.setPointerCapture(e.pointerId);
     const r = board.getBoundingClientRect();
     current = { mode, pts: [[(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]] };
+    if (drillsMode && drillColor !== "#ffffff") current.color = drillColor; // colour drill lines only
     const mv = ev => {
       current.pts.push([(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height]);
       redraw();
@@ -497,6 +498,29 @@ export function initBoard(store) {
       document.body.classList.toggle("drawing", mode !== "move");
     });
   });
+  // drill colour palette: a swatch pops up out of the bottom toolbar and sets
+  // the colour of the next cone/marker/line placed
+  const drillColors = document.getElementById("drillColors");
+  const colorDot = document.getElementById("colorDot");
+  document.getElementById("colorBtn").addEventListener("click", e => {
+    e.stopPropagation();
+    drillColors.classList.toggle("open");
+  });
+  document.querySelectorAll("#drillColors .swatch").forEach(sw => {
+    sw.addEventListener("click", () => {
+      document.querySelectorAll("#drillColors .swatch").forEach(x => x.classList.remove("on"));
+      sw.classList.add("on");
+      drillColor = sw.dataset.color;
+      colorDot.style.background = drillColor;
+      drillColors.classList.remove("open");
+    });
+  });
+  // tap anywhere else closes the pop-up
+  document.addEventListener("pointerdown", e => {
+    if (drillColors.classList.contains("open") &&
+        !drillColors.contains(e.target) && !e.target.closest("#colorBtn"))
+      drillColors.classList.remove("open");
+  });
   document.getElementById("undoBtn").addEventListener("click", () => { strokes.pop(); redraw(); });
   document.getElementById("clearBtn").addEventListener("click", () => { strokes = []; redraw(); });
   document.getElementById("resetBtn").addEventListener("click", () => {
@@ -536,7 +560,8 @@ export function initBoard(store) {
 
   /* ---------------- drills mode ---------------- */
   let drillsMode = false;
-  let drillItems = [];        // {kind, x, y, el}
+  let drillItems = [];        // {kind, x, y, el, color?}
+  let drillColor = "#ffffff"; // active colour for new cones/markers/lines in drills
   // one sketch buffer per view; `strokes` always points at the active one
   const strokeBufs = { team: strokes, game: [], drills: [] };
   let teamStash = null;       // team board parked while the game view is active
@@ -630,18 +655,37 @@ export function initBoard(store) {
   trayScroller.addEventListener("scroll", updateTrayFades);
   window.addEventListener("resize", () => requestAnimationFrame(updateTrayFades));
 
-  function shapeEl(kind) {
+  // cone and marker take the selected drill colour; other kinds keep their look
+  const COLOURED_KINDS = new Set(["cone", "disc"]);
+  function shade(hex, amt) {   // amt in -1..1; negative darker, positive lighter
+    const n = parseInt(hex.slice(1), 16);
+    const f = v => Math.max(0, Math.min(255, Math.round(v + amt * 255)));
+    return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  }
+  function paintPiece(s, kind, color) {
+    if (!color || !COLOURED_KINDS.has(kind)) return;
+    if (kind === "cone") {
+      s.style.background = `linear-gradient(${shade(color, 0.14)}, ${shade(color, -0.14)})`;
+    } else {   // disc / marker
+      s.style.background = color;
+      s.style.borderColor = color.toLowerCase() === "#ffffff"
+        ? "rgba(0,0,0,.28)" : "rgba(255,255,255,.55)";
+    }
+  }
+  function shapeEl(kind, color) {
     const s = document.createElement("div");
     s.className = kind; s.style.pointerEvents = "none";
+    paintPiece(s, kind, color);
     return s;
   }
-  function addDrillItem(kind, x, y) {
+  function addDrillItem(kind, x, y, color) {
     const el = document.createElement("div");
     el.className = "ditem d-" + kind;
-    el.appendChild(shapeEl(kind));
+    el.appendChild(shapeEl(kind, color));
     board.appendChild(el);
     setPos(el, x, y);
     const item = { kind, x, y, el };
+    if (color && COLOURED_KINDS.has(kind)) item.color = color;
     drillItems.push(item);
     enableDrillDrag(item);
     return item;
@@ -700,7 +744,7 @@ export function initBoard(store) {
         ghost.textContent = "";
         ghost.style.background = "transparent";
         ghost.style.boxShadow = "none";
-        ghost.appendChild(shapeEl(kind));
+        ghost.appendChild(shapeEl(kind, drillColor));
         ghost.style.display = "flex";
       };
       const mv = ev => {
@@ -728,7 +772,8 @@ export function initBoard(store) {
         if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
           addDrillItem(kind,
             clamp01((ev.clientX - r.left) / r.width),
-            clamp01((ev.clientY - r.top) / r.height));
+            clamp01((ev.clientY - r.top) / r.height),
+            drillColor);
         }
       };
       el.addEventListener("pointermove", mv);
@@ -739,11 +784,11 @@ export function initBoard(store) {
 
   /* ---------------- drill library ---------------- */
   // Firestore cannot store nested arrays, so stroke points are flattened on save.
-  const flatStroke = s => ({ mode: s.mode, pts: s.pts.flat() });
+  const flatStroke = s => ({ mode: s.mode, pts: s.pts.flat(), ...(s.color ? { color: s.color } : {}) });
   function unflatStroke(s) {
     const pts = [];
     for (let i = 0; i + 1 < s.pts.length; i += 2) pts.push([s.pts[i], s.pts[i + 1]]);
-    return { mode: s.mode, pts };
+    return { mode: s.mode, pts, ...(s.color ? { color: s.color } : {}) };
   }
   const drillPanel = document.getElementById("drillPanel");
   const drillNameIn = document.getElementById("drillName");
@@ -965,8 +1010,8 @@ export function initBoard(store) {
   function loadPreset(p) {
     setDrillsMode(true);
     clearDrillItems();
-    (p.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y));
-    strokes = (p.strokes || []).map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]) }));
+    (p.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color));
+    strokes = (p.strokes || []).map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]), ...(s.color ? { color: s.color } : {}) }));
     redraw();
   }
 
@@ -1041,7 +1086,7 @@ export function initBoard(store) {
   function loadDrill(d) {
     setDrillsMode(true);
     clearDrillItems();
-    (d.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y));
+    (d.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color));
     strokes = (d.strokes || []).map(unflatStroke);
     redraw();
   }
@@ -1050,7 +1095,7 @@ export function initBoard(store) {
     const d = {
       id: Date.now(),
       name,
-      items: drillItems.map(({ kind, x, y }) => ({ kind, x, y })),
+      items: drillItems.map(({ kind, x, y, color }) => ({ kind, x, y, ...(color ? { color } : {}) })),
       strokes: strokes.map(flatStroke)
     };
     store.data.drills = [...drills(), d];
@@ -1091,7 +1136,7 @@ export function initBoard(store) {
   }
   function drawStrokePNG(c, W, H, s) {
     if (!s.pts || s.pts.length < 2) return;
-    c.strokeStyle = "rgba(255,255,255,.95)";
+    c.strokeStyle = s.color || "rgba(255,255,255,.95)";
     c.lineWidth = W * 0.008; c.lineCap = "round"; c.lineJoin = "round";
     c.setLineDash(s.mode === "pass" ? [W * 0.022, W * 0.02] : []);
     let pts = s.pts;
@@ -1161,7 +1206,14 @@ export function initBoard(store) {
     a.href = URL.createObjectURL(blob); a.download = filename; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
+  // sharing is an account feature; nudge guests to create one
+  function guestShareBlocked() {
+    if (!store.guestMode) return false;
+    alert("Sharing needs a free account. Create one to share team sheets and drills.");
+    return true;
+  }
   async function shareTeamSheet() {
+    if (guestShareBlocked()) return;
     const b = bstate();
     const teamName = store.data.teamName || "My team";
     const g = (store.data && store.data.gameday) || {};
@@ -1198,15 +1250,17 @@ export function initBoard(store) {
     }
     await shareCanvas(cv, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
   }
-  function drillPiecePNG(c, W, kind, x, y) {
+  function drillPiecePNG(c, W, kind, x, y, color) {
     const u = W * 0.016; // base unit
     c.save(); c.translate(x, y);
     if (kind === "cone") {
-      c.fillStyle = "#ff8a14";
+      c.fillStyle = color || "#ff8a14";
       c.beginPath(); c.moveTo(0, -u); c.lineTo(u * .9, u); c.lineTo(-u * .9, u); c.closePath(); c.fill();
     } else if (kind === "disc") {
-      c.fillStyle = "#ffd60a"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
-      c.lineWidth = 3; c.strokeStyle = "rgba(255,255,255,.55)"; c.stroke();
+      c.fillStyle = color || "#ffd60a"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
+      c.lineWidth = 3;
+      c.strokeStyle = (color && color.toLowerCase() === "#ffffff") ? "rgba(0,0,0,.28)" : "rgba(255,255,255,.55)";
+      c.stroke();
     } else if (kind === "pole") {
       c.fillStyle = "#ff453a"; c.fillRect(-u * .18, -u * 1.4, u * .36, u * 2.8);
       c.fillStyle = "#fff";
@@ -1230,10 +1284,11 @@ export function initBoard(store) {
     c.restore();
   }
   async function shareDrill(d) {
+    if (guestShareBlocked()) return;
     const { cv, c, W, H } = makeShareCanvas(d.name, (store.data.teamName || "") + "  ·  drill");
     drawPitchPNG(c, W, H);
     (d.strokes || []).map(unflatStroke).forEach(s => drawStrokePNG(c, W, H, s));
-    (d.items || []).forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H));
+    (d.items || []).forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H, i.color));
     await shareCanvas(cv, d.name.replace(/\s+/g, "-").toLowerCase() + "-drill.png", d.name);
   }
   document.getElementById("shareTeamBtn").addEventListener("click", () => {

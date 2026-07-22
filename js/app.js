@@ -7,15 +7,14 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=41";
-import { initBoard } from "./board.js?v=41";
+import { firebaseConfig } from "./firebase-config.js?v=46";
+import { initBoard } from "./board.js?v=46";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
 const DEMO_KEY = "tacticsDemoTeam";
 // Guest mode: user chose "try without an account" -> same device-only storage.
 let guest = false;
-const isLocal = () => DEMO || guest;
 
 let auth = null, db = null;
 if (!DEMO) {
@@ -56,14 +55,13 @@ const store = {
     if (this.unsubscribe) this.unsubscribe();
     this.unsubscribe = onSnapshot(doc(db, "teams", uid), snap => {
       if (!snap.exists()) return;
-      // ignore echoes of our own pending writes, and any snapshot that
-      // arrives while local changes are still waiting to be written —
-      // otherwise a stale server copy can undo a drag mid-flight.
-      // The dirty guard expires after 5s so a tab can never wedge itself
-      // on stale data if a write is slow or lost.
-      const dirtyFresh = this.dirty && (Date.now() - (this.dirtySince || 0) < 5000);
-      if (snap.metadata.hasPendingWrites || dirtyFresh) return;
-      this.dirty = false;
+      // Never let an incoming copy overwrite a local edit that is still
+      // queued (`pending`) or mid-write (`writing`) — otherwise a stale
+      // server copy repaints the board and a drag jumps back to its previous
+      // spot. This holds only while a write is actually outstanding (bounded
+      // by the 600ms debounce + the network round-trip, both of which always
+      // resolve), so a tab can never wedge itself on stale data.
+      if (snap.metadata.hasPendingWrites || this.pending || this.writing) return;
       this.data = snap.data();
       this.emit();
       setSyncStatus(snap.metadata.fromCache ? "Offline — changes saved on this device" : "Synced");
@@ -76,24 +74,32 @@ const store = {
 
   save(partial) {
     this.data = { ...(this.data || {}), ...partial };
-    this.dirty = true;
-    this.dirtySince = Date.now();
+    this.pending = true;                 // a change is waiting to be written
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      if (isLocal()) {
-        try { localStorage.setItem(DEMO_KEY, JSON.stringify(this.data)); } catch (e) {}
-        this.dirty = false;
-        return;
-      }
-      if (!this.uid) return;
-      // full replace, NOT merge: merge deep-combines nested maps, so removed
-      // players (benched / reset) were never deleted server-side and kept
-      // resurrecting on the next sync echo
-      setDoc(doc(db, "teams", this.uid),
-        { ...this.data, updatedAt: serverTimestamp() })
-        .then(() => { this.dirty = false; })
-        .catch(() => { this.dirty = false; setSyncStatus("Offline — changes saved on this device"); });
-    }, 600);
+    this.saveTimer = setTimeout(() => this.flush(), 600);
+  },
+  // Write the queued change now. Called by the debounce, and directly when
+  // the app is backgrounded so a move made just before switching away is
+  // never lost. `pending`/`writing` gate the snapshot guard above.
+  flush() {
+    clearTimeout(this.saveTimer);
+    if (!this.pending) return;
+    if (guest) { this.pending = false; return; }   // guest: in-memory only, nothing is saved
+    if (DEMO) {
+      try { localStorage.setItem(DEMO_KEY, JSON.stringify(this.data)); } catch (e) {}
+      this.pending = false;
+      return;
+    }
+    if (!this.uid) { this.pending = false; return; }
+    this.pending = false;
+    this.writing = true;
+    // full replace, NOT merge: merge deep-combines nested maps, so removed
+    // players (benched / reset) were never deleted server-side and kept
+    // resurrecting on the next sync echo
+    setDoc(doc(db, "teams", this.uid),
+      { ...this.data, updatedAt: serverTimestamp() })
+      .then(() => { this.writing = false; })
+      .catch(() => { this.writing = false; setSyncStatus("Offline — changes saved on this device"); });
   }
 };
 
@@ -110,6 +116,8 @@ document.getElementById("authSwap").addEventListener("click", () => {
   document.getElementById("authSubmit").textContent = isSignup ? "Create account" : "Log in";
   document.getElementById("authSwap").textContent =
     isSignup ? "Already have an account? Log in" : "New here? Create an account";
+  document.getElementById("authHeading").textContent =
+    isSignup ? "Create your free account" : "Log in to your account";
   authError.textContent = "";
 });
 document.getElementById("authForm").addEventListener("submit", async e => {
@@ -198,6 +206,7 @@ function doSignOut() {
     // back to the front door; guest data stays on the device
     guest = false;
     store.data = null;
+    resetAuthView();
     show("auth");
     return;
   }
@@ -222,7 +231,7 @@ function enterBoard() {
 
 document.getElementById("menuBtn").addEventListener("click", () => {
   document.getElementById("menuEmail").textContent =
-    guest ? "Guest — data saved on this device only"
+    guest ? "Guest — nothing is saved. Create an account to keep your team."
     : DEMO ? "Demo mode — no account yet"
     : (auth.currentUser ? auth.currentUser.email : "");
   document.getElementById("signOutBtn").textContent = guest ? "Sign up / Log in" : "Sign out";
@@ -240,26 +249,30 @@ document.getElementById("signOutBtn").addEventListener("click", () => {
 });
 
 /* ---------------- guest mode ---------------- */
-function loadLocalTeam() {
-  try { return JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) { return null; }
-}
 function enterGuest() {
   guest = true;
-  setSyncStatus("Guest mode — data stays on this device");
-  const saved = loadLocalTeam();
-  if (saved && saved.roster && saved.roster.length) {
-    store.data = saved;
-    enterBoard();
-  } else {
-    setupRoster = []; setupNextId = 1;
-    renderSetupRoster();
-    show("setup");
-  }
+  store.guestMode = true;            // board.js gates saving/sharing on this
+  store.data = null;                 // start fresh; guest work is never saved
+  setSyncStatus("Guest mode — nothing is saved");
+  setupRoster = []; setupNextId = 1;
+  renderSetupRoster();
+  show("setup");
   // show the guest nudges in the squad and drills sheets
   document.querySelectorAll(".guestNote").forEach(el => el.hidden = false);
 }
-const guestBtn = document.getElementById("guestBtn");
-if (guestBtn) guestBtn.addEventListener("click", enterGuest);
+document.getElementById("landingGuest").addEventListener("click", enterGuest);
+
+// entry screen: landing (intro + choices) <-> auth form
+const authLanding = document.getElementById("authLanding");
+const authPanel = document.getElementById("authPanel");
+function showAuthPanel(on) {
+  authLanding.hidden = on;
+  authPanel.hidden = !on;
+  if (on) document.getElementById("authEmail").focus();
+}
+function resetAuthView() { showAuthPanel(false); authError.textContent = ""; }
+document.getElementById("landingAuth").addEventListener("click", () => showAuthPanel(true));
+document.getElementById("authBack").addEventListener("click", () => showAuthPanel(false));
 
 /* ---------------- boot ---------------- */
 if (DEMO) {
@@ -278,10 +291,11 @@ if (DEMO) {
   onAuthStateChanged(auth, async user => {
     if (!user) {
       store.detach();
-      if (!guest) show("auth");
+      if (!guest) { resetAuthView(); show("auth"); }
       return;
     }
     guest = false;
+    store.guestMode = false;
     document.querySelectorAll(".guestNote").forEach(el => el.hidden = true);
     // load or create team doc
     let snap;
@@ -292,12 +306,10 @@ if (DEMO) {
       store.data = snap.data();
       enterBoard();
     } else {
-      // brand-new account: migrate any guest team saved on this device
-      const local = loadLocalTeam();
-      if (local && local.roster && local.roster.length) {
-        store.data = local;
-        store.save({});                       // now writes to Firestore
-        try { localStorage.removeItem(DEMO_KEY); } catch (e) {}
+      // brand-new account: carry over whatever the guest built this session,
+      // now that there is an account to save it to
+      if (store.data && store.data.roster && store.data.roster.length) {
+        store.save({});                       // persist the in-memory team to Firestore
         enterBoard();
         return;
       }
@@ -311,16 +323,17 @@ if (DEMO) {
 // returning to the foreground: pull the latest server state before any
 // further saves, so a backgrounded tab cannot overwrite newer data
 document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState !== "visible") return;
-  if (DEMO || guest || !store.uid || store.dirty) return;
+  if (document.visibilityState !== "visible") { store.flush(); return; } // leaving: save now
+  if (DEMO || guest || !store.uid || store.pending || store.writing) return;
   try {
     const snap = await getDoc(doc(db, "teams", store.uid));
-    if (snap.exists() && !store.dirty) {
+    if (snap.exists() && !store.pending && !store.writing) {
       store.data = snap.data();
       store.emit();
     }
   } catch (e) {}
 });
+window.addEventListener("pagehide", () => store.flush());
 
 // keep header in sync with remote team-name changes
 store.subscribe(d => {

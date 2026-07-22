@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v41**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v46**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -56,7 +56,8 @@ controllerchange → reload).
   board:{squad:"11"|"9", formation, showOpp, showNames, placed:{id:{x,y}}},
   gameday:{id?, date, time, opp, notes, lineup:{formation,squad,placed,at}|null},
   games:[gameday...],                      // saved games library
-  drills:[{id,name,items:[{kind,x,y}], strokes:[{mode,pts:FLAT}]}],
+  drills:[{id,name,items:[{kind,x,y,color?}], strokes:[{mode,pts:FLAT,color?}]}],
+                                     // color (hex) optional: cones/markers + lines only
   updatedAt }
 ```
 
@@ -70,16 +71,25 @@ controllerchange → reload).
 1. **Never use `setDoc(..., {merge:true})` for this doc.** Deep merge resurrects deleted
    map keys (benched players kept reappearing on the pitch for days). Saves are full
    document replaces.
-2. Sync echo guard: `store.dirty` + `dirtySince` (5s expiry) prevents snapshot echoes
-   undoing drags; visibilitychange refetch prevents stale backgrounded tabs overwriting.
+2. Sync echo guard: incoming snapshots are ignored while a local write is
+   `pending` (queued in the 600ms debounce) or `writing` (setDoc in flight) — this
+   held on a time basis before (`dirty` + 5s `dirtySince`), but the 5s window let a
+   slow write's stale echo snap a drag back to its previous spot, so it is now keyed
+   on write confirmation instead. `store.flush()` writes immediately and is called on
+   visibilitychange-hidden + pagehide so a move made just before backgrounding is not
+   lost. visibilitychange-visible refetch (guarded by !pending && !writing) prevents
+   stale backgrounded tabs overwriting.
 3. Browser caches module JS aggressively → that is what the `?v=` bumps are for. "It
    works local but not deployed" almost always = not deployed or old SW; hard refresh.
 
 ## Architecture notes
 
-- `store` (app.js): holds `data`, debounced save (600ms), onSnapshot subscribe,
-  localStorage backend when DEMO (placeholder config) or guest mode. Guest data migrates
-  into a newly created account automatically (DEMO_KEY localStorage).
+- `store` (app.js): holds `data`, debounced save (600ms), onSnapshot subscribe.
+  Persistence by mode: signed-in = Firestore; DEMO (placeholder config) = localStorage
+  (DEMO_KEY); GUEST = nothing (in-memory only — `flush()` no-ops for guests). Guest is
+  a deliberate try-only mode: not saved, and sharing is blocked (store.guestMode →
+  guestShareBlocked alert). If a guest creates an account, the in-memory team is carried
+  into Firestore on first auth (onAuthStateChanged new-account branch saves store.data).
 - Views in board.js: `currentView` = team | game | drills via `setView()`.
   - Team = the standard board (store.data.board).
   - Game = separate pitch: entering stashes the team board (`teamStash`), loads
@@ -93,6 +103,15 @@ controllerchange → reload).
   match bar (game view only) = vs-label + game timer + subs timer + … (opens config sheet);
   formation select + ⟳ float over the pitch top-right; bottom pill toolbar =
   Move/Run/Pass/Dribble/Draw + Undo/Clear.
+  In DRILLS the formation select is hidden so top-right ⟳ shows alone and means
+  "clear the pitch" (clearDrillBoard); the bottom toolbar gains a #colorBtn (dot)
+  that pops #drillColors (white/red/blue/yellow) up out of the toolbar. `drillColor`
+  sets the colour of the next cone/marker placed and the next line drawn (lines only
+  coloured while in drills). Piece colour is inline style over the CSS class
+  (paintPiece/shade); default white keeps old line look.
+- Entry screen (authView) = landing (intro list + "Try as guest" + "Log in/register")
+  that reveals the email/password panel on demand (#authLanding / #authPanel toggle,
+  resetAuthView() returns to landing on sign-out).
 - Game config is a SHEET over the pitch (not a view): details, line-up card with tappable
   pitch preview (canvas), game timer (per-period clocks, tap H1/H2 chips to switch),
   independent subs countdown (rolls over automatically). Save game upserts by id into

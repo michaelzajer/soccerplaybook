@@ -82,6 +82,19 @@ button.primary:disabled{opacity:.5}
 }
 .linkish:hover{color:var(--ink)}
 .err{color:#ff7b6b;font-size:var(--t-sm);font-weight:600}
+#authLanding,#authPanel{display:flex;flex-direction:column;gap:12px}
+#authLanding[hidden],#authPanel[hidden]{display:none}
+.introList{list-style:none;margin:4px 0 6px;padding:0;display:flex;flex-direction:column;gap:9px;text-align:left}
+.introList li{position:relative;padding-left:24px;font-size:var(--t-md);line-height:1.4;color:var(--ink)}
+.introList li::before{content:"✓";position:absolute;left:3px;top:0;color:var(--accent);font-weight:800}
+.acctLead{margin:8px 0 -2px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);text-align:left}
+.acctList li::before{content:"★";color:#ffd60a}
+.linkish.outlineBtn{
+  border:1px solid var(--line-strong);border-radius:var(--r-pill);
+  color:var(--ink);padding:11px;font-size:var(--t-md);
+}
+.linkish.outlineBtn:hover{border-color:var(--accent);color:var(--ink)}
+.introHint{text-align:center;margin-top:2px}
 .err:empty{display:none}
 
 /* ---------- top bar ---------- */
@@ -141,7 +154,30 @@ body.gameView #matchBar{display:flex}
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   color:#fff;
 }
-body.drillsMode #pitchTools{display:none}
+/* in drills the formation select is hidden (rule below) so #pitchTools shows
+   only the ⟳, which there means "clear the pitch" */
+/* colour palette pops up out of the bottom toolbar (drills only) */
+#colorBtn{display:none;flex-direction:column;align-items:center;justify-content:center;
+  background:transparent;border:none;border-left:1px solid var(--line);padding:6px 13px;
+  color:var(--ink-dim);font-size:var(--t-xs);font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;line-height:1;text-align:center}
+body.drillsMode #colorBtn{display:flex}
+#colorDot{width:15px;height:15px;border-radius:50%;background:#fff;margin:0 auto 3px;
+  border:2px solid rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+#drillColors{
+  position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
+  display:none;gap:14px;padding:11px 16px;
+  background:rgba(34,41,37,.96);border:1px solid var(--line);border-radius:var(--r-pill);
+  box-shadow:0 12px 30px rgba(0,0,0,.5);z-index:20;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+#drillColors.open{display:flex}
+.swatch{
+  width:30px;height:30px;border-radius:50%;background:var(--sw);
+  border:2px solid rgba(255,255,255,.55);box-shadow:0 1px 4px rgba(0,0,0,.45);
+  cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;touch-action:manipulation;
+}
+.swatch.on{border-color:#fff;box-shadow:0 0 0 3px var(--accent)}
 
 select,.chip{
   flex:0 0 auto;
@@ -358,6 +394,7 @@ body.drawing .ditem{pointer-events:none}
 
 /* ---------- bottom toolbar ---------- */
 footer{
+  position:relative;
   flex:0 0 auto;display:flex;gap:2px;align-items:stretch;justify-content:center;
   align-self:center;
   margin:10px auto calc(12px + env(safe-area-inset-bottom));
