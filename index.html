@@ -25,7 +25,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=46">
+<link rel="stylesheet" href="styles.css?v=51">
 </head>
 <body>
 
@@ -200,13 +200,30 @@
   <div id="dragGhost"></div>
 
   <footer>
-    <div id="drillColors" aria-label="Drill colour">
-      <button class="swatch on" data-color="#ffffff" style="--sw:#ffffff" aria-label="White"></button>
-      <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red"></button>
-      <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue"></button>
-      <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow"></button>
+    <div id="drillColors" aria-label="Colours">
+      <div class="palRow" data-target="team">
+        <span class="palLbl">Players</span>
+        <button class="swatch" data-color="#ffffff" style="--sw:#ffffff" aria-label="White players"></button>
+        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red players"></button>
+        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue players"></button>
+        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow players"></button>
+      </div>
+      <div class="palRow" data-target="opp">
+        <span class="palLbl">Opp</span>
+        <button class="swatch" data-color="#ffffff" style="--sw:#ffffff" aria-label="White opposition"></button>
+        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red opposition"></button>
+        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue opposition"></button>
+        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow opposition"></button>
+      </div>
+      <div class="palRow palPiece" data-target="piece">
+        <span class="palLbl">Item</span>
+        <button class="swatch on" data-color="#ffffff" style="--sw:#ffffff" aria-label="White item"></button>
+        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red item"></button>
+        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue item"></button>
+        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow item"></button>
+      </div>
     </div>
-    <button class="tool" id="colorBtn" aria-label="Cone and line colour"><span id="colorDot"></span>Colour</button>
+    <button class="tool" id="colorBtn" aria-label="Colours"><span id="colorDot"></span>Colour</button>
     <button class="mode on" data-mode="move"><span class="glyph">✥</span>Move</button>
     <button class="mode" data-mode="run">
       <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8"/><path d="M14 3 L20 8 L14 13"/></svg>Run
@@ -286,15 +303,17 @@
   <div id="drillPanel" class="overlay">
     <div class="sheet">
       <h2>Drills</h2>
-      <div class="presetLabel">Starter drills</div>
+      <div class="presetLabel">Built-in drills</div>
       <div id="presetRow" class="presetRow"></div>
+      <div class="presetLabel">Your drills</div>
       <div class="addRow">
         <input id="drillName" placeholder="Drill name" maxlength="40" autocomplete="off">
         <button type="button" id="saveDrillBtn">Save</button>
       </div>
+      <textarea id="drillNotes" class="drillNotes" rows="2" maxlength="1500" placeholder="Instructions (optional) — set-up, how it runs, coaching points"></textarea>
       <div id="drillList" class="rosterList"></div>
       <div class="hint guestNote" id="drillGuestNote" hidden>Guest mode is just for a try — your drills are not saved. Create a free account to save them and share them.</div>
-      <div class="hint">Save saves what is on the pitch now. Tap a saved drill to load it.</div>
+      <div class="hint">Save keeps what is on the pitch now, with any instructions. Tap a saved drill to load it, or ⓘ to read or edit its instructions.</div>
       <button class="close" id="closeDrills">Done</button>
     </div>
   </div>
@@ -310,8 +329,25 @@
       <ol class="diList" id="diSteps"></ol>
       <div class="diLabel">Coaching points</div>
       <ul class="diList diPoints" id="diCoaching"></ul>
+      <div id="diProgWrap" hidden>
+        <div class="diLabel">Progression</div>
+        <ul class="diList" id="diProgression"></ul>
+      </div>
       <button class="primary" id="diLoadBtn">Load onto pitch</button>
       <button class="close" id="diClose">Back</button>
+    </div>
+  </div>
+
+  <!-- custom drill: view / edit instructions -->
+  <div id="drillEditPanel" class="overlay">
+    <div class="sheet">
+      <h2 id="deTitle">Drill</h2>
+      <label class="tlab">Instructions
+        <textarea id="deNotes" rows="7" maxlength="1500" placeholder="Set-up, how it runs, coaching points…"></textarea>
+      </label>
+      <button class="primary" id="deSaveBtn">Save instructions</button>
+      <button class="close" id="deLoadBtn">Load onto pitch</button>
+      <button class="close" id="deClose">Back</button>
     </div>
   </div>
 
@@ -334,6 +370,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=46"></script>
+<script type="module" src="js/app.js?v=51"></script>
 </body>
 </html>

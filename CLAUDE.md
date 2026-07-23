@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v46**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v51**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -57,7 +57,7 @@ controllerchange → reload).
   gameday:{id?, date, time, opp, notes, lineup:{formation,squad,placed,at}|null},
   games:[gameday...],                      // saved games library
   drills:[{id,name,items:[{kind,x,y,color?}], strokes:[{mode,pts:FLAT,color?}]}],
-                                     // color (hex) optional: cones/markers + lines only
+                                     // color (hex) optional: cones/markers/players + lines
   updatedAt }
 ```
 
@@ -104,11 +104,16 @@ controllerchange → reload).
   formation select + ⟳ float over the pitch top-right; bottom pill toolbar =
   Move/Run/Pass/Dribble/Draw + Undo/Clear.
   In DRILLS the formation select is hidden so top-right ⟳ shows alone and means
-  "clear the pitch" (clearDrillBoard); the bottom toolbar gains a #colorBtn (dot)
-  that pops #drillColors (white/red/blue/yellow) up out of the toolbar. `drillColor`
-  sets the colour of the next cone/marker placed and the next line drawn (lines only
-  coloured while in drills). Piece colour is inline style over the CSS class
-  (paintPiece/shade); default white keeps old line look.
+  "clear the pitch" (clearDrillBoard). The toolbar #colorBtn (rainbow dot, all board
+  views) pops #drillColors up out of the toolbar. That pop-up has rows: "Players" and
+  "Opp" set the team/opp KIT colours (data.colors, global, live via applyColors — same
+  4 swatches shown in My Squad's full hex pickers, kept in sync) in EVERY view; a
+  drills-only "Item" row sets `drillColor` for the next cone/marker/line placed.
+  refreshColorPalette() highlights the active swatch per row on open. COLOURED_KINDS =
+  cone/disc/att/def; for drill players white on the Item row means "use the default kit"
+  (effectiveColor strips it) so Player=team/Opp=opp defaults are preserved; drill lines
+  only coloured while in drills. Piece colour is inline style over the CSS class
+  (paintPiece/shade). e.g. 3v3v3 preset uses three Item colours to show three teams.
 - Entry screen (authView) = landing (intro list + "Try as guest" + "Log in/register")
   that reveals the email/password panel on demand (#authLanding / #authPanel toggle,
   resetAuthView() returns to landing on sign-out).

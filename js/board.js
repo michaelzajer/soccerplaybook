@@ -498,21 +498,43 @@ export function initBoard(store) {
       document.body.classList.toggle("drawing", mode !== "move");
     });
   });
-  // drill colour palette: a swatch pops up out of the bottom toolbar and sets
-  // the colour of the next cone/marker/line placed
+  // colour palette pops up out of the bottom toolbar:
+  //  - "Players"/"Opp" rows set the team/opp KIT colours (all views, global)
+  //  - "Item" row sets the colour of the next cone/marker/line placed (drills)
   const drillColors = document.getElementById("drillColors");
-  const colorDot = document.getElementById("colorDot");
+  function markActive(row, color) {
+    const c = (color || "").toLowerCase();
+    row.querySelectorAll(".swatch").forEach(x =>
+      x.classList.toggle("on", x.dataset.color.toLowerCase() === c));
+  }
+  function refreshColorPalette() {
+    const c = colors();
+    markActive(drillColors.querySelector('.palRow[data-target="team"]'), c.team);
+    markActive(drillColors.querySelector('.palRow[data-target="opp"]'), c.opp);
+    markActive(drillColors.querySelector('.palRow[data-target="piece"]'), drillColor);
+  }
   document.getElementById("colorBtn").addEventListener("click", e => {
     e.stopPropagation();
+    refreshColorPalette();
     drillColors.classList.toggle("open");
   });
-  document.querySelectorAll("#drillColors .swatch").forEach(sw => {
-    sw.addEventListener("click", () => {
-      document.querySelectorAll("#drillColors .swatch").forEach(x => x.classList.remove("on"));
-      sw.classList.add("on");
-      drillColor = sw.dataset.color;
-      colorDot.style.background = drillColor;
-      drillColors.classList.remove("open");
+  drillColors.querySelectorAll(".palRow").forEach(row => {
+    const target = row.dataset.target;
+    row.querySelectorAll(".swatch").forEach(sw => {
+      sw.addEventListener("click", () => {
+        const color = sw.dataset.color;
+        if (target === "piece") {
+          drillColor = color;
+        } else {
+          const c = colors();
+          store.data.colors = { team: c.team, opp: c.opp, [target]: color };
+          store.save({ colors: store.data.colors });
+          applyColors();
+          const pick = document.getElementById(target === "team" ? "teamColor" : "oppColor");
+          if (pick) pick.value = color;   // keep My Squad pickers in sync
+        }
+        markActive(row, color);
+      });
     });
   });
   // tap anywhere else closes the pop-up
@@ -655,37 +677,48 @@ export function initBoard(store) {
   trayScroller.addEventListener("scroll", updateTrayFades);
   window.addEventListener("resize", () => requestAnimationFrame(updateTrayFades));
 
-  // cone and marker take the selected drill colour; other kinds keep their look
-  const COLOURED_KINDS = new Set(["cone", "disc"]);
+  // cones, markers AND players can take the selected drill colour; other kinds
+  // keep their look. For players, white means "use the default" (Player = team
+  // colour, Opp = opposition colour) so the two default kits are preserved.
+  const COLOURED_KINDS = new Set(["cone", "disc", "att", "def"]);
+  const isPlayerKind = k => k === "att" || k === "def";
+  function effectiveColor(kind, color) {
+    if (!color || !COLOURED_KINDS.has(kind)) return null;
+    if (isPlayerKind(kind) && color.toLowerCase() === "#ffffff") return null; // keep team/opp default
+    return color;
+  }
   function shade(hex, amt) {   // amt in -1..1; negative darker, positive lighter
     const n = parseInt(hex.slice(1), 16);
     const f = v => Math.max(0, Math.min(255, Math.round(v + amt * 255)));
     return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
   }
   function paintPiece(s, kind, color) {
-    if (!color || !COLOURED_KINDS.has(kind)) return;
+    if (!color) return;
     if (kind === "cone") {
       s.style.background = `linear-gradient(${shade(color, 0.14)}, ${shade(color, -0.14)})`;
-    } else {   // disc / marker
+    } else if (kind === "disc") {
       s.style.background = color;
       s.style.borderColor = color.toLowerCase() === "#ffffff"
         ? "rgba(0,0,0,.28)" : "rgba(255,255,255,.55)";
+    } else if (isPlayerKind(kind)) {
+      s.style.background = color;
     }
   }
   function shapeEl(kind, color) {
     const s = document.createElement("div");
     s.className = kind; s.style.pointerEvents = "none";
-    paintPiece(s, kind, color);
+    paintPiece(s, kind, effectiveColor(kind, color));
     return s;
   }
   function addDrillItem(kind, x, y, color) {
+    const eff = effectiveColor(kind, color);
     const el = document.createElement("div");
     el.className = "ditem d-" + kind;
-    el.appendChild(shapeEl(kind, color));
+    el.appendChild(shapeEl(kind, eff));
     board.appendChild(el);
     setPos(el, x, y);
     const item = { kind, x, y, el };
-    if (color && COLOURED_KINDS.has(kind)) item.color = color;
+    if (eff) item.color = eff;
     drillItems.push(item);
     enableDrillDrag(item);
     return item;
@@ -792,6 +825,7 @@ export function initBoard(store) {
   }
   const drillPanel = document.getElementById("drillPanel");
   const drillNameIn = document.getElementById("drillName");
+  const drillNotesIn = document.getElementById("drillNotes");
 
   // Built-in starter drills. Coordinates are normalised 0..1 on a portrait pitch
   // (y=0 is the top goal). Tapping loads onto the board; the coach can tweak and Save.
@@ -1005,6 +1039,91 @@ export function initBoard(store) {
         { mode: "pass", pts: [[0.52, 0.56], [0.60, 0.40]] },   // pivot releases C
         { mode: "pass", pts: [[0.60, 0.40], [0.50, 0.14]] }    // finish
       ]
+    },
+    {
+      // Possession game in a grid used to coach the defending three:
+      // pressure, cover, balance. App has two player colours, so the working
+      // defensive unit (3) is shown pressing the six in possession.
+      name: "3 v 3 v 3",
+      info: {
+        trains: "Pressure, cover and balance; defending as a unit",
+        setup: "A 20 × 30 yard grid marked with cones. Three groups of three (9 players), shown here in red, blue and yellow; extra players rotate in.",
+        steps: [
+          "Play 3v3v3 for possession — two teams keep the ball, one team defends.",
+          "First defender steps HARD to the ball to pressure it.",
+          "Second defender tucks in behind to cover.",
+          "Third defender reads the play from behind and provides balance.",
+          "Rotate the defending group; run for 14 minutes."
+        ],
+        coaching: [
+          "First defender: quick, aggressive pressure to force the play.",
+          "Cover defender: right angle and distance behind the pressure.",
+          "Balance defender: read from behind and protect the far space."
+        ],
+        progression: [
+          "Make it a competition: each team defends for a two-minute period and counts steals and disruptions.",
+          "The two teams in possession count how many times they split the defenders.",
+          "Score: steals plus disruptions added together, plus splits multiplied by two (2 minutes × 4)."
+        ]
+      },
+      items: [
+        { kind: "cone", x: 0.30, y: 0.28 }, { kind: "cone", x: 0.70, y: 0.28 },
+        { kind: "cone", x: 0.70, y: 0.72 }, { kind: "cone", x: 0.30, y: 0.72 },
+        // three teams of three, mixed as in a possession game
+        { kind: "att", x: 0.38, y: 0.38, color: "#ff453a" },
+        { kind: "att", x: 0.54, y: 0.34, color: "#2f6bff" },
+        { kind: "att", x: 0.64, y: 0.44, color: "#ffd60a" },
+        { kind: "att", x: 0.36, y: 0.55, color: "#2f6bff" },
+        { kind: "att", x: 0.52, y: 0.63, color: "#ffd60a" },
+        { kind: "att", x: 0.64, y: 0.60, color: "#ff453a" },
+        { kind: "att", x: 0.47, y: 0.45, color: "#ffd60a" },
+        { kind: "att", x: 0.45, y: 0.60, color: "#ff453a" },
+        { kind: "att", x: 0.58, y: 0.52, color: "#2f6bff" },
+        { kind: "dball", x: 0.40, y: 0.50 }
+      ],
+      strokes: []
+    },
+    {
+      // Defenders guard one goal; three lines of attackers ~40y out attack on
+      // the coach's call. Focus is the defenders' communication when the
+      // numbers keep changing. Attackers shown yellow, defenders in opp kit.
+      name: "Defensive Communication",
+      info: {
+        trains: "Defensive communication, cover and coordination; defending outnumbered",
+        setup: "One goal defended by 3–4 defenders. Three lines of attackers about 40 yards out, each with a ball.",
+        steps: [
+          "The coach calls out a random attack; the defenders must talk and react to it.",
+          "Vary it constantly: three attackers with one ball; three attackers each with a ball (one per defender); two attackers with one ball; five attackers with one ball; five with two balls, and so on.",
+          "The defenders sort out who takes which attacker as the attack unfolds."
+        ],
+        coaching: [
+          "Talk early and loudly — call who has which attacker.",
+          "When outnumbered, defend the greatest threat first.",
+          "Cover and shift across together as a unit."
+        ]
+      },
+      items: [
+        { kind: "goal", x: 0.50, y: 0.09 },
+        { kind: "def", x: 0.32, y: 0.31 }, { kind: "def", x: 0.44, y: 0.28 },
+        { kind: "def", x: 0.57, y: 0.28 }, { kind: "def", x: 0.69, y: 0.31 },
+        // three lines of attackers ~40y out, each with a ball
+        { kind: "att", x: 0.30, y: 0.60, color: "#ffd60a" },
+        { kind: "att", x: 0.28, y: 0.69, color: "#ffd60a" },
+        { kind: "att", x: 0.31, y: 0.77, color: "#ffd60a" },
+        { kind: "att", x: 0.50, y: 0.60, color: "#ffd60a" },
+        { kind: "att", x: 0.48, y: 0.69, color: "#ffd60a" },
+        { kind: "att", x: 0.51, y: 0.77, color: "#ffd60a" },
+        { kind: "att", x: 0.70, y: 0.60, color: "#ffd60a" },
+        { kind: "att", x: 0.68, y: 0.69, color: "#ffd60a" },
+        { kind: "att", x: 0.71, y: 0.77, color: "#ffd60a" },
+        { kind: "dball", x: 0.30, y: 0.64 }, { kind: "dball", x: 0.50, y: 0.64 },
+        { kind: "dball", x: 0.70, y: 0.64 }
+      ],
+      strokes: [
+        { mode: "dribble", pts: [[0.30, 0.58], [0.34, 0.44], [0.40, 0.34]] },
+        { mode: "dribble", pts: [[0.50, 0.58], [0.50, 0.44], [0.50, 0.34]] },
+        { mode: "dribble", pts: [[0.70, 0.58], [0.66, 0.44], [0.60, 0.34]] }
+      ]
     }
   ];
   function loadPreset(p) {
@@ -1044,6 +1163,10 @@ export function initBoard(store) {
     document.getElementById("diSetup").textContent = info.setup || "";
     fillList(document.getElementById("diSteps"), info.steps);
     fillList(document.getElementById("diCoaching"), info.coaching);
+    const progWrap = document.getElementById("diProgWrap");
+    const hasProg = info.progression && info.progression.length;
+    progWrap.hidden = !hasProg;
+    if (hasProg) fillList(document.getElementById("diProgression"), info.progression);
     const loadBtn = document.getElementById("diLoadBtn");
     loadBtn.onclick = () => {
       loadPreset(p);
@@ -1065,6 +1188,11 @@ export function initBoard(store) {
       row.className = "rrow";
       const rn = document.createElement("div");
       rn.className = "rname"; rn.textContent = d.name;
+      const inf = document.createElement("button");
+      inf.className = "inf"; inf.textContent = "ⓘ";
+      inf.setAttribute("aria-label", "Drill instructions");
+      if (d.instructions) inf.classList.add("has");
+      inf.addEventListener("click", ev => { ev.stopPropagation(); openDrillEdit(d); });
       const shr = document.createElement("button");
       shr.className = "shr"; shr.textContent = "↗";
       shr.setAttribute("aria-label", "Share drill");
@@ -1078,7 +1206,7 @@ export function initBoard(store) {
         store.save({ drills: store.data.drills });
         renderDrillList();
       });
-      row.append(rn, shr, del);
+      row.append(rn, inf, shr, del);
       row.addEventListener("click", () => { loadDrill(d); drillPanel.classList.remove("open"); });
       list.appendChild(row);
     }
@@ -1092,17 +1220,49 @@ export function initBoard(store) {
   }
   document.getElementById("saveDrillBtn").addEventListener("click", () => {
     const name = drillNameIn.value.trim() || ("Drill " + (drills().length + 1));
+    const notes = drillNotesIn.value.trim();
     const d = {
       id: Date.now(),
       name,
       items: drillItems.map(({ kind, x, y, color }) => ({ kind, x, y, ...(color ? { color } : {}) })),
-      strokes: strokes.map(flatStroke)
+      strokes: strokes.map(flatStroke),
+      ...(notes ? { instructions: notes } : {})
     };
     store.data.drills = [...drills(), d];
     store.save({ drills: store.data.drills });
     drillNameIn.value = "";
+    drillNotesIn.value = "";
     renderDrillList();
   });
+
+  // view / edit a saved drill's instructions
+  const drillEditPanel = document.getElementById("drillEditPanel");
+  const deNotes = document.getElementById("deNotes");
+  let editingDrill = null;
+  function openDrillEdit(d) {
+    editingDrill = d;
+    document.getElementById("deTitle").textContent = d.name;
+    deNotes.value = d.instructions || "";
+    drillEditPanel.classList.add("open");
+  }
+  document.getElementById("deSaveBtn").addEventListener("click", () => {
+    if (!editingDrill) return;
+    const notes = deNotes.value.trim();
+    const d = drills().find(x => x.id === editingDrill.id);
+    if (d) {
+      if (notes) d.instructions = notes; else delete d.instructions;
+      store.save({ drills: store.data.drills });
+    }
+    drillEditPanel.classList.remove("open");
+    renderDrillList();
+  });
+  document.getElementById("deLoadBtn").addEventListener("click", () => {
+    if (editingDrill) loadDrill(editingDrill);
+    drillEditPanel.classList.remove("open");
+    drillPanel.classList.remove("open");
+  });
+  document.getElementById("deClose").addEventListener("click", () => drillEditPanel.classList.remove("open"));
+  drillEditPanel.addEventListener("click", e => { if (e.target === drillEditPanel) drillEditPanel.classList.remove("open"); });
   document.getElementById("drillLibBtn").addEventListener("click", () => {
     renderPresetRow();
     renderDrillList();
@@ -1270,7 +1430,7 @@ export function initBoard(store) {
       c.fillStyle = "#fff"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
       c.fillStyle = "#111"; c.beginPath(); c.arc(0, 0, u * .3, 0, 7); c.fill();
     } else if (kind === "att" || kind === "def") {
-      c.fillStyle = kind === "att" ? colors().team : colors().opp;
+      c.fillStyle = color || (kind === "att" ? colors().team : colors().opp);
       c.beginPath(); c.arc(0, 0, u, 0, 7); c.fill();
       c.lineWidth = 2.5; c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
     } else if (kind === "goal" || kind === "mini") {

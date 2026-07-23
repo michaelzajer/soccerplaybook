@@ -156,22 +156,28 @@ body.gameView #matchBar{display:flex}
 }
 /* in drills the formation select is hidden (rule below) so #pitchTools shows
    only the ⟳, which there means "clear the pitch" */
-/* colour palette pops up out of the bottom toolbar (drills only) */
-#colorBtn{display:none;flex-direction:column;align-items:center;justify-content:center;
+/* colour palette pops up out of the bottom toolbar; sets team/opp kit colours
+   in all views, plus a drills-only "Item" colour for cones/markers/lines */
+#colorBtn{display:flex;flex-direction:column;align-items:center;justify-content:center;
   background:transparent;border:none;border-left:1px solid var(--line);padding:6px 13px;
   color:var(--ink-dim);font-size:var(--t-xs);font-weight:600;letter-spacing:.06em;
   text-transform:uppercase;line-height:1;text-align:center}
-body.drillsMode #colorBtn{display:flex}
-#colorDot{width:15px;height:15px;border-radius:50%;background:#fff;margin:0 auto 3px;
+#colorDot{width:15px;height:15px;border-radius:50%;margin:0 auto 3px;
+  background:conic-gradient(#ff453a,#ffd60a,#2f6bff,#ffffff,#ff453a);
   border:2px solid rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 #drillColors{
   position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
-  display:none;gap:14px;padding:11px 16px;
-  background:rgba(34,41,37,.96);border:1px solid var(--line);border-radius:var(--r-pill);
+  display:none;flex-direction:column;gap:9px;padding:12px 14px;
+  background:rgba(34,41,37,.97);border:1px solid var(--line);border-radius:16px;
   box-shadow:0 12px 30px rgba(0,0,0,.5);z-index:20;
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
 #drillColors.open{display:flex}
+.palRow{display:flex;align-items:center;gap:10px}
+.palLbl{width:52px;flex:0 0 auto;text-align:right;font-size:11px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--ink-dim)}
+.palPiece{display:none}
+body.drillsMode .palPiece{display:flex}
 .swatch{
   width:30px;height:30px;border-radius:50%;background:var(--sw);
   border:2px solid rgba(255,255,255,.55);box-shadow:0 1px 4px rgba(0,0,0,.45);
@@ -320,8 +326,10 @@ body.drillsMode #shareTeamBtn,body.drillsMode #benchZone{display:none}
 #board.hideNames .pname{display:none}
 .presetLabel{font-size:11px;font-weight:600;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin:2px 0 6px}
 .presetRow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.presetChip{background:var(--bg);color:var(--ink);border:1px solid var(--line-strong);border-radius:var(--r-pill);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
-.presetChip:active{border-color:var(--accent);color:var(--accent)}
+/* built-in drills: accent-tinted so they read as distinct from your own */
+.presetChip{background:rgba(59,130,246,.13);color:var(--accent);border:1px solid rgba(59,130,246,.55);border-radius:var(--r-pill);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.presetChip:active{background:var(--accent);color:var(--accent-ink)}
+#drillList:empty::after{content:"No saved drills yet — build one on the pitch and tap Save";font-size:var(--t-sm);color:var(--ink-faint);font-weight:500;padding:6px 2px}
 .diTrains{color:var(--accent);font-size:13px;font-weight:600;margin:-4px 0 12px}
 .diLabel{font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 5px}
 .diSetup{margin:0;font-size:14px;line-height:1.45;color:var(--ink)}
@@ -521,3 +529,55 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 /* per-drill row actions */
 .rrow .shr{background:none;border:none;color:var(--ink-dim);font-size:15px;padding:2px 6px;flex:0 0 auto}
 .rrow .shr:hover{color:var(--accent)}
+.rrow .inf{background:none;border:none;color:var(--ink-dim);font-size:16px;padding:2px 5px;flex:0 0 auto}
+.rrow .inf.has{color:var(--accent)}
+.rrow .inf:hover{color:var(--ink)}
+/* optional instructions field in the drill save area */
+.drillNotes{
+  width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);
+  color:var(--ink);font-family:inherit;font-size:15px;padding:9px 10px;resize:vertical;min-height:44px;
+}
+.drillNotes:focus{outline:none;border-color:var(--accent)}
+.drillNotes::placeholder{color:var(--ink-faint)}
+
+/* ============================================================
+   Tablet and larger. The layout is mobile-first; on wider
+   screens the board view otherwise stretches into a bar with a
+   small pitch adrift in empty space. Here it becomes one tidy,
+   centred column with a comfortably sized pitch and roomier
+   touch targets. Navigation/structure is unchanged.
+   ============================================================ */
+@media (min-width: 768px){
+  /* keep the top chrome and pitch aligned in a centred column
+     (footer, bench and kit tray are already centred on their own) */
+  #boardView > header,
+  #boardView > #controls,
+  #boardView > #matchBar,
+  #boardView > main{
+    width:100%;max-width:720px;margin-left:auto;margin-right:auto;
+  }
+  #board{max-width:600px}                 /* stop the pitch getting oversized */
+
+  header h1{font-size:var(--t-xl)}
+  .seg button,.chip,select{font-size:14px}
+  .seg,.chip,select,.iconChip{height:34px}
+  .iconChip{width:34px}
+
+  /* bigger, easier toolbar targets */
+  footer .mode,footer .act,#colorBtn{padding:9px 18px}
+  footer .mode,footer .act{font-size:var(--t-sm)}
+  .swatch{width:34px;height:34px}
+
+  /* auth / setup cards a touch wider and airier */
+  .card{max-width:460px;padding:34px 30px}
+}
+
+/* Landscape tablet: trim the vertical chrome so the (height-bound)
+   pitch gets as much room as possible. */
+@media (min-width: 768px) and (orientation: landscape){
+  header{padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:0}
+  #controls{padding-top:6px;padding-bottom:2px}
+  main{padding-top:0;padding-bottom:0}
+  #benchZone{min-height:44px;margin-top:6px}
+  footer{margin-top:6px;margin-bottom:calc(8px + env(safe-area-inset-bottom))}
+}
