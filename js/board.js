@@ -54,6 +54,9 @@ export function initBoard(store) {
   const namesToggle = document.getElementById("namesToggle");
 
   const roster = () => (store.data && store.data.roster) || [];
+  const unavailable = () => (store.data && store.data.unavailable) || [];
+  const isOut = id => unavailable().includes(id);
+  let subSel = null;   // roster id of the sub currently selected to come on
   function colors() {
     const c = (store.data && store.data.colors) || {};
     return { team: c.team || "#2563eb", opp: c.opp || "#ff453a" };
@@ -121,25 +124,96 @@ export function initBoard(store) {
     }
     renderBench();
   }
+  function subTokenEl(p, b) {
+    const el = document.createElement("div");
+    el.className = "btok";
+    const disc = document.createElement("div");
+    disc.className = "disc"; disc.textContent = p.pos;
+    el.append(disc);
+    if (b.showNames !== false) {
+      const nm = document.createElement("div");
+      nm.className = "bname"; nm.textContent = firstName(p.name);
+      el.append(nm);
+    }
+    return el;
+  }
   function renderBench() {
     const b = bstate();
     bench.innerHTML = "";
+    const outList = document.getElementById("outList");
+    outList.innerHTML = "";
     for (const p of roster()) {
-      if (b.placed[p.id]) continue;
-      const el = document.createElement("div");
-      el.className = "btok";
-      const disc = document.createElement("div");
-      disc.className = "disc"; disc.textContent = p.pos;
-      el.append(disc);
-      if (b.showNames !== false) {
-        const nm = document.createElement("div");
-        nm.className = "bname"; nm.textContent = firstName(p.name);
-        el.append(nm);
+      if (isOut(p.id)) {
+        const el = subTokenEl(p, b);
+        el.classList.add("outTok");
+        el.title = "Tap to make available";
+        el.addEventListener("click", () => restoreAvailable(p.id));
+        outList.appendChild(el);
+        continue;
       }
-      enableBenchDrag(el, p);
+      if (b.placed[p.id]) continue;
+      const el = subTokenEl(p, b);
+      if (subSel === p.id) el.classList.add("sel");
+      enableSubDrag(el, p);
       bench.appendChild(el);
     }
+    updateSubHint();
   }
+  function updateSubHint() {
+    const h = document.getElementById("subHint");
+    if (!h) return;
+    const p = subSel != null ? roster().find(x => x.id === subSel) : null;
+    h.hidden = !p;
+    h.textContent = p ? `Tap a player to bring ${firstName(p.name)} on, or an empty spot to add them` : "";
+  }
+  function toggleSubSel(id) { subSel = (subSel === id) ? null : id; renderBench(); }
+  function markUnavailable(id) {
+    if (isOut(id)) return;
+    store.data.unavailable = [...unavailable(), id];
+    delete bstate().placed[id];
+    if (subSel === id) subSel = null;
+    store.save({ unavailable: store.data.unavailable });
+    renderTeam(); renderBench();
+  }
+  function restoreAvailable(id) {
+    store.data.unavailable = unavailable().filter(x => x !== id);
+    store.save({ unavailable: store.data.unavailable });
+    renderBench();
+  }
+  // substitution sheet: pick position for the player coming on, then swap
+  let subCtx = null;
+  const subPanel = document.getElementById("subPanel");
+  function openSubSheet(inId, outId) {
+    const inP = roster().find(p => p.id === inId);
+    const outP = roster().find(p => p.id === outId);
+    if (!inP || !outP) return;
+    subCtx = { inId, outId };
+    document.getElementById("subOffName").textContent = firstName(outP.name) + " · " + outP.pos;
+    document.getElementById("subOnName").textContent = firstName(inP.name) + " · " + inP.pos;
+    document.getElementById("subOnName2").textContent = firstName(inP.name);
+    document.getElementById("subPos").value = outP.pos;   // default to the spot being filled
+    subPanel.classList.add("open");
+  }
+  document.getElementById("subConfirm").addEventListener("click", () => {
+    if (!subCtx) return;
+    const b = bstate(), { inId, outId } = subCtx;
+    const newPos = (document.getElementById("subPos").value.trim() || "").toUpperCase();
+    if (b.placed[outId]) { b.placed[inId] = { ...b.placed[outId] }; delete b.placed[outId]; }
+    if (newPos) {
+      const inP = roster().find(p => p.id === inId);
+      if (inP && inP.pos !== newPos) {
+        inP.pos = newPos;
+        saveRoster(roster(), store.data.nextId);
+      }
+    }
+    subSel = null; subCtx = null;
+    subPanel.classList.remove("open");
+    renderTeam(); renderBench(); saveBoard();
+  });
+  document.getElementById("subCancel").addEventListener("click", () => {
+    subCtx = null; subPanel.classList.remove("open");
+  });
+  subPanel.addEventListener("click", e => { if (e.target === subPanel) { subCtx = null; subPanel.classList.remove("open"); } });
   function buildOpp() {
     oppTokens.forEach(t => t.remove()); oppTokens = [];
     const b = bstate();
@@ -178,7 +252,7 @@ export function initBoard(store) {
     const b = bstate();
     const slots = FORMATIONS[b.squad][b.formation];
     b.placed = {};
-    const pool = [...roster()];
+    const pool = roster().filter(p => !isOut(p.id));   // injured/unavailable sit out
     const assigned = new Array(slots.length).fill(null);
     slots.forEach((s, i) => {
       const idx = pool.findIndex(p => p.pos === s[2]);
@@ -219,13 +293,15 @@ export function initBoard(store) {
       if (mode !== "move") return;
       e.preventDefault();
       t.el.setPointerCapture(e.pointerId);
-      t.el.classList.add("dragging"); dragging = true;
       const r = board.getBoundingClientRect();
       const benchZone = document.getElementById("benchZone");
-      let lastX = e.clientX, lastY = e.clientY;
+      const sx = e.clientX, sy = e.clientY;
+      let lastX = e.clientX, lastY = e.clientY, moved = false;
       const b = bstate();
       const mv = ev => {
         lastX = ev.clientX; lastY = ev.clientY;
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 6) return; // ignore jitter so taps stay clean
+        if (!moved) { moved = true; t.el.classList.add("dragging"); dragging = true; }
         const x = clamp01((ev.clientX - r.left) / r.width);
         const y = clamp01((ev.clientY - r.top) / r.height);
         b.placed[id] = { x, y }; setPos(t.el, x, y);
@@ -234,11 +310,19 @@ export function initBoard(store) {
           lastX >= bz.left && lastX <= bz.right && lastY >= bz.top && lastY <= bz.bottom);
       };
       const up = () => {
-        t.el.classList.remove("dragging"); dragging = false;
         t.el.removeEventListener("pointermove", mv);
         t.el.removeEventListener("pointerup", up);
         t.el.removeEventListener("pointercancel", up);
         benchZone.classList.remove("dropTarget");
+        if (!moved) {                                 // a tap, not a drag
+          if (subSel != null && subSel !== id) openSubSheet(subSel, id);  // sub the selected player in
+          return;
+        }
+        t.el.classList.remove("dragging"); dragging = false;
+        const oz = document.getElementById("outZone").getBoundingClientRect();
+        if (lastX >= oz.left && lastX <= oz.right && lastY >= oz.top && lastY <= oz.bottom) {
+          markUnavailable(id); return;                // dragged onto Out = injured/unavailable
+        }
         const bz = benchZone.getBoundingClientRect();
         const overBench = lastX >= bz.left && lastX <= bz.right && lastY >= bz.top && lastY <= bz.bottom;
         if (overBench || lastY > r.bottom + 10) { delete b.placed[id]; renderTeam(); }
@@ -250,42 +334,28 @@ export function initBoard(store) {
     });
   }
 
-  function enableBenchDrag(el, p) {
+  // subs are tap-to-select (for a substitution); dragging one into the Out zone
+  // marks the player unavailable
+  function enableSubDrag(el, p) {
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
-      ghost.textContent = p.pos;
-      ghost.style.display = "flex";
-      ghost.style.left = e.clientX + "px"; ghost.style.top = e.clientY + "px";
-      const mv = ev => { ghost.style.left = ev.clientX + "px"; ghost.style.top = ev.clientY + "px"; };
+      const sx = e.clientX, sy = e.clientY;
+      let moved = false;
+      const mv = ev => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 8) return;
+        if (!moved) { moved = true; ghost.textContent = p.pos; ghost.style.display = "flex"; }
+        ghost.style.left = ev.clientX + "px"; ghost.style.top = ev.clientY + "px";
+      };
       const up = ev => {
         ghost.style.display = "none";
         el.removeEventListener("pointermove", mv);
         el.removeEventListener("pointerup", up);
         el.removeEventListener("pointercancel", up);
-        const r = board.getBoundingClientRect();
-        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-          const b = bstate();
-          const x = clamp01((ev.clientX - r.left) / r.width);
-          const y = clamp01((ev.clientY - r.top) / r.height);
-          // dropped on an on-pitch teammate? substitute: sub takes their spot, they go to the bench
-          let swapId = null, best = 28; // px radius
-          for (const q of roster()) {
-            const pos = b.placed[q.id];
-            if (!pos) continue;
-            const dx = pos.x * r.width - (ev.clientX - r.left);
-            const dy = pos.y * r.height - (ev.clientY - r.top);
-            const d = Math.hypot(dx, dy);
-            if (d < best) { best = d; swapId = q.id; }
-          }
-          if (swapId !== null) {
-            b.placed[p.id] = { ...b.placed[swapId] };
-            delete b.placed[swapId];
-          } else {
-            b.placed[p.id] = { x, y };
-          }
-          renderTeam(); saveBoard();
-        }
+        if (!moved) { toggleSubSel(p.id); return; }   // tap = select for a sub
+        const oz = document.getElementById("outZone").getBoundingClientRect();
+        if (ev.clientX >= oz.left && ev.clientX <= oz.right && ev.clientY >= oz.top && ev.clientY <= oz.bottom)
+          markUnavailable(p.id);
       };
       el.addEventListener("pointermove", mv);
       el.addEventListener("pointerup", up);
@@ -377,7 +447,19 @@ export function initBoard(store) {
     }
   }
   board.addEventListener("pointerdown", e => {
-    if (mode === "move") return;
+    if (mode === "move") {
+      // with a sub selected, tapping an empty part of the pitch places them there
+      if (subSel != null && (e.target === board || e.target.id === "ink" || e.target.id === "lines")) {
+        const r = board.getBoundingClientRect();
+        bstate().placed[subSel] = {
+          x: clamp01((e.clientX - r.left) / r.width),
+          y: clamp01((e.clientY - r.top) / r.height)
+        };
+        subSel = null;
+        renderTeam(); renderBench(); saveBoard();
+      }
+      return;
+    }
     e.preventDefault();
     board.setPointerCapture(e.pointerId);
     const r = board.getBoundingClientRect();
@@ -640,7 +722,9 @@ export function initBoard(store) {
     rb.setAttribute("title", drillsMode ? "Clear the pitch" : "Reset players to formation");
     document.querySelectorAll("#viewSeg button").forEach(b =>
       b.classList.toggle("on", b.dataset.view === v));
+    subSel = null;              // clear any pending sub when switching views
     renderAll();
+    if (v === "game") renderScore();
     redraw();
     if (drillsMode) requestAnimationFrame(updateTrayFades);
     window.dispatchEvent(new Event("resize")); // re-measure board
@@ -1459,11 +1543,28 @@ export function initBoard(store) {
   /* ---------------- game day: details ---------------- */
   function gday() {
     if (!store.data.gameday)
-      store.data.gameday = { date: "", time: "", opp: "", notes: "", lineup: null };
+      store.data.gameday = { date: "", time: "", opp: "", notes: "", lineup: null, score: { us: 0, them: 0 } };
     return store.data.gameday;
   }
   let gdaySaveTimer = null;
   function saveGday() { store.save({ gameday: gday() }); }
+  // scoreboard (game view)
+  function gscore() { const g = gday(); if (!g.score) g.score = { us: 0, them: 0 }; return g.score; }
+  function renderScore() {
+    const s = gscore();
+    document.getElementById("scoreUs").textContent = s.us || 0;
+    document.getElementById("scoreThem").textContent = s.them || 0;
+    document.getElementById("scoreUsName").textContent = (store.data.teamName || "Us");
+    document.getElementById("scoreThemName").textContent = (gday().opp || "Opp");
+  }
+  document.querySelectorAll("#scoreBar button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const s = gscore(), team = btn.dataset.team, d = parseInt(btn.dataset.d, 10);
+      s[team] = Math.max(0, (s[team] || 0) + d);
+      renderScore();
+      saveGday();
+    });
+  });
   [["gDate", "date"], ["gTime", "time"], ["gOpp", "opp"], ["gNotes", "notes"]].forEach(([id, key]) => {
     const el = document.getElementById(id);
     el.addEventListener("input", () => {
@@ -1486,6 +1587,7 @@ export function initBoard(store) {
     const gameChip = document.getElementById("gameChip");
     gameChip.textContent = g.opp ? "vs " + g.opp : "Game day";
     document.getElementById("gameCfgChip").hidden = false; // CSS limits the bar to the game view
+    renderScore();
     renderGamePitch();
   }
   const gamePanel = document.getElementById("gamePanel");

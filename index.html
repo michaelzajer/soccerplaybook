@@ -25,7 +25,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=51">
+<link rel="stylesheet" href="styles.css?v=52">
 </head>
 <body>
 
@@ -108,6 +108,26 @@
     <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
   </div>
 
+  <div id="scoreBar">
+    <div class="scoreSide">
+      <div class="scoreName" id="scoreUsName">Us</div>
+      <div class="scoreBtns">
+        <button data-team="us" data-d="-1" aria-label="Us minus one">−</button>
+        <div class="scoreNum" id="scoreUs">0</div>
+        <button data-team="us" data-d="1" aria-label="Us plus one">+</button>
+      </div>
+    </div>
+    <div class="scoreColon">:</div>
+    <div class="scoreSide">
+      <div class="scoreName" id="scoreThemName">Opp</div>
+      <div class="scoreBtns">
+        <button data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
+        <div class="scoreNum" id="scoreThem">0</div>
+        <button data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
+      </div>
+    </div>
+  </div>
+
   <main><div id="board">
     <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
     <canvas id="ink"></canvas>
@@ -181,8 +201,13 @@
   </div>
 
   <div id="benchZone">
-    <span class="benchLabel">Bench</span>
+    <div id="subHint" class="subHint" hidden></div>
+    <span class="benchLabel">Subs</span>
     <div id="bench"></div>
+    <div id="outZone">
+      <span class="outLabel">Out</span>
+      <div id="outList"></div>
+    </div>
   </div>
   <div id="drillTray">
     <span class="benchLabel">Kit</span>
@@ -288,6 +313,21 @@
     </div>
   </div>
 
+  <!-- substitution sheet -->
+  <div id="subPanel" class="overlay">
+    <div class="sheet">
+      <h2>Substitution</h2>
+      <div class="subLine"><span class="subTag off">Off</span><span id="subOffName" class="subWho"></span></div>
+      <div class="subLine"><span class="subTag on">On</span><span id="subOnName" class="subWho"></span></div>
+      <label class="tlab">Position for <span id="subOnName2"></span>
+        <input id="subPos" maxlength="3" autocomplete="off" list="posList">
+      </label>
+      <div class="hint">The player coming on takes that spot. Change the position if they are playing somewhere different.</div>
+      <button class="primary" id="subConfirm">Make substitution</button>
+      <button class="close" id="subCancel">Cancel</button>
+    </div>
+  </div>
+
   <!-- saved games sheet -->
   <div id="gamesPanel" class="overlay">
     <div class="sheet">
@@ -370,6 +410,6 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=51"></script>
+<script type="module" src="js/app.js?v=52"></script>
 </body>
 </html>

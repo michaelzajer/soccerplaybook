@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v51**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v52**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -53,8 +53,9 @@ controllerchange → reload).
 ```
 { teamName, roster:[{id,name,pos}], nextId,
   colors:{team,opp},                       // hex; defaults #2563eb / #ff453a
+  unavailable:[id...],                     // injured/unavailable roster ids (team-wide, ongoing)
   board:{squad:"11"|"9", formation, showOpp, showNames, placed:{id:{x,y}}},
-  gameday:{id?, date, time, opp, notes, lineup:{formation,squad,placed,at}|null},
+  gameday:{id?, date, time, opp, notes, score:{us,them}, lineup:{formation,squad,placed,at}|null},
   games:[gameday...],                      // saved games library
   drills:[{id,name,items:[{kind,x,y,color?}], strokes:[{mode,pts:FLAT,color?}]}],
                                      // color (hex) optional: cones/markers/players + lines
@@ -117,6 +118,14 @@ controllerchange → reload).
 - Entry screen (authView) = landing (intro list + "Try as guest" + "Log in/register")
   that reveals the email/password panel on demand (#authLanding / #authPanel toggle,
   resetAuthView() returns to landing on sign-out).
+- Subs bar (#benchZone, team+game views): left "Subs" (available, unplaced) + right "Out"
+  (#outZone, unavailable). Subs are TAP-to-select (subSel) for a substitution — drag-to-sub
+  was removed. Tap a sub then tap an on-pitch player → #subPanel (edit incoming position) →
+  swap (incoming takes the spot, pos updated on roster, outgoing to subs). Tap an empty pitch
+  spot with a sub selected = place them. Mark unavailable by dragging a sub (or on-pitch
+  player) onto #outZone; tap an Out token to restore. applyFormation skips unavailable.
+- Game scoreboard (#scoreBar, gameView only): gameday.score {us,them}, +/- buttons, green
+  LED-style numbers; renderScore() on renderGameday + setView('game'); saved with the game.
 - Game config is a SHEET over the pitch (not a view): details, line-up card with tappable
   pitch preview (canvas), game timer (per-period clocks, tap H1/H2 chips to switch),
   independent subs countdown (rolls over automatically). Save game upserts by id into
