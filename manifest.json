@@ -1,8 +1,8 @@
 {
-  "name": "Soccer Play Book",
-  "short_name": "Play Book",
+  "name": "My Soccer Coach",
+  "short_name": "Soccer Coach",
   "description": "Set your team. Run your plays.",
-  "start_url": "./",
+  "start_url": "./app",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

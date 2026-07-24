@@ -1,416 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#181d1a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Soccer Play Book — Tactics Board, Drills &amp; Game-Day Timers for Coaches</title>
-<meta name="description" content="Soccer Play Book is a free, mobile coaching app. Build your squad, set formations on a tactics board, plan drills, and run game day with line-ups, a match clock and a subs timer. Works offline.">
-<link rel="canonical" href="https://mysoccercoach.app/">
-<meta name="robots" content="index, follow">
-<!-- Open Graph / social preview -->
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Soccer Play Book">
-<meta property="og:title" content="Soccer Play Book — coaching app for squads, formations, drills and game day">
-<meta property="og:description" content="Build your squad, set formations, plan drills, and run game day with line-ups and timers. Free, mobile, works offline.">
-<meta property="og:url" content="https://mysoccercoach.app/">
-<meta property="og:image" content="https://mysoccercoach.app/icons/icon-512.png">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Soccer Play Book — coaching app for squads, formations, drills and game day">
-<meta name="twitter:description" content="Build your squad, set formations, plan drills, and run game day with line-ups and timers. Free, mobile, works offline.">
-<meta name="twitter:image" content="https://mysoccercoach.app/icons/icon-512.png">
-<link rel="manifest" href="manifest.json">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>My Soccer Coach</title>
+<meta name="description" content="My Soccer Coach is a free, mobile coaching app. Build your squad, set formations on a tactics board, plan drills, and run game day with line-ups, a match clock and a subs timer.">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=54">
+<style>
+  :root {
+    --bg: #111;
+    --ink: #eee;
+    --accent: #3b82f6;
+    --line: #333;
+  }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header { padding: 20px; text-align: center; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; text-transform: uppercase; }
+  h1 span { color: var(--accent); }
+  .hero { text-align: center; padding: 40px 20px; }
+  .hero p { font-size: 20px; color: #ccc; max-width: 600px; margin: 0 auto 30px; }
+  .btn {
+    display: inline-block; background: var(--accent); color: #fff;
+    padding: 15px 30px; border-radius: 30px; text-decoration: none; font-weight: bold; font-size: 18px;
+    border: none; cursor: pointer; transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.9; }
+  
+  /* Slider */
+  .slider-container {
+    max-width: 800px; margin: 20px auto; position: relative; overflow: hidden;
+    border-radius: 12px; border: 1px solid var(--line);
+  }
+  .slides { display: flex; transition: transform 0.4s ease-in-out; }
+  .slide { min-width: 100%; box-sizing: border-box; padding: 20px 15px 10px; text-align: center; background: #1a1a1a; }
+  .slide img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .slide h2 { margin: 0 0 10px 0; color: var(--accent); }
+  .slide p { margin: 0; color: #bbb; }
+  
+  .slider-controls {
+    display: flex; justify-content: center; gap: 10px; margin-top: 20px;
+  }
+  .dot {
+    width: 12px; height: 12px; border-radius: 50%; background: var(--line); cursor: pointer;
+  }
+  .dot.active { background: var(--accent); }
+
+  footer {
+    margin-top: auto; padding: 20px; text-align: center; border-top: 1px solid var(--line);
+    font-size: 14px;
+  }
+  footer a { color: #888; text-decoration: none; margin: 0 10px; }
+  footer a:hover { color: #fff; }
+</style>
 </head>
 <body>
 
-<!-- ============ AUTH VIEW ============ -->
-<section id="authView" class="view">
-  <div class="card">
-    <h1 class="brand">Soccer<span>Play Book</span></h1>
+<header>
+  <h1>My Soccer<span>Coach</span></h1>
+</header>
 
-    <!-- landing: what this is + how to get in -->
-    <div id="authLanding">
-      <p class="tag">Your pitch-side coaching companion.</p>
-      <ul class="introList">
-        <li>Build your squad and set formations on a tactics board.</li>
-        <li>Plan drills with cones, markers, players and passing lines.</li>
-        <li>Run game day with line-ups, a match clock and a subs timer.</li>
-        <li>Works offline and installs to your home screen.</li>
-      </ul>
-      <p class="acctLead">With a free account you also get</p>
-      <ul class="introList acctList">
-        <li>Your team and drills saved and synced across devices.</li>
-        <li>Share team sheets and drills as images.</li>
-      </ul>
-      <button class="primary" id="landingGuest">Try it now as a guest</button>
-      <button class="linkish outlineBtn" id="landingAuth">Log in or create an account</button>
-      <p class="hint introHint">Guest mode is just for a try — nothing is saved. Create a free account to keep your work.</p>
-    </div>
-
-    <!-- auth: email/password form, revealed on demand -->
-    <div id="authPanel" hidden>
-      <p class="tag" id="authHeading">Log in to your account</p>
-      <form id="authForm">
-        <input id="authEmail" type="email" placeholder="Email" autocomplete="email" required>
-        <input id="authPass" type="password" placeholder="Password (6+ characters)" autocomplete="current-password" required minlength="6">
-        <div id="authError" class="err"></div>
-        <button type="submit" class="primary" id="authSubmit">Log in</button>
-        <button type="button" class="linkish" id="authForgot">Forgot password?</button>
-      </form>
-      <button class="linkish" id="authSwap">New here? Create an account</button>
-      <button class="linkish" id="authBack">← Back</button>
-    </div>
-  </div>
-</section>
-
-<!-- ============ TEAM SETUP VIEW ============ -->
-<section id="setupView" class="view">
-  <div class="card">
-    <h1 class="brand">Team setup</h1>
-    <p class="tag">Name your team and add your squad. You can change all of this later.</p>
-    <input id="teamName" type="text" placeholder="Team name" maxlength="40">
-    <div class="addRow">
-      <input id="suName" placeholder="Player name" autocomplete="off">
-      <input id="suPos" placeholder="POS" maxlength="3" autocomplete="off" list="posList">
-      <button type="button" id="suAdd">Add</button>
-    </div>
-    <div id="suList" class="rosterList"></div>
-    <div id="setupError" class="err"></div>
-    <button class="primary" id="setupDone">Start coaching</button>
-    <button class="linkish" id="setupSignOut">Sign out</button>
-  </div>
-</section>
-
-<!-- ============ BOARD VIEW ============ -->
-<section id="boardView" class="view">
-  <header>
-    <h1 id="hdrTeam">Soccer Play Book</h1>
-    <div class="spacer"></div>
-    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
-  </header>
-  <div id="controls">
-    <div class="seg" id="viewSeg">
-      <button class="on" data-view="team">Team <span class="chev">⌄</span></button>
-      <button data-view="game">Game day <span class="chev">⌄</span></button>
-      <button data-view="drills">Drills <span class="chev">⌄</span></button>
-    </div>
-  </div>
-
-  <div id="matchBar">
-    <button id="gameChip">Game</button>
-    <button id="timerChip" hidden>00:00</button>
-    <button id="subsChip" hidden>Subs 10:00</button>
-    <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
-  </div>
-
-  <div id="scoreBar">
-    <div class="scoreSide">
-      <div class="scoreName" id="scoreUsName">Us</div>
-      <div class="scoreBtns">
-        <button data-team="us" data-d="-1" aria-label="Us minus one">−</button>
-        <div class="scoreNum" id="scoreUs">0</div>
-        <button data-team="us" data-d="1" aria-label="Us plus one">+</button>
+<main class="hero">
+  <p>Your pitch-side coaching companion. Build your squad, plan drills, and run game day seamlessly.</p>
+  <a href="/app.html" class="btn">Open Web App</a>
+  
+  <div class="slider-container">
+    <div class="slides" id="slides">
+      <div class="slide">
+        <h2>Tactics Board</h2>
+        <p>Set formations and organize your squad instantly.</p>
+        <img src="img/teamview_one.png" alt="Tactics Board">
+      </div>
+      <div class="slide">
+        <h2>Easy Drag & Drop</h2>
+        <p>Intuitive touch controls make moving players and markers effortless.</p>
+        <img src="img/teamview_two.png" alt="Easy Drag & Drop">
+      </div>
+      <div class="slide">
+        <h2>Powerful Menus</h2>
+        <p>Customize team colors, kits, and match details with ease.</p>
+        <img src="img/Team_Options.png" alt="Options Menu">
+      </div>
+      <div class="slide">
+        <h2>Live Substitutions</h2>
+        <p>Manage subs on the fly with dedicated bench zones and out-of-play tracking.</p>
+        <img src="img/teamview_three.png" alt="Substitutions">
+      </div>
+      <div class="slide">
+        <h2>Drills Planner</h2>
+        <p>Design training sessions with cones, markers, goals, and passing lines.</p>
+        <img src="img/drills_one.png" alt="Drills Planner">
+      </div>
+      <div class="slide">
+        <h2>Game Day Manager</h2>
+        <p>Run match day like a pro with line-ups, a match clock, and a subs timer.</p>
+        <img src="img/gamesetup_one.png" alt="Game Day Manager">
       </div>
     </div>
-    <div class="scoreColon">:</div>
-    <div class="scoreSide">
-      <div class="scoreName" id="scoreThemName">Opp</div>
-      <div class="scoreBtns">
-        <button data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
-        <div class="scoreNum" id="scoreThem">0</div>
-        <button data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
-      </div>
+    
+    <div class="slider-controls" id="dots">
+      <div class="dot active" data-index="0"></div>
+      <div class="dot" data-index="1"></div>
+      <div class="dot" data-index="2"></div>
+      <div class="dot" data-index="3"></div>
+      <div class="dot" data-index="4"></div>
+      <div class="dot" data-index="5"></div>
     </div>
   </div>
+</main>
 
-  <main><div id="board">
-    <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
-    <canvas id="ink"></canvas>
-    <div id="pitchTools">
-      <select id="formation"></select>
-      <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
-    </div>
-  </div></main>
+<footer>
+  <a href="/about.html">About</a>
+  <a href="/info.html">Info</a>
+  <a href="/feedback.html">Feedback</a>
+  <a href="/sitemap.xml">Sitemap</a>
+  <br><br>
+  <span style="color:#666;">&copy; 2026 My Soccer Coach</span>
+</footer>
 
-  <!-- game configuration sheet -->
-  <div id="gamePanel" class="overlay">
-   <div class="sheet gameSheet">
-    <div class="gcard">
-      <h2>Game details</h2>
-      <div class="cfgRow">
-        <label class="tlab">Date<input type="date" id="gDate"></label>
-        <label class="tlab">Kick-off<input type="time" id="gTime"></label>
-      </div>
-      <label class="tlab">Opposition<input type="text" id="gOpp" placeholder="Who are you playing?" maxlength="40"></label>
-      <label class="tlab">Notes<textarea id="gNotes" rows="4" placeholder="Game notes — tactics, reminders, who is away…"></textarea></label>
-      <button class="primary" id="gSaveBtn">Save game</button>
-    </div>
-    <div class="gcard">
-      <h2>Line-up</h2>
-      <canvas id="gPitchPreview"></canvas>
-      <div class="hint" id="gLineupInfo">Not captured yet</div>
-      <div class="timerBtns">
-        <button class="close" id="gCapture">Capture current board</button>
-        <button class="close" id="gRestore" hidden>Load onto board</button>
-        <button class="close" id="gShare">Share team sheet</button>
-      </div>
-    </div>
-    <div class="gcard">
-      <h2>Game timer</h2>
-      <div class="segRow" id="periodSeg"></div>
-      <div class="timerBig" id="timerDisplay">00:00</div>
-      <div class="hint timerMeta" id="timerMeta"></div>
-      <div class="cfgRow">
-        <label class="tlab">Periods
-          <select id="cfgPeriods">
-            <option value="2">2 halves</option>
-            <option value="4">4 quarters</option>
-          </select>
-        </label>
-        <label class="tlab">Minutes each
-          <input id="cfgMinutes" type="number" inputmode="numeric" min="5" max="60" value="30">
-        </label>
-      </div>
-      <div class="timerBtns">
-        <button class="primary" id="timerStart">Start</button>
-        <button class="close" id="timerReset">Reset</button>
-      </div>
-      <div class="hint">Tap a period to switch between them — each keeps its own clock.</div>
-    </div>
-    <div class="gcard">
-      <h2>Subs timer</h2>
-      <div class="timerBig" id="subsDisplay">10:00</div>
-      <div class="cfgRow">
-        <label class="tlab">Rotate every (minutes)
-          <input id="cfgSubInt" type="number" inputmode="numeric" min="1" max="30" value="10">
-        </label>
-      </div>
-      <div class="timerBtns">
-        <button class="primary" id="subsStart">Start</button>
-        <button class="close" id="subsReset">Reset</button>
-      </div>
-      <div class="hint">Independent of the game timer. Counts down, alerts, and restarts automatically. The countdown shows on the Team view while running.</div>
-    </div>
-    <button class="close" id="closeGame">Back to pitch</button>
-   </div>
-  </div>
+<script>
+  const slides = document.getElementById('slides');
+  const dots = document.querySelectorAll('.dot');
+  let currentSlide = 0;
 
-  <div id="benchZone">
-    <div id="subHint" class="subHint" hidden></div>
-    <span class="benchLabel">Subs</span>
-    <div id="bench"></div>
-    <div id="outZone">
-      <span class="outLabel">Out</span>
-      <div id="outList"></div>
-    </div>
-  </div>
-  <div id="drillTray">
-    <span class="benchLabel">Kit</span>
-    <div class="trayItems">
-      <div class="titem" data-kind="cone"><div class="tico"><div class="cone"></div></div><span>Cone</span></div>
-      <div class="titem" data-kind="disc"><div class="tico"><div class="disc"></div></div><span>Marker</span></div>
-      <div class="titem" data-kind="pole"><div class="tico"><div class="pole"></div></div><span>Pole</span></div>
-      <div class="titem" data-kind="dball"><div class="tico"><div class="dball"></div></div><span>Ball</span></div>
-      <div class="titem" data-kind="att"><div class="tico"><div class="att"></div></div><span>Player</span></div>
-      <div class="titem" data-kind="def"><div class="tico"><div class="def"></div></div><span>Opp</span></div>
-      <div class="titem" data-kind="goal"><div class="tico"><div class="goal"></div></div><span>Goal</span></div>
-      <div class="titem" data-kind="mini"><div class="tico"><div class="mini"></div></div><span>Mini goal</span></div>
-    </div>
-  </div>
-  <div id="dragGhost"></div>
+  dots.forEach(dot => {
+    dot.addEventListener('click', (e) => {
+      currentSlide = parseInt(e.target.dataset.index);
+      updateSlider();
+    });
+  });
 
-  <footer>
-    <div id="drillColors" aria-label="Colours">
-      <div class="palRow" data-target="team">
-        <span class="palLbl">Players</span>
-        <button class="swatch" data-color="#ffffff" style="--sw:#ffffff" aria-label="White players"></button>
-        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red players"></button>
-        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue players"></button>
-        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow players"></button>
-      </div>
-      <div class="palRow" data-target="opp">
-        <span class="palLbl">Opp</span>
-        <button class="swatch" data-color="#ffffff" style="--sw:#ffffff" aria-label="White opposition"></button>
-        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red opposition"></button>
-        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue opposition"></button>
-        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow opposition"></button>
-      </div>
-      <div class="palRow palPiece" data-target="piece">
-        <span class="palLbl">Item</span>
-        <button class="swatch on" data-color="#ffffff" style="--sw:#ffffff" aria-label="White item"></button>
-        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red item"></button>
-        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue item"></button>
-        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow item"></button>
-      </div>
-    </div>
-    <button class="tool" id="colorBtn" aria-label="Colours"><span id="colorDot"></span>Colour</button>
-    <button class="mode on" data-mode="move"><span class="glyph">✥</span>Move</button>
-    <button class="mode" data-mode="run">
-      <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8"/><path d="M14 3 L20 8 L14 13"/></svg>Run
-    </button>
-    <button class="mode" data-mode="pass">
-      <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="3 3"/><path d="M14 3 L20 8 L14 13"/></svg>Pass
-    </button>
-    <button class="mode" data-mode="dribble">
-      <svg class="icon" viewBox="0 0 24 16"><path d="M2 8 q2 -5 4 0 t4 0 t4 0 t4 0"/><path d="M15 3 L21 8 L15 13"/></svg>Dribble
-    </button>
-    <button class="mode" data-mode="draw">
-      <svg class="icon" viewBox="0 0 24 16"><path d="M2 12 C8 2, 14 14, 22 4"/></svg>Draw
-    </button>
-    <button class="act" id="undoBtn"><span class="glyph">↩</span>Undo</button>
-    <button class="act" id="clearBtn"><span class="glyph">✕</span>Clear</button>
-  </footer>
+  function updateSlider() {
+    slides.style.transform = `translateX(-${currentSlide * 100}%)`;
+    dots.forEach((dot, index) => {
+      dot.classList.toggle('active', index === currentSlide);
+    });
+  }
+  
+  // Auto-advance
+  setInterval(() => {
+    currentSlide = (currentSlide + 1) % dots.length;
+    updateSlider();
+  }, 5000);
+</script>
 
-  <!-- squad sheet -->
-  <div id="squadPanel" class="overlay">
-    <div class="sheet">
-      <h2>My Squad</h2>
-      <input id="editTeamName" type="text" placeholder="Team name" maxlength="40">
-      <div class="cfgRow">
-        <label class="tlab">Squad size
-          <select id="squad">
-            <option value="11">11 v 11</option>
-            <option value="9">9 v 9</option>
-          </select>
-        </label>
-        <label class="tlab">Team colour
-          <input type="color" id="teamColor" value="#2563eb">
-        </label>
-        <label class="tlab">Opposition
-          <input type="color" id="oppColor" value="#ff453a">
-        </label>
-      </div>
-      <div class="addRow">
-        <input id="inName" placeholder="Player name" autocomplete="off">
-        <input id="inPos" placeholder="POS" maxlength="3" autocomplete="off" list="posList">
-        <button type="button" id="addPlayer">Add</button>
-      </div>
-      <div id="rosterList" class="rosterList"></div>
-      <div class="hint guestNote" id="squadGuestNote" hidden>Guest mode is just for a try — your squad is not saved. Create a free account to save it and use it on any device.</div>
-      <div class="hint">Pick a formation to auto-place players. Drag between pitch and bench to sub.</div>
-      <button class="close" id="closeSquad">Done</button>
-    </div>
-  </div>
-
-  <!-- board options sheet -->
-  <div id="ctlMenuPanel" class="overlay">
-    <div class="sheet">
-      <h2 id="ctlMenuTitle">Team options</h2>
-      <div class="menuSheet">
-        <button id="squadBtn">My squad…</button>
-        <button id="namesToggle">Player names</button>
-        <button id="oppToggle">Opposition</button>
-        <button id="shareTeamBtn">Share team sheet…</button>
-        <button id="drillLibBtn">Drill library…</button>
-        <button id="resetBtn">Reset board</button>
-      </div>
-      <button class="close" id="closeCtlMenu">Done</button>
-    </div>
-  </div>
-
-  <!-- substitution sheet -->
-  <div id="subPanel" class="overlay">
-    <div class="sheet">
-      <h2>Substitution</h2>
-      <div class="subLine"><span class="subTag off">Off</span><span id="subOffName" class="subWho"></span></div>
-      <div class="subLine"><span class="subTag on">On</span><span id="subOnName" class="subWho"></span></div>
-      <label class="tlab">Position for <span id="subOnName2"></span>
-        <input id="subPos" maxlength="3" autocomplete="off" list="posList">
-      </label>
-      <div class="hint">The player coming on takes that spot. Change the position if they are playing somewhere different.</div>
-      <button class="primary" id="subConfirm">Make substitution</button>
-      <button class="close" id="subCancel">Cancel</button>
-    </div>
-  </div>
-
-  <!-- saved games sheet -->
-  <div id="gamesPanel" class="overlay">
-    <div class="sheet">
-      <h2>Game day</h2>
-      <button class="close" id="newGameBtn">Set up new game</button>
-      <div id="gamesList" class="rosterList"></div>
-      <div class="hint">Tap a saved game to open its line-up on the pitch. Use the … chip to get back to its details.</div>
-      <button class="close" id="closeGames">Done</button>
-    </div>
-  </div>
-
-  <!-- drills sheet -->
-  <div id="drillPanel" class="overlay">
-    <div class="sheet">
-      <h2>Drills</h2>
-      <div class="presetLabel">Built-in drills</div>
-      <div id="presetRow" class="presetRow"></div>
-      <div class="presetLabel">Your drills</div>
-      <div class="addRow">
-        <input id="drillName" placeholder="Drill name" maxlength="40" autocomplete="off">
-        <button type="button" id="saveDrillBtn">Save</button>
-      </div>
-      <textarea id="drillNotes" class="drillNotes" rows="2" maxlength="1500" placeholder="Instructions (optional) — set-up, how it runs, coaching points"></textarea>
-      <div id="drillList" class="rosterList"></div>
-      <div class="hint guestNote" id="drillGuestNote" hidden>Guest mode is just for a try — your drills are not saved. Create a free account to save them and share them.</div>
-      <div class="hint">Save keeps what is on the pitch now, with any instructions. Tap a saved drill to load it, or ⓘ to read or edit its instructions.</div>
-      <button class="close" id="closeDrills">Done</button>
-    </div>
-  </div>
-
-  <!-- drill instructions sheet -->
-  <div id="drillInfoPanel" class="overlay">
-    <div class="sheet">
-      <h2 id="diTitle">Drill</h2>
-      <div class="diTrains" id="diTrains"></div>
-      <div class="diLabel">Set-up</div>
-      <p class="diSetup" id="diSetup"></p>
-      <div class="diLabel">How it runs</div>
-      <ol class="diList" id="diSteps"></ol>
-      <div class="diLabel">Coaching points</div>
-      <ul class="diList diPoints" id="diCoaching"></ul>
-      <div id="diProgWrap" hidden>
-        <div class="diLabel">Progression</div>
-        <ul class="diList" id="diProgression"></ul>
-      </div>
-      <button class="primary" id="diLoadBtn">Load onto pitch</button>
-      <button class="close" id="diClose">Back</button>
-    </div>
-  </div>
-
-  <!-- custom drill: view / edit instructions -->
-  <div id="drillEditPanel" class="overlay">
-    <div class="sheet">
-      <h2 id="deTitle">Drill</h2>
-      <label class="tlab">Instructions
-        <textarea id="deNotes" rows="7" maxlength="1500" placeholder="Set-up, how it runs, coaching points…"></textarea>
-      </label>
-      <button class="primary" id="deSaveBtn">Save instructions</button>
-      <button class="close" id="deLoadBtn">Load onto pitch</button>
-      <button class="close" id="deClose">Back</button>
-    </div>
-  </div>
-
-  <!-- menu sheet -->
-  <div id="menuPanel" class="overlay">
-    <div class="sheet">
-      <h2>Account</h2>
-      <div class="hint" id="menuEmail"></div>
-      <div class="hint" id="syncStatus"></div>
-      <button class="close" id="signOutBtn">Sign out</button>
-      <button class="close" id="closeMenu">Back</button>
-    </div>
-  </div>
-</section>
-
-<datalist id="posList">
-  <option value="GK"><option value="LB"><option value="CB"><option value="RB">
-  <option value="LWB"><option value="RWB"><option value="CDM"><option value="CM">
-  <option value="CAM"><option value="LM"><option value="RM"><option value="LW">
-  <option value="RW"><option value="ST"><option value="CF">
-</datalist>
-
-<script type="module" src="js/app.js?v=54"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 {
   "hosting": {
     "public": ".",
+    "cleanUrls": true,
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -10,7 +11,7 @@
     ],
     "headers": [
       {
-        "source": "/index.html",
+        "source": "/app.html",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
       {

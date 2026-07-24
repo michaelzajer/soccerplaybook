@@ -281,19 +281,10 @@ function enterGuest() {
   // show the guest nudges in the squad and drills sheets
   document.querySelectorAll(".guestNote").forEach(el => el.hidden = false);
 }
-document.getElementById("landingGuest").addEventListener("click", enterGuest);
+document.getElementById("authGuest").addEventListener("click", enterGuest);
 
-// entry screen: landing (intro + choices) <-> auth form
-const authLanding = document.getElementById("authLanding");
-const authPanel = document.getElementById("authPanel");
-function showAuthPanel(on) {
-  authLanding.hidden = on;
-  authPanel.hidden = !on;
-  if (on) document.getElementById("authEmail").focus();
-}
-function resetAuthView() { showAuthPanel(false); authError.textContent = ""; }
-document.getElementById("landingAuth").addEventListener("click", () => showAuthPanel(true));
-document.getElementById("authBack").addEventListener("click", () => showAuthPanel(false));
+// entry screen is now just the auth form
+function resetAuthView() { authError.textContent = ""; }
 
 /* ---------------- boot ---------------- */
 if (DEMO) {

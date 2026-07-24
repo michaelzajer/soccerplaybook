@@ -2,7 +2,7 @@
 const CACHE = "spb-v54";
 const SHELL = [
   "./",
-  "./index.html",
+  "./app.html",
   "./styles.css",
   "./manifest.json",
   "./js/app.js",

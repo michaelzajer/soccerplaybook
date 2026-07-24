@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Feedback - My Soccer Coach</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; padding: 0; background: #111; color: #eee; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+  header { padding: 20px; text-align: center; border-bottom: 1px solid #333; }
+  header a { text-decoration: none; color: inherit; }
+  h1 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; text-transform: uppercase; }
+  h1 span { color: #3b82f6; }
+  main { padding: 40px 20px; max-width: 600px; margin: 0 auto; line-height: 1.6; flex: 1; }
+  footer { margin-top: auto; padding: 20px; text-align: center; border-top: 1px solid #333; font-size: 14px; }
+  footer a { color: #888; text-decoration: none; margin: 0 10px; }
+  footer a:hover { color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/"><h1>My Soccer<span>Coach</span></h1></a>
+</header>
+<style>
+  /* Form Styles */
+  form { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+  label { font-weight: bold; }
+  input, textarea { 
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; 
+    background: #1a1a1a; color: #eee; font-family: inherit; box-sizing: border-box;
+  }
+  input:focus, textarea:focus { border-color: #3b82f6; outline: none; }
+  button { 
+    background: #3b82f6; color: #fff; padding: 15px; border: none; 
+    border-radius: 30px; font-weight: bold; font-size: 16px; cursor: pointer; transition: opacity 0.2s;
+  }
+  button:hover { opacity: 0.9; }
+</style>
+<main>
+  <h2>Feedback</h2>
+  <p>We would love to hear your feedback on My Soccer Coach! Have a feature request, found a bug, or just want to say hi?</p>
+  
+  <form action="mailto:info@mysoccercoach.app" method="post" enctype="text/plain">
+    <div>
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" placeholder="Coach" required>
+    </div>
+    
+    <div>
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="6" placeholder="Your feedback here..." required></textarea>
+    </div>
+    
+    <button type="submit">Send Feedback</button>
+  </form>
+</main>
+<footer>
+  <a href="/about.html">About</a>
+  <a href="/info.html">Info</a>
+  <a href="/feedback.html">Feedback</a>
+  <a href="/sitemap.xml">Sitemap</a>
+  <br><br><span style="color:#666;">&copy; 2026 My Soccer Coach</span>
+</footer>
+</body>
+</html>
