@@ -334,8 +334,11 @@ export function initBoard(store) {
     });
   }
 
-  // subs are tap-to-select (for a substitution); dragging one into the Out zone
-  // marks the player unavailable
+  // subs support both gestures:
+  //   tap                    -> select for a substitution (then tap a player)
+  //   drag onto empty pitch  -> place them there
+  //   drag onto a player     -> substitution sheet (edit position, swap)
+  //   drag onto the Out zone -> mark unavailable
   function enableSubDrag(el, p) {
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
@@ -354,8 +357,29 @@ export function initBoard(store) {
         el.removeEventListener("pointercancel", up);
         if (!moved) { toggleSubSel(p.id); return; }   // tap = select for a sub
         const oz = document.getElementById("outZone").getBoundingClientRect();
-        if (ev.clientX >= oz.left && ev.clientX <= oz.right && ev.clientY >= oz.top && ev.clientY <= oz.bottom)
-          markUnavailable(p.id);
+        if (ev.clientX >= oz.left && ev.clientX <= oz.right && ev.clientY >= oz.top && ev.clientY <= oz.bottom) {
+          markUnavailable(p.id); return;
+        }
+        const r = board.getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+          const b = bstate();
+          // dropped on a placed player? open the substitution sheet for that swap
+          let swapId = null, best = 28; // px radius
+          for (const q of roster()) {
+            const pos = b.placed[q.id];
+            if (!pos) continue;
+            const d = Math.hypot(pos.x * r.width - (ev.clientX - r.left), pos.y * r.height - (ev.clientY - r.top));
+            if (d < best) { best = d; swapId = q.id; }
+          }
+          if (swapId !== null) { openSubSheet(p.id, swapId); return; }
+          // otherwise place on the empty spot
+          b.placed[p.id] = {
+            x: clamp01((ev.clientX - r.left) / r.width),
+            y: clamp01((ev.clientY - r.top) / r.height)
+          };
+          subSel = null;
+          renderTeam(); renderBench(); saveBoard();
+        }
       };
       el.addEventListener("pointermove", mv);
       el.addEventListener("pointerup", up);

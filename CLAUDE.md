@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v52**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v53**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -119,11 +119,13 @@ controllerchange → reload).
   that reveals the email/password panel on demand (#authLanding / #authPanel toggle,
   resetAuthView() returns to landing on sign-out).
 - Subs bar (#benchZone, team+game views): left "Subs" (available, unplaced) + right "Out"
-  (#outZone, unavailable). Subs are TAP-to-select (subSel) for a substitution — drag-to-sub
-  was removed. Tap a sub then tap an on-pitch player → #subPanel (edit incoming position) →
-  swap (incoming takes the spot, pos updated on roster, outgoing to subs). Tap an empty pitch
-  spot with a sub selected = place them. Mark unavailable by dragging a sub (or on-pitch
-  player) onto #outZone; tap an Out token to restore. applyFormation skips unavailable.
+  (#outZone, unavailable). A sub token (enableSubDrag) does both: TAP = select (subSel) then
+  tap an on-pitch player to swap; DRAG onto empty pitch = place, DRAG onto a player = open
+  #subPanel for that swap, DRAG onto #outZone = mark unavailable. #subPanel edits the incoming
+  player's position (default = the slot being filled), then swaps (incoming takes the spot,
+  pos updated on roster, outgoing to subs). Tap an empty pitch spot with a sub selected also
+  places them. On-pitch players: drag onto #outZone marks unavailable; tap an Out token to
+  restore. applyFormation skips unavailable.
 - Game scoreboard (#scoreBar, gameView only): gameday.score {us,them}, +/- buttons, green
   LED-style numbers; renderScore() on renderGameday + setView('game'); saved with the game.
 - Game config is a SHEET over the pitch (not a view): details, line-up card with tappable
