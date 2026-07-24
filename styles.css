@@ -276,7 +276,7 @@ body.drawing .tok{pointer-events:none}
 #benchZone.dropTarget{border-color:var(--accent);background:rgba(255,214,10,.06)}
 .subHint{
   position:absolute;left:0;right:0;bottom:calc(100% + 5px);
-  text-align:center;font-size:11px;font-weight:600;color:var(--accent);
+  text-align:center;font-size:11px;font-weight:600;color:#fff;
   pointer-events:none;
 }
 /* the "Out" (unavailable) section on the right of the subs bar */
@@ -556,7 +556,7 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 .subTag{flex:0 0 auto;width:42px;text-align:center;font-size:11px;font-weight:800;
   letter-spacing:.06em;text-transform:uppercase;padding:4px 0;border-radius:var(--r-pill)}
 .subTag.off{background:rgba(255,123,107,.18);color:#ff7b6b}
-.subTag.on{background:rgba(59,130,246,.18);color:var(--accent)}
+.subTag.on{background:rgba(59,130,246,.18);color:#fff}
 .subWho{font-size:var(--t-md);font-weight:600;color:var(--ink)}
 #subPos{width:90px;text-transform:uppercase;text-align:center}
 

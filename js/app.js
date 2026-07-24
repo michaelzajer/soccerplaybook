@@ -1,14 +1,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, signOut
+  createUserWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=53";
-import { initBoard } from "./board.js?v=53";
+import { firebaseConfig } from "./firebase-config.js?v=54";
+import { initBoard } from "./board.js?v=54";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
@@ -118,8 +118,29 @@ document.getElementById("authSwap").addEventListener("click", () => {
     isSignup ? "Already have an account? Log in" : "New here? Create an account";
   document.getElementById("authHeading").textContent =
     isSignup ? "Create your free account" : "Log in to your account";
+  document.getElementById("authForgot").hidden = isSignup;
   authError.textContent = "";
 });
+
+document.getElementById("authForgot").addEventListener("click", async () => {
+  authError.textContent = "";
+  const email = document.getElementById("authEmail").value.trim();
+  if (!email) {
+    authError.textContent = "Enter your email address above first.";
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    authError.textContent = "Password reset email sent. Check your inbox.";
+    authError.style.color = "var(--accent)"; // make it look like a success message
+    setTimeout(() => { authError.style.color = ""; }, 5000);
+  } catch (err) {
+    console.error("Reset password error:", err);
+    authError.textContent = friendlyAuthError(err.code) || "Could not send reset email.";
+    authError.style.color = "";
+  }
+});
+
 document.getElementById("authForm").addEventListener("submit", async e => {
   e.preventDefault();
   authError.textContent = "";
