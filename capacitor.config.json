@@ -1,0 +1,10 @@
+{
+  "appId": "app.mysoccercoach.coach",
+  "appName": "My Soccer Coach",
+  "webDir": "dist",
+  "server": {
+    "hostname": "mysoccercoach.app",
+    "iosScheme": "https",
+    "androidScheme": "https"
+  }
+}
