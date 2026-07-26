@@ -1446,19 +1446,18 @@ export function initBoard(store) {
       c.shadowBlur = 0;
     }
   }
-  function makeShareCanvas(title, subtitle) {
-    const W = 1080, HEAD = 110, H = Math.round(W * 105 / 68);
-    const FOOTER = 650;
+  function makeShareCanvas(title, subtitle, footerHeight = 0) {
+    const W = 1080, HEAD = 180, H = Math.round(W * 105 / 68);
     const cv = document.createElement("canvas");
-    cv.width = W; cv.height = H + HEAD + FOOTER;
+    cv.width = W; cv.height = H + HEAD + footerHeight;
     const c = cv.getContext("2d");
     c.fillStyle = "#101411"; c.fillRect(0, 0, W, cv.height);
     c.fillStyle = "#ffd60a"; c.textAlign = "left"; c.textBaseline = "middle";
-    c.font = "700 44px 'Barlow Condensed',sans-serif";
-    c.fillText(title.toUpperCase(), 36, HEAD / 2 - (subtitle ? 14 : 0));
+    c.font = "700 68px 'Barlow Condensed',sans-serif";
+    c.fillText(title.toUpperCase(), 40, HEAD / 2 - (subtitle ? 24 : 0));
     if (subtitle) {
-      c.fillStyle = "#95a09a"; c.font = "600 28px 'Barlow Condensed',sans-serif";
-      c.fillText(subtitle, 36, HEAD / 2 + 26);
+      c.fillStyle = "#95a09a"; c.font = "600 36px 'Barlow Condensed',sans-serif";
+      c.fillText(subtitle, 40, HEAD / 2 + 36);
     }
     c.translate(0, HEAD);
     return { cv, c, W, H };
@@ -1484,6 +1483,22 @@ export function initBoard(store) {
   async function shareTeamSheet() {
     if (guestShareBlocked()) return;
     const b = bstate();
+    
+    // Calculate dynamic footer height based on substitutes
+    const offPitch = roster().filter(p => !b.placed[p.id]);
+    const benchList = offPitch.filter(p => !isOut(p.id));
+    const outList = offPitch.filter(p => isOut(p.id));
+
+    let footerHeight = 0;
+    if (benchList.length > 0) {
+      footerHeight += 70 + 65 + Math.ceil(benchList.length / 2) * 50 + 40;
+    }
+    if (outList.length > 0) {
+      if (footerHeight === 0) footerHeight += 70;
+      footerHeight += 65 + Math.ceil(outList.length / 2) * 50 + 40;
+    }
+    if (footerHeight > 0) footerHeight += 20;
+
     const teamName = store.data.teamName || "My team";
     const g = (store.data && store.data.gameday) || {};
     let sub = b.formation + "  ·  " + b.squad + " v " + b.squad;
@@ -1493,7 +1508,7 @@ export function initBoard(store) {
       if (!isNaN(d)) sub += "  ·  " + d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) +
         (g.time ? " " + g.time : "");
     }
-    const { cv, c, W, H } = makeShareCanvas(teamName, sub);
+    const { cv, c, W, H } = makeShareCanvas(teamName, sub, footerHeight);
     drawPitchPNG(c, W, H);
     const cur = (currentView === "team" || currentView === "game") ? strokes : strokeBufs.team;
     cur.forEach(s => drawStrokePNG(c, W, H, s));
