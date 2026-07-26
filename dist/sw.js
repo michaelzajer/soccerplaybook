@@ -1,5 +1,5 @@
 /* Simple app-shell cache. Firestore handles data offline on its own. */
-const CACHE = "spb-v54";
+const CACHE = "spb-v55";
 const SHELL = [
   "./",
   "./app.html",
