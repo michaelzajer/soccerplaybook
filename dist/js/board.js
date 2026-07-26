@@ -1534,9 +1534,6 @@ export function initBoard(store) {
     }
     
     // Draw Substitutes in the footer
-    const offPitch = roster().filter(p => !b.placed[p.id]);
-    const benchList = offPitch.filter(p => !isOut(p.id));
-    const outList = offPitch.filter(p => isOut(p.id));
     
     c.translate(0, H); // move down into the footer area
     

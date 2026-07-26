@@ -13,6 +13,10 @@
     ],
     "headers": [
       {
+        "source": "/",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
         "source": "/app.html",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
