@@ -18,6 +18,21 @@
 <meta property="og:url" content="https://mysoccercoach.app/">
 <meta property="og:image" content="https://mysoccercoach.app/img/og-banner.jpg">
 <meta name="twitter:card" content="summary">
+
+<script>
+window.onerror = function(msg, url, line, col, error) {
+  var div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;z-index:99999;padding:20px;font-family:sans-serif;word-break:break-all;';
+  div.innerHTML = '<b>ERROR:</b> ' + msg + '<br><b>Line:</b> ' + line + '<br><b>URL:</b> ' + url;
+  document.body ? document.body.appendChild(div) : window.addEventListener('DOMContentLoaded', () => document.body.appendChild(div));
+};
+window.addEventListener("unhandledrejection", function(event) {
+  var div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:50%;left:0;width:100%;background:orange;color:black;z-index:99999;padding:20px;font-family:sans-serif;word-break:break-all;';
+  div.innerHTML = '<b>PROMISE REJECTION:</b> ' + (event.reason && event.reason.message ? event.reason.message : event.reason);
+  document.body ? document.body.appendChild(div) : window.addEventListener('DOMContentLoaded', () => document.body.appendChild(div));
+});
+</script>
 <meta name="twitter:title" content="My Soccer Coach — coaching app for squads, formations, drills and game day">
 <meta name="twitter:description" content="Build your squad, set formations, plan drills, and run game day with line-ups and timers. Free, mobile, works offline.">
 <meta name="twitter:image" content="https://mysoccercoach.app/img/og-banner.jpg">
@@ -25,7 +40,9 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=54">
+<link rel="stylesheet" href="tailwind.css?v=131">
+<link rel="stylesheet" href="styles.css?v=131">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
 </head>
 <body>
 
@@ -71,7 +88,7 @@
 </section>
 
 <!-- ============ BOARD VIEW ============ -->
-<section id="boardView" class="view">
+<section id="boardView" class="view md:max-w-[430px] md:mx-auto md:border-x md:border-white/10 md:shadow-2xl relative">
   <header>
     <h1 id="hdrTeam">Soccer Play Book</h1>
     <div class="spacer"></div>
@@ -112,14 +129,38 @@
     </div>
   </div>
 
-  <main><div id="board">
+  <main class="flex-1 w-full relative h-full m-0 p-0 overflow-hidden flex items-center justify-center bg-black">
+<div id="board" class="w-full h-full max-h-full max-w-full aspect-[68/105] relative rounded-none border-none shadow-none overflow-hidden">
+    <svg id="tacticalLayer" width="100%" height="100%" style="position:absolute; top:0; left:0; pointer-events:none; z-index:2;">
+      <defs>
+        <!-- Pass Arrow -->
+        <marker id="arrow-pass" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+        <!-- Run Arrow -->
+        <marker id="arrow-run" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+        <!-- Dribble Arrow -->
+        <marker id="arrow-dribble" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+        <!-- Pass+Run Arrow -->
+        <marker id="arrow-passrun" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+      </defs>
+    </svg>
+
     <svg id="lines" viewBox="0 0 68 105" preserveAspectRatio="none"></svg>
     <canvas id="ink"></canvas>
     <div id="pitchTools">
       <select id="formation"></select>
       <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
     </div>
-  </div></main>
+      </div>
+</main>
+  
 
   <!-- game configuration sheet -->
   <div id="gamePanel" class="overlay">
@@ -180,7 +221,6 @@
       </div>
       <div class="hint">Independent of the game timer. Counts down, alerts, and restarts automatically. The countdown shows on the Team view while running.</div>
     </div>
-    <button class="close" id="closeGame">Back to pitch</button>
    </div>
   </div>
 
@@ -193,61 +233,134 @@
       <div id="outList"></div>
     </div>
   </div>
-  <div id="drillTray">
-    <span class="benchLabel">Kit</span>
-    <div class="trayItems">
-      <div class="titem" data-kind="cone"><div class="tico"><div class="cone"></div></div><span>Cone</span></div>
-      <div class="titem" data-kind="disc"><div class="tico"><div class="disc"></div></div><span>Marker</span></div>
-      <div class="titem" data-kind="pole"><div class="tico"><div class="pole"></div></div><span>Pole</span></div>
-      <div class="titem" data-kind="dball"><div class="tico"><div class="dball"></div></div><span>Ball</span></div>
-      <div class="titem" data-kind="att"><div class="tico"><div class="att"></div></div><span>Player</span></div>
-      <div class="titem" data-kind="def"><div class="tico"><div class="def"></div></div><span>Opp</span></div>
-      <div class="titem" data-kind="goal"><div class="tico"><div class="goal"></div></div><span>Goal</span></div>
-      <div class="titem" data-kind="mini"><div class="tico"><div class="mini"></div></div><span>Mini goal</span></div>
+    <!-- Transport bar. Positioned in styles.css (#drillPlayerBar), docked to the
+         bottom zone with the other controls — it sat over the attacking third. -->
+    <div id="drillPlayerBar" class="hidden drillOnly flex items-center gap-3 bg-[#121212]/80 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+    <button id="dpPrevDrill" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors" aria-label="Previous Drill">◀</button>
+    <div class="flex flex-col items-center justify-center px-1 max-w-[120px]">
+      <div id="dpTitle" class="text-white font-bold text-sm tracking-wide truncate w-full text-center">Drill Title</div>
+      <div id="dpStep" class="text-white/40 text-[10px] uppercase tracking-wider font-semibold mt-0.5">Step 1 of 1</div>
     </div>
+    <div class="flex items-center gap-1">
+      <button id="dpInfoBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors text-lg" aria-label="Drill Instructions">ⓘ</button>
+      <!-- Loop toggle. An SVG (not the 🔁 emoji) so it inherits currentColor and
+           can actually show an on/off state; styled in styles.css #dpLoopBtn. -->
+      <button id="dpLoopBtn" aria-label="Loop drill" aria-pressed="false" title="Keep the rotation running">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+          <path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+        </svg>
+        <span class="loopLbl">Loop</span>
+      </button>
+      <button id="playDrillBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-blue-500 text-white shadow-lg active:scale-95 transition-transform"><span id="playDrillGlyph" class="ml-0.5 text-lg">▶</span></button>
+    </div>
+    <button id="dpNextDrill" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors" aria-label="Next Drill">▶</button>
   </div>
+  <div id="drillTray" class="drillOnly absolute bottom-16 left-4 right-4 bg-[#121212]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[110] transform translate-y-0 transition-transform duration-300 ease-out p-2 flex flex-row overflow-x-auto gap-2">
+    <div class="flex gap-2 overflow-x-auto scrollbar-hide trayItems items-center">
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="cone"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="cone"></div></div><span class="text-xs text-white/60 font-medium">Cone</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="disc"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="disc"></div></div><span class="text-xs text-white/60 font-medium">Marker</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="pole"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="pole"></div></div><span class="text-xs text-white/60 font-medium">Pole</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="dball"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="dball"></div></div><span class="text-xs text-white/60 font-medium">Ball</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="att"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="att"></div></div><span class="text-xs text-white/60 font-medium">Player</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="def"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="def"></div></div><span class="text-xs text-white/60 font-medium">Opp</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="goal"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="goal"></div></div><span class="text-xs text-white/60 font-medium">Goal</span></div>
+      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="mini"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="mini"></div></div><span class="text-xs text-white/60 font-medium">Mini</span></div>
+    </div>
+  </div><!-- /#drillTray -->
+
   <div id="dragGhost"></div>
 
-  <footer>
-    <div id="drillColors" aria-label="Colours">
+  <!-- Number Selector Popup -->
+  <div id="numSelectorPopup" class="glass-popup" hidden>
+    <div class="num-list">
+      <button class="num-btn" data-num="">✕</button>
+      <button class="num-btn" data-num="1">1</button>
+      <button class="num-btn" data-num="2">2</button>
+      <button class="num-btn" data-num="3">3</button>
+      <button class="num-btn" data-num="4">4</button>
+      <button class="num-btn" data-num="5">5</button>
+      <button class="num-btn" data-num="6">6</button>
+      <button class="num-btn" data-num="7">7</button>
+      <button class="num-btn" data-num="8">8</button>
+      <button class="num-btn" data-num="9">9</button>
+      <button class="num-btn" data-num="10">10</button>
+      <button class="num-btn" data-num="11">11</button>
+    </div>
+  </div>
+  <!-- Colour palette. NOTE: .palRow / .swatch / data-target are JS hooks used by
+       board.js (refreshColorPalette + swatch binding) — do not replace them with
+       Tailwind-only classes. data-target must stay team | opp | piece. -->
+  <div id="drillColors" class="bg-[#121212]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-3 shadow-2xl z-[100]">
       <div class="palRow" data-target="team">
         <span class="palLbl">Players</span>
-        <button class="swatch" data-color="#ffffff" style="--sw:#ffffff" aria-label="White players"></button>
-        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red players"></button>
-        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue players"></button>
-        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow players"></button>
+        <button class="swatch" data-color="#ffffff" style="background:#ffffff" aria-label="White players"></button>
+        <button class="swatch" data-color="#2563eb" style="background:#2563eb" aria-label="Blue players"></button>
+        <button class="swatch" data-color="#ff453a" style="background:#ff453a" aria-label="Red players"></button>
+        <button class="swatch" data-color="#ffd60a" style="background:#ffd60a" aria-label="Yellow players"></button>
       </div>
       <div class="palRow" data-target="opp">
         <span class="palLbl">Opp</span>
-        <button class="swatch" data-color="#ffffff" style="--sw:#ffffff" aria-label="White opposition"></button>
-        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red opposition"></button>
-        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue opposition"></button>
-        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow opposition"></button>
+        <button class="swatch" data-color="#ffffff" style="background:#ffffff" aria-label="White opposition"></button>
+        <button class="swatch" data-color="#2563eb" style="background:#2563eb" aria-label="Blue opposition"></button>
+        <button class="swatch" data-color="#ff453a" style="background:#ff453a" aria-label="Red opposition"></button>
+        <button class="swatch" data-color="#ffd60a" style="background:#ffd60a" aria-label="Yellow opposition"></button>
       </div>
       <div class="palRow palPiece" data-target="piece">
         <span class="palLbl">Item</span>
-        <button class="swatch on" data-color="#ffffff" style="--sw:#ffffff" aria-label="White item"></button>
-        <button class="swatch" data-color="#ff453a" style="--sw:#ff453a" aria-label="Red item"></button>
-        <button class="swatch" data-color="#2f6bff" style="--sw:#2f6bff" aria-label="Blue item"></button>
-        <button class="swatch" data-color="#ffd60a" style="--sw:#ffd60a" aria-label="Yellow item"></button>
+        <button class="swatch" data-color="#ffffff" style="background:#ffffff" aria-label="White item"></button>
+        <button class="swatch" data-color="#2f6bff" style="background:#2f6bff" aria-label="Blue item"></button>
+        <button class="swatch" data-color="#ff453a" style="background:#ff453a" aria-label="Red item"></button>
+        <button class="swatch" data-color="#ffd60a" style="background:#ffd60a" aria-label="Yellow item"></button>
       </div>
     </div>
-    <button class="tool" id="colorBtn" aria-label="Colours"><span id="colorDot"></span>Colour</button>
-    <button class="mode on" data-mode="move"><span class="glyph">✥</span>Move</button>
-    <button class="mode" data-mode="run">
-      <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8"/><path d="M14 3 L20 8 L14 13"/></svg>Run
+    
+  
+  <!-- Drills dock: the one persistent drills control. Each segment reveals its
+       own pane (kit tray / line tools / transport) directly above the dock;
+       only one is open at a time, so only the dock reserves screen space. -->
+  <div id="drillDock" class="drillOnly">
+    <button data-pane="kit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L21 8 L12 13 L3 8 Z"/><path d="M3 13 L12 18 L21 13"/></svg>
+      <span>Drill Setup</span>
     </button>
-    <button class="mode" data-mode="pass">
-      <svg class="icon" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="3 3"/><path d="M14 3 L20 8 L14 13"/></svg>Pass
+    <button data-pane="lines">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17 q4 -8 8 -4 t9 -6"/><path d="M16 6 L20 7 L19 11"/></svg>
+      <span>Lines</span>
     </button>
-    <button class="mode" data-mode="dribble">
-      <svg class="icon" viewBox="0 0 24 16"><path d="M2 8 q2 -5 4 0 t4 0 t4 0 t4 0"/><path d="M15 3 L21 8 L15 13"/></svg>Dribble
+    <button data-pane="play">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 L19 12 L7 20 Z"/></svg>
+      <span>Play</span>
     </button>
-    <button class="mode" data-mode="draw">
-      <svg class="icon" viewBox="0 0 24 16"><path d="M2 12 C8 2, 14 14, 22 4"/></svg>Draw
+    <!-- Colours live on the dock, not inside a pane: you set an item colour
+         while placing kit, and a line colour while drawing, so it has to be
+         reachable from both. No data-pane, so it does not switch panes. -->
+    <button id="colorBtn" aria-label="Colours" title="Colours">
+      <span id="colorDot"></span>
     </button>
-    <button class="act" id="undoBtn"><span class="glyph">↩</span>Undo</button>
-    <button class="act" id="clearBtn"><span class="glyph">✕</span>Clear</button>
+  </div>
+
+  <footer class="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center justify-center gap-1 bg-[#1e2320]/80 backdrop-blur-xl border border-white/10 rounded-full px-4 py-2 shadow-2xl z-[100] w-max max-w-[95%]" style="position: fixed; bottom: 16px;">
+    <div class="w-px h-6 bg-white/15 mx-1"></div>
+    <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="move" aria-label="Move"><span class="glyph text-xl">✥</span></button>
+    <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="run" aria-label="Run">
+      <svg class="w-[22px] h-4 stroke-current fill-none stroke-[1.5]" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8"/><path d="M14 3 L20 8 L14 13"/></svg>
+    </button>
+    <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="pass" aria-label="Pass">
+      <svg class="w-[22px] h-4 stroke-current fill-none stroke-[1.5]" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="3 3"/><path d="M14 3 L20 8 L14 13"/></svg>
+    </button>
+    <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="passrun" aria-label="Pass+Run">
+      <svg class="w-[22px] h-4 stroke-current fill-none stroke-[1.5]" viewBox="0 0 24 16"><line x1="2" y1="8" x2="18" y2="8" stroke-dasharray="2 2"/><path d="M14 3 L20 8 L14 13"/></svg>
+    </button>
+    <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="dribble" aria-label="Dribble">
+      <svg class="w-[22px] h-4 stroke-current fill-none stroke-[1.5]" viewBox="0 0 24 16"><path d="M2 8 q2 -5 4 0 t4 0 t4 0 t4 0"/><path d="M15 3 L21 8 L15 13"/></svg>
+    </button>
+    <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="draw" aria-label="Draw">
+      <svg class="w-[22px] h-4 stroke-current fill-none stroke-[1.5]" viewBox="0 0 24 16"><path d="M2 12 C8 2, 14 14, 22 4"/></svg>
+    </button>
+    <div class="w-px h-6 bg-white/15 mx-1"></div>
+    <button class="act w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors" id="undoBtn" aria-label="Undo"><span class="glyph text-xl">↩</span></button>
+    <button class="act w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors" id="clearBtn" aria-label="Clear"><span class="glyph text-xl">✕</span></button>
   </footer>
 
   <!-- squad sheet -->
@@ -277,7 +390,6 @@
       <div id="rosterList" class="rosterList"></div>
       <div class="hint guestNote" id="squadGuestNote" hidden>Guest mode is just for a try — your squad is not saved. Create a free account to save it and use it on any device.</div>
       <div class="hint">Pick a formation to auto-place players. Drag between pitch and bench to sub.</div>
-      <button class="close" id="closeSquad">Done</button>
     </div>
   </div>
 
@@ -293,7 +405,6 @@
         <button id="drillLibBtn">Drill library…</button>
         <button id="resetBtn">Reset board</button>
       </div>
-      <button class="close" id="closeCtlMenu">Done</button>
     </div>
   </div>
 
@@ -319,7 +430,6 @@
       <button class="close" id="newGameBtn">Set up new game</button>
       <div id="gamesList" class="rosterList"></div>
       <div class="hint">Tap a saved game to open its line-up on the pitch. Use the … chip to get back to its details.</div>
-      <button class="close" id="closeGames">Done</button>
     </div>
   </div>
 
@@ -327,8 +437,15 @@
   <div id="drillPanel" class="overlay">
     <div class="sheet">
       <h2>Drills</h2>
+      <!-- Entry point for building from scratch, mirroring "Set up new game" -->
+      <button class="close" id="newDrillBtn">Start a new drill</button>
       <div class="presetLabel">Built-in drills</div>
-      <div id="presetRow" class="presetRow"></div>
+      <div class="seg drillTabs" style="margin: 0 16px 12px; height: 36px;">
+        <button class="drillTab on" data-diff="Simple">Simple</button>
+        <button class="drillTab" data-diff="Medium">Medium</button>
+        <button class="drillTab" data-diff="Complex">Complex</button>
+      </div>
+      <div id="presetList" class="rosterList presetList"></div>
       <div class="presetLabel">Your drills</div>
       <div class="addRow">
         <input id="drillName" placeholder="Drill name" maxlength="40" autocomplete="off">
@@ -338,7 +455,6 @@
       <div id="drillList" class="rosterList"></div>
       <div class="hint guestNote" id="drillGuestNote" hidden>Guest mode is just for a try — your drills are not saved. Create a free account to save them and share them.</div>
       <div class="hint">Save keeps what is on the pitch now, with any instructions. Tap a saved drill to load it, or ⓘ to read or edit its instructions.</div>
-      <button class="close" id="closeDrills">Done</button>
     </div>
   </div>
 
@@ -358,7 +474,6 @@
         <ul class="diList" id="diProgression"></ul>
       </div>
       <button class="primary" id="diLoadBtn">Load onto pitch</button>
-      <button class="close" id="diClose">Back</button>
     </div>
   </div>
 
@@ -367,11 +482,14 @@
     <div class="sheet">
       <h2 id="deTitle">Drill</h2>
       <label class="tlab">Instructions
-        <textarea id="deNotes" rows="7" maxlength="1500" placeholder="Set-up, how it runs, coaching points…"></textarea>
+        <textarea id="deNotes" rows="4" maxlength="1500" placeholder="Set-up, how it runs, coaching points…"></textarea>
       </label>
       <button class="primary" id="deSaveBtn">Save instructions</button>
       <button class="close" id="deLoadBtn">Load onto pitch</button>
-      <button class="close" id="deClose">Back</button>
+      <!-- puts the drill's raw layout on the clipboard so it can be pasted
+           somewhere else — the only way to get a drill off the device, since
+           drills live in this account's Firestore doc -->
+      <button class="close" id="deCopyBtn">Copy drill data</button>
     </div>
   </div>
 
@@ -382,7 +500,6 @@
       <div class="hint" id="menuEmail"></div>
       <div class="hint" id="syncStatus"></div>
       <button class="close" id="signOutBtn">Sign out</button>
-      <button class="close" id="closeMenu">Back</button>
     </div>
   </div>
 </section>
@@ -394,6 +511,8 @@
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script type="module" src="js/app.js?v=56"></script>
+<script src="js/drills.js?v=131"></script>
+<script type="module" src="js/app.js?v=131"></script>
+
 </body>
 </html>

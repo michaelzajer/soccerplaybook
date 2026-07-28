@@ -7,8 +7,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=54";
-import { initBoard } from "./board.js?v=56";
+import { firebaseConfig } from "./firebase-config.js?v=131";
+import { initBoard } from "./board.js?v=131";
 
 // Demo mode: no Firebase config yet -> skip accounts, keep data on this device.
 const DEMO = firebaseConfig.apiKey.startsWith("PASTE");
@@ -261,7 +261,7 @@ document.getElementById("menuBtn").addEventListener("click", () => {
   document.getElementById("signOutBtn").textContent = guest ? "Sign up / Log in" : "Sign out";
   document.getElementById("menuPanel").classList.add("open");
 });
-document.getElementById("closeMenu").addEventListener("click", () =>
+document.getElementById("closeMenu")?.addEventListener("click", () =>
   document.getElementById("menuPanel").classList.remove("open"));
 document.getElementById("menuPanel").addEventListener("click", e => {
   if (e.target === document.getElementById("menuPanel"))

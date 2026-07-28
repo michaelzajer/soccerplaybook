@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v53**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v131**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -67,7 +67,144 @@ controllerchange → reload).
   flatStroke/unflatStroke in board.js.
 - Timers are device-local in localStorage (`spbGameTimer`, `spbSubsTimer`), not synced.
 
+## Drill playback model (rewritten v121 — do not reintroduce heuristics)
+
+A drill is a **circuit plus a queue**, not a cloud of pieces to be guessed at.
+
+- **A LEG BELONGS TO A SLOT, NOT A PLAYER (v123 — this is the crux).** Whoever
+  is standing on a leg's start position performs it. After one rotation player 5
+  is on cone 1, so player 5 runs the cone1->cone2 leg. Binding legs to a piece id
+  looked right on lap 1 and then froze the drill on lap 2 — `stroke.from` is
+  still recorded but is NEVER used to choose the actor.
+- Player-moving legs (run/dribble/passrun) only ever consider PLAYERS, so a cone
+  sitting on the same spot cannot be picked up and animated instead.
+- **START CONE (v122).** Tap a cone/disc in drills to mark it as the entry slot
+  (`item.startCone`, saved with the drill, blue ring in the UI). It defines the
+  slot the queue feeds into AND the slot a runner reaches to complete a lap, so
+  the rotation no longer assumes "the first stroke was drawn from the entry".
+  Without a marker it falls back to that old convention.
+- **Stroke binding prefers PLAYERS.** A cone sits under the player standing on
+  it; binding to the cone would animate the cone and strand the player.
+- **STATIONS (v125) — the whole rotation, one rule.** Every cone/disc is a
+  STATION with its own queue: the players who started nearest it, ordered by
+  distance from it. Each leg says "front of station A travels to station B";
+  the arriving player joins the BACK of B's queue. After the legs, each station
+  re-lays its queue along its own original slot positions — survivors shuffle
+  forward, arrivals take the back.
+    square circuit — 4 stations with a queue of one each, plus the long feeding
+                     queue at the start cone
+    facing lines   — 2 stations with long queues, players shuttling and joining
+                     the opposite back
+  MULTIPLE LANES NEED NO SPECIAL HANDLING: stations and legs are local, so two
+  drills side by side never reference each other. Duplicate shirt numbers across
+  lanes are fine — nothing keys off the number. (The previous single-queue model
+  ordered ONE queue by distance from ONE start cone, which merged both lanes and
+  threw right-hand players onto the left-hand line.)
+  Every player inherits an EXISTING slot, so layout is preserved exactly over
+  repeated loops (no outward drift) and looping is stable.
+- This replaced ~190 lines of geometric inference (`injectQueueStrokes`,
+  `detectQueues`, `findVacancy`, `rotateFinishedToBack`) with about ten tuned
+  magic numbers. If a drill misbehaves, fix the MODEL, do not add a threshold.
+- Reference drill (Michael's): 4 cones in a square, players 1-4 on the cones,
+  5-8 queued behind cone 1, follow-your-pass, cone 1 marked as start. Lap 1 —
+  1->cone2, 2->cone3, 3->cone4, 5->cone1, 6/7/8 shuffle up, 4 to the back.
+  It must keep cycling: L2 c1:P6 c2:P5 c3:P1 c4:P2 ... and after 8 laps with
+  8 players everyone is back on their original cone. /tmp/laps.mjs pattern
+  (stub anime, capture cfg.complete, call it to advance a lap) tests this —
+  a test that only counts occupied slots will NOT catch a frozen rotation.
+- Second reference drill ("medium"): TWO lanes side by side, each a shuttle
+  between a top line and a bottom line of 3. Front of each line travels to the
+  opposite station and joins its back; no player ever changes lane.
+
+### Sequencing: WHAT TRIGGERS THE NEXT MOVE (v129)
+
+Playback is built in TWO passes, and the split matters:
+
+- **Pass A — who does what, and where it ends.** Walked in draw order, because
+  resolving the actor depends on where everything has got to. NO timing is
+  decided here: a leg's start can depend on a leg drawn LATER.
+- **Pass B — when each leg runs.** The trigger is the END of the lines a leg
+  depends on, not merely something sitting on its start:
+    1. the actor (and any ball it carries) has finished its previous leg;
+    2. whoever must be standing on my START has arrived (the old rule, kept);
+    3. the RECEIVING END is ready — three cases the start-only rule could not
+       express, and which a combination drill is entirely made of:
+       - **3a pass to a moving target** — "player 2 passes to wherever player 1
+         is", player 1 having run off first. Player 1 never touches the pass's
+         start, so rule 2 is blind and the ball was launched at empty grass. A
+         pass waits for any earlier leg ENDING where it ends.
+       - **3b running onto a pass** — "player 1 passes half way, player 2 runs
+         and gets the ball". Both legs were free at t=0, so each finished on its
+         own length and the runner beat or missed the ball. A run ending where a
+         pass ends is timed to ARRIVE WITH IT (never starting before rules 1-2).
+       - **3c pass before you go** — "player 1 passes through the cones, then
+         runs to the back of the queue". Nothing in the run said it must follow
+         the pass, so the player sprinted off and the ball left from an empty
+         spot. A player leaving a point waits for any pass STRUCK from that
+         point (struck, not received — you go as the ball leaves your foot).
+  Rules 3a-3c only look BACKWARDS through the draw order, which matches how a
+  coach describes a drill ("A passes, then B runs"). Draw the receiving run
+  before its pass and you lose the arrive-together sync, not the ordering.
+  `DEP_TOL` 0.08 = "same place", `LEG_GAP` 150ms = breath between legs.
+  **`LOOSE_TOL` 0.15 for rule 3c specifically (v131).** A pass is already allowed
+  to be struck by a ball up to 0.15 away, because nobody draws the line exactly
+  on the ball — so "pass before you go" has to be equally forgiving or the
+  engine binds the pass to a player and then lets that player run off before
+  playing it. In complex3 the third left-lane pass was drawn 0.11 from where the
+  ball had come to rest: player 6 left for the queue at 950ms and the ball was
+  struck from empty grass at 2185ms. Matching tolerances fixed it.
+- **NEVER TELEPORT (v131).** The actor is bound from up to 0.15 away, so the
+  drawn start is rarely exactly under the piece — animating from the drawn point
+  made the piece flick sideways before travelling. Every leg now starts from the
+  piece's REAL position: `pathPts = [[closest.x, closest.y], ...rest]`.
+- **Third reference drill (Michael's "complex3"): two mirrored lanes, four
+  queues.** Top/bottom/left/right queues, cones down the centre. Each lane:
+  queue player passes in, receiver runs onto it, passer runs on, receiver
+  returns it to where the passer went, then a cross-field pass and a pass+run
+  into the next queue — so all four queues rotate. It exercises 3a, 3b and 3c
+  simultaneously in both lanes, and the lanes must not reference each other.
+- Pass lines have NO arrowhead (v129): the dashes read as a pass, playback shows
+  direction, and the marker cluttered short passes. Removed in both `redraw()`
+  and the PNG renderer. Pass+Run keeps its arrow.
+- **Getting a drill off a device:** drills live only in `teams/{uid}`, so the
+  drill edit sheet (Drills → library → the ⓘ on a drill row) has "Copy drill
+  data" → JSON (strokes unflattened) on the clipboard. Use it rather than guessing at a drill's geometry.
+
+### Animation gotchas (anime.js 3.2.1)
+- **Animate `left`/`top` in PIXELS, never `%`.** anime converts a % keyframe to
+  px using `offsetWidth` for BOTH axes, so on a 68:105 pitch vertical motion was
+  scaled by ~0.65 and drills played back squashed.
+- The element's INLINE style is anime's start value, so seed positions with
+  `setPosPx()` before building the timeline — mixing a `%` start with `px`
+  keyframes made pieces jump to the origin before animating.
+- Reading a final keyframe back to normalised coords must divide by the board
+  rect, not by 100 (that bug stopped the ball after one pass).
+
 ## CRITICAL bug lessons (do not regress)
+
+0. **A control must live where the task is.** `#colorBtn` sat inside `<footer>`,
+   which became the LINES pane — so while placing cones in the Drill Setup pane
+   the colour palette was simply not on screen. It now lives on `#drillDock`
+   (no `data-pane`, and the dock click handler returns early for buttons without
+   one) so it is reachable from every pane. `body.paneOpen` lifts `#drillColors`
+   clear of an open pane; without a pane it sits just above the dock.
+0a. **A SHEET MUST SCROLL.** `.sheet` was `max-height:92dvh` with no overflow
+   rule, and `.tlab{flex:1}` lets a textarea eat the space — so the LAST control
+   in a tall sheet was pushed off the bottom of the phone with no way to reach
+   it. "Copy drill data" was invisible under the drill notes box and read as
+   never having shipped. `.sheet` is now `overflow-y:auto`, `.sheet > button` is
+   `flex:0 0 auto` so a button can never shrink away, and `.grip` is
+   `position:sticky` (with a solid backdrop layer) so drag-to-dismiss survives
+   scrolling. Add a control to a sheet and CHECK IT ON A PHONE.
+0b. **`position:absolute` + `getBoundingClientRect()` is a bug.** The number
+   selector was placed from viewport coordinates but positioned absolutely, so
+   it was offset by however far `#boardView` sat from the viewport origin, and
+   `translate(-50%,-100%)` forced it ABOVE the piece — a player near the top of
+   the pitch pushed it off-screen, where its buttons were unreachable and it read
+   as "frozen". It is now `position:fixed`, z-index 500 (over dock 120 / panes
+   130-140), flips to `.below` when there is no room above, and is clamped
+   horizontally. The piece's own click handler calls `stopPropagation()` so the
+   document-level dismiss does not close the popup it is opening.
 
 1. **Never use `setDoc(..., {merge:true})` for this doc.** Deep merge resurrects deleted
    map keys (benched players kept reappearing on the pitch for days). Saves are full

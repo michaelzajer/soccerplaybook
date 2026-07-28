@@ -1,8 +1,9 @@
 /* Simple app-shell cache. Firestore handles data offline on its own. */
-const CACHE = "spb-v56";
+const CACHE = "spb-v131";
 const SHELL = [
   "./",
   "./app.html",
+  "./tailwind.css",
   "./styles.css",
   "./manifest.json",
   "./js/app.js",
@@ -14,7 +15,7 @@ const SHELL = [
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(url => new Request(url, {cache: "no-cache"})))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(

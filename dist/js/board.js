@@ -407,18 +407,15 @@ export function initBoard(store) {
     }
     redraw();
   }
-  function redraw() {
-    const r = board.getBoundingClientRect();
-    ctx.clearRect(0, 0, r.width, r.height);
-    for (const s of strokes) paint(s, r);
-    if (current) paint(current, r);
-  }
+  
+  const tacticalLayer = document.getElementById("tacticalLayer");
+
+
   // resample a stroke into a wavy line (dribble notation)
   function wavyPoints(pts, r) {
     const P = pts.map(p => [p[0] * r.width, p[1] * r.height]);
-    // proportional so the wave reads the same on screen and in share images
-    const amp = Math.max(2.6, r.width * 0.0095);
-    const wavelength = Math.max(11, r.width * 0.041);
+    const amp = Math.max(1.5, r.width * 0.005);
+    const wavelength = Math.max(15, r.width * 0.05);
     const step = Math.max(2.5, r.width * 0.009);
     const out = [P[0]];
     let dist = 0;
@@ -441,35 +438,52 @@ export function initBoard(store) {
     }
     return out;
   }
-  function paint(s, r) {
-    const pts = s.pts; if (pts.length < 2) return;
-    ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.strokeStyle = s.color || "rgba(255,255,255,.95)";
-    ctx.setLineDash(s.mode === "pass" ? [9, 8] : []);
-    ctx.beginPath();
+
+  function buildSvgPath(s, r, id) {
+    const pts = s.pts; if (pts.length < 2) return "";
+    let d = "";
     if (s.mode === "dribble") {
       const w = wavyPoints(pts, r);
-      ctx.moveTo(w[0][0], w[0][1]);
-      for (let i = 1; i < w.length; i++) ctx.lineTo(w[i][0], w[i][1]);
+      d = `M ${w[0][0]} ${w[0][1]} `;
+      for (let i = 1; i < w.length; i++) d += `L ${w[i][0]} ${w[i][1]} `;
     } else {
-      ctx.moveTo(pts[0][0] * r.width, pts[0][1] * r.height);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] * r.width, pts[i][1] * r.height);
+      d = `M ${pts[0][0] * r.width} ${pts[0][1] * r.height} `;
+      for (let i = 1; i < pts.length; i++) d += `L ${pts[i][0] * r.width} ${pts[i][1] * r.height} `;
     }
-    ctx.stroke();
-    ctx.setLineDash([]);
-    if (s.mode === "run" || s.mode === "pass" || s.mode === "dribble") {
-      const n = pts.length;
-      const a = pts[Math.max(0, n - 6)], bp = pts[n - 1];
-      const bx = bp[0] * r.width, by = bp[1] * r.height;
-      const ang = Math.atan2(by - a[1] * r.height, bx - a[0] * r.width);
-      const L = 12;
-      ctx.beginPath();
-      ctx.moveTo(bx - L * Math.cos(ang - 0.5), by - L * Math.sin(ang - 0.5));
-      ctx.lineTo(bx, by);
-      ctx.lineTo(bx - L * Math.cos(ang + 0.5), by - L * Math.sin(ang + 0.5));
-      ctx.stroke();
-    }
+    
+    let strokeColor = s.color || "rgba(255,255,255,0.95)";
+    let dash = (s.mode === "pass" || s.mode === "passrun") ? "stroke-dasharray='9,8'" : "";
+    let marker = (s.mode === "pass" || s.mode === "passrun") ? `marker-end="url(#arrow-${s.mode})"` : "";
+    
+    return `<path id="${id}" d="${d}" stroke="${strokeColor}" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 2px 6px rgba(0,0,0,0.5));" ${dash} ${marker}></path>`;
   }
+
+  function redraw() {
+    const r = board.getBoundingClientRect();
+    ctx.clearRect(0, 0, r.width, r.height);
+    let svgHtml = `
+      <defs>
+        <marker id="arrow-pass" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+        <marker id="arrow-run" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+        <marker id="arrow-dribble" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.9)" />
+        </marker>
+      </defs>
+    `;
+    let i = 0;
+    for (const s of strokes) {
+       svgHtml += buildSvgPath(s, r, "stroke-" + i++);
+    }
+    if (current) {
+       svgHtml += buildSvgPath(current, r, "stroke-current");
+    }
+    if (tacticalLayer) tacticalLayer.innerHTML = svgHtml;
+  }
+
   board.addEventListener("pointerdown", e => {
     if (mode === "move") {
       // with a sub selected, tapping an empty part of the pitch places them there
@@ -609,9 +623,10 @@ export function initBoard(store) {
   //  - "Item" row sets the colour of the next cone/marker/line placed (drills)
   const drillColors = document.getElementById("drillColors");
   function markActive(row, color) {
+    if (!row) return;   // tolerate markup without this row rather than throwing
     const c = (color || "").toLowerCase();
     row.querySelectorAll(".swatch").forEach(x =>
-      x.classList.toggle("on", x.dataset.color.toLowerCase() === c));
+      x.classList.toggle("on", (x.dataset.color || "").toLowerCase() === c));
   }
   function refreshColorPalette() {
     const c = colors();
@@ -690,8 +705,13 @@ export function initBoard(store) {
   let drillsMode = false;
   let drillItems = [];        // {kind, x, y, el, color?}
   let drillColor = "#ffffff"; // active colour for new cones/markers/lines in drills
+  
+  // SEQUENCER
+  let drillSteps = [[]]; // array of strokes
+  let currentStep = 0;
+  
   // one sketch buffer per view; `strokes` always points at the active one
-  const strokeBufs = { team: strokes, game: [], drills: [] };
+  const strokeBufs = { team: strokes, game: [], drills: drillSteps[0] };
   let teamStash = null;       // team board parked while the game view is active
   const drillTray = document.getElementById("drillTray");
 
@@ -739,6 +759,9 @@ export function initBoard(store) {
     currentView = v;
     strokes = strokeBufs[v];
     drillsMode = v === "drills";
+    if (drillsMode) {
+      updateStepUI();
+    }
     document.body.classList.toggle("drillsMode", drillsMode);
     document.body.classList.toggle("gameView", v === "game");
     const rb = document.getElementById("reformBtn");
@@ -812,29 +835,120 @@ export function initBoard(store) {
       s.style.background = color;
     }
   }
-  function shapeEl(kind, color) {
+  function shapeEl(kind, color, num) {
     const s = document.createElement("div");
     s.className = kind; s.style.pointerEvents = "none";
     paintPiece(s, kind, effectiveColor(kind, color));
+    if (num && isPlayerKind(kind)) {
+       s.textContent = num;
+       s.style.color = "#fff";
+       s.style.fontWeight = "bold";
+       s.style.display = "flex";
+       s.style.alignItems = "center";
+       s.style.justifyContent = "center";
+       s.style.fontSize = "13px";
+    }
     return s;
   }
-  function addDrillItem(kind, x, y, color) {
+  function addDrillItem(kind, x, y, color, num) {
     const eff = effectiveColor(kind, color);
     const el = document.createElement("div");
     el.className = "ditem d-" + kind;
-    el.appendChild(shapeEl(kind, eff));
+    el.appendChild(shapeEl(kind, eff, num));
     board.appendChild(el);
     setPos(el, x, y);
-    const item = { kind, x, y, el };
+    const item = { kind, x, y, el, num };
     if (eff) item.color = eff;
     drillItems.push(item);
+    
+    // Number picker logic
+    if (kind === "att" || kind === "def") {
+      el.addEventListener("click", (e) => {
+        if (!drillsMode) return;
+        const popup = document.getElementById("numSelectorPopup");
+        if (popup) {
+          const rect = el.getBoundingClientRect();
+          popup.style.left = (rect.left + rect.width / 2) + "px";
+          popup.style.top = rect.top + "px";
+          popup.hidden = false;
+          popup.activeItem = item;
+        }
+      });
+    }
+
     enableDrillDrag(item);
     return item;
   }
   function clearDrillItems() {
     drillItems.forEach(i => i.el.remove());
     drillItems = [];
+    drillSteps = [[]];
+    currentStep = 0;
+    strokeBufs.drills = drillSteps[0];
+    if (currentView === "drills") strokes = strokeBufs.drills;
+    updateStepUI();
   }
+
+  function updateStepUI() {
+    const lbl = document.getElementById("dpStep");
+    if (lbl) lbl.textContent = `Step ${currentStep + 1} of ${drillSteps.length}`;
+    const btnP = document.getElementById("dpPrevDrill");
+    
+    if (btnP) btnP.disabled = currentStep === 0;
+    
+  }
+  
+  function applyStepState(targetStep) {
+    // start from initial items
+    const state = drillItems.map(item => ({ item, x: item.x, y: item.y }));
+    for (let s = 0; s < targetStep; s++) {
+      const stepStrokes = drillSteps[s];
+      stepStrokes.forEach(stroke => {
+        if (stroke.pts.length < 2) return;
+        const startPt = stroke.pts[0];
+        const pref = stroke.mode === "pass" ? ["dball"] : (stroke.mode === "run" || stroke.mode === "dribble") ? ["att", "def"] : [];
+        let closest = null, minDist = 0.05;
+        state.forEach(st => {
+          if (pref.includes(st.item.kind)) {
+            const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+            if (d < minDist) { minDist = d; closest = st; }
+          }
+        });
+        if (!closest) {
+          minDist = 0.05;
+          state.forEach(st => {
+            const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+            if (d < minDist) { minDist = d; closest = st; }
+          });
+        }
+        if (closest) {
+          const endPt = stroke.pts[stroke.pts.length - 1];
+          closest.x = endPt[0];
+          closest.y = endPt[1];
+        }
+      });
+    }
+    state.forEach(st => setPos(st.item.el, st.x, st.y));
+  }
+
+  function changeStep(newStep) {
+    currentStep = Math.max(0, Math.min(newStep, drillSteps.length - 1));
+    strokeBufs.drills = drillSteps[currentStep];
+    if (currentView === "drills") strokes = strokeBufs.drills;
+    applyStepState(currentStep);
+    updateStepUI();
+    redraw();
+  }
+
+  document.getElementById("dsPrev")?.addEventListener("click", () => changeStep(currentStep - 1));
+  document.getElementById("dsNext")?.addEventListener("click", () => changeStep(currentStep + 1));
+  document.getElementById("dsAdd")?.addEventListener("click", () => {
+    // If not at the end, adding a step inserts or trims? We trim.
+    drillSteps = drillSteps.slice(0, currentStep + 1);
+    drillSteps.push([]);
+    changeStep(drillSteps.length - 1);
+  });
+
   function enableDrillDrag(item) {
     item.el.addEventListener("pointerdown", e => {
       if (mode !== "move") return;
@@ -935,326 +1049,73 @@ export function initBoard(store) {
   const drillNameIn = document.getElementById("drillName");
   const drillNotesIn = document.getElementById("drillNotes");
 
-  // Built-in starter drills. Coordinates are normalised 0..1 on a portrait pitch
-  // (y=0 is the top goal). Tapping loads onto the board; the coach can tweak and Save.
-  const PRESET_DRILLS = [
-    {
-      // 5 attackers keep the ball off 2 defenders inside a marked box.
-      // Ball circulates round the edge, then a split pass cuts the middle.
-      name: "Rondo 5v2",
-      info: {
-        trains: "Possession under pressure, first touch, scanning",
-        setup: "Mark a 15x15m box. Five players spread around the edge, two defenders inside.",
-        steps: [
-          "Outside players keep the ball, one or two touch.",
-          "Circulate around the edge, then split the two defenders when a gap opens.",
-          "A defender who wins it or forces it out swaps with the player at fault."
-        ],
-        coaching: [
-          "Open your body to see the next pass before the ball arrives.",
-          "First touch away from pressure.",
-          "Move after you pass — do not stand still."
-        ]
-      },
-      items: [
-        { kind: "disc", x: 0.26, y: 0.28 }, { kind: "disc", x: 0.74, y: 0.28 },
-        { kind: "disc", x: 0.74, y: 0.72 }, { kind: "disc", x: 0.26, y: 0.72 },
-        { kind: "att", x: 0.30, y: 0.42 }, { kind: "att", x: 0.50, y: 0.26 },
-        { kind: "att", x: 0.70, y: 0.42 }, { kind: "att", x: 0.62, y: 0.70 },
-        { kind: "att", x: 0.38, y: 0.70 },
-        { kind: "def", x: 0.46, y: 0.48 }, { kind: "def", x: 0.56, y: 0.55 },
-        { kind: "dball", x: 0.32, y: 0.44 }
-      ],
-      strokes: [
-        { mode: "pass", pts: [[0.30, 0.42], [0.50, 0.26]] },
-        { mode: "pass", pts: [[0.50, 0.26], [0.70, 0.42]] },
-        { mode: "pass", pts: [[0.70, 0.42], [0.38, 0.70]] },   // split pass
-        { mode: "pass", pts: [[0.38, 0.70], [0.62, 0.70]] },
-        { mode: "pass", pts: [[0.62, 0.70], [0.30, 0.42]] }
-      ]
-    },
-    {
-      // Midfielder sets to the winger, deep player overlaps outside,
-      // winger dribbles the byline and crosses for the striker to finish.
-      name: "Overlap & Cross",
-      info: {
-        trains: "Wide combination play, overlapping runs, crossing and finishing",
-        setup: "One channel down the right, goal at the top. Feeder starts centrally with the ball, striker in front, winger wide.",
-        steps: [
-          "Feeder passes into the striker's feet.",
-          "Striker sets it out wide to the winger.",
-          "Feeder overlaps outside the winger.",
-          "Winger drives to the byline and crosses.",
-          "Striker attacks the cross to finish."
-        ],
-        coaching: [
-          "Time the overlap — go as the set pass is played.",
-          "Weight and disguise the set-up pass.",
-          "Attack the cross at the near post, do not wait for it."
-        ]
-      },
-      items: [
-        { kind: "goal", x: 0.50, y: 0.10 },
-        { kind: "cone", x: 0.34, y: 0.68 }, { kind: "cone", x: 0.66, y: 0.68 },
-        { kind: "att", x: 0.50, y: 0.84 }, { kind: "att", x: 0.50, y: 0.54 },
-        { kind: "att", x: 0.75, y: 0.62 },
-        { kind: "def", x: 0.50, y: 0.16 },
-        { kind: "dball", x: 0.50, y: 0.86 }
-      ],
-      strokes: [
-        { mode: "pass", pts: [[0.50, 0.84], [0.50, 0.56]] },   // feeder to striker
-        { mode: "pass", pts: [[0.50, 0.56], [0.73, 0.62]] },   // set out to winger
-        { mode: "run", pts: [[0.50, 0.84], [0.68, 0.72], [0.82, 0.46]] }, // overlap
-        { mode: "dribble", pts: [[0.75, 0.62], [0.82, 0.44], [0.85, 0.30]] }, // byline
-        { mode: "pass", pts: [[0.85, 0.30], [0.52, 0.20]] },   // cross
-        { mode: "run", pts: [[0.50, 0.56], [0.49, 0.24]] }     // striker attacks it
-      ]
-    },
-    {
-      // Weave the poles, beat a defender, finish. Second striker follows
-      // in for the rebound.
-      name: "Slalom & Finish",
-      info: {
-        trains: "Close control at speed, beating a player, finishing",
-        setup: "Four poles staggered from the edge of the box, a passive defender inside, goal at the top. Players queue at the start with a ball each.",
-        steps: [
-          "Dribble through the poles with close control.",
-          "Accelerate out of the last pole and beat the defender.",
-          "Finish low across the keeper.",
-          "A second player follows in for any rebound."
-        ],
-        coaching: [
-          "Small touches through the poles, both feet.",
-          "Change of pace on the exit.",
-          "Head up before the shot — pick your spot."
-        ]
-      },
-      items: [
-        { kind: "goal", x: 0.50, y: 0.10 },
-        { kind: "pole", x: 0.44, y: 0.78 }, { kind: "pole", x: 0.58, y: 0.70 },
-        { kind: "pole", x: 0.44, y: 0.62 }, { kind: "pole", x: 0.58, y: 0.54 },
-        { kind: "def", x: 0.50, y: 0.40 },
-        { kind: "att", x: 0.50, y: 0.86 }, { kind: "att", x: 0.28, y: 0.44 },
-        { kind: "dball", x: 0.50, y: 0.88 }
-      ],
-      strokes: [
-        { mode: "dribble", pts: [
-          [0.50, 0.86], [0.36, 0.80], [0.56, 0.72], [0.38, 0.64],
-          [0.58, 0.56], [0.40, 0.46], [0.58, 0.36]
-        ] },
-        { mode: "pass", pts: [[0.58, 0.36], [0.50, 0.13]] },   // shot
-        { mode: "run", pts: [[0.28, 0.44], [0.44, 0.22]] }     // follow in
-      ]
-    },
-    {
-      // Two attackers against one defender plus a keeper. Carry, combine
-      // around the defender, finish; second attacker fills the far post.
-      name: "2v1 to Goal",
-      info: {
-        trains: "Attacking overloads, decision making, finishing",
-        setup: "Start from cones about 25m out, one defender between the attackers and goal, keeper in.",
-        steps: [
-          "Ball carrier drives at the defender to commit them.",
-          "Release the second attacker at the right moment.",
-          "Support runner finishes first time.",
-          "Carrier continues to the far post for any rebound."
-        ],
-        coaching: [
-          "Draw the defender in before releasing the pass.",
-          "Do not pass too early — make the decision for them.",
-          "Talk to each other on the run."
-        ]
-      },
-      items: [
-        { kind: "goal", x: 0.50, y: 0.10 },
-        { kind: "cone", x: 0.30, y: 0.82 }, { kind: "cone", x: 0.70, y: 0.82 },
-        { kind: "att", x: 0.40, y: 0.76 }, { kind: "att", x: 0.62, y: 0.70 },
-        { kind: "def", x: 0.50, y: 0.46 }, { kind: "def", x: 0.50, y: 0.16 },
-        { kind: "dball", x: 0.40, y: 0.78 }
-      ],
-      strokes: [
-        { mode: "dribble", pts: [[0.40, 0.76], [0.44, 0.54]] },
-        { mode: "pass", pts: [[0.44, 0.54], [0.62, 0.48]] },   // release the 2nd man
-        { mode: "run", pts: [[0.62, 0.70], [0.60, 0.42]] },
-        { mode: "pass", pts: [[0.60, 0.42], [0.52, 0.14]] },   // shot
-        { mode: "run", pts: [[0.44, 0.54], [0.44, 0.24]] }     // far post support
-      ]
-    },
-    {
-      // Winger delivers from wide; near- and far-post runners time their
-      // movement to attack the cross.
-      name: "Crossing & Finishing",
-      info: {
-        trains: "Delivery from wide areas, timing runs, first-time finishing",
-        setup: "Winger wide with a supply of balls, two strikers central, keeper in goal.",
-        steps: [
-          "Winger drives to the byline and crosses.",
-          "Near-post runner attacks the front space.",
-          "Far-post runner holds, then arrives behind.",
-          "Finish first time."
-        ],
-        coaching: [
-          "Delay the runs until the cross is struck.",
-          "Attack the ball, do not wait for it.",
-          "Keep near and far post runners separated."
-        ]
-      },
-      items: [
-        { kind: "goal", x: 0.50, y: 0.10 },
-        { kind: "cone", x: 0.72, y: 0.70 }, { kind: "cone", x: 0.74, y: 0.46 },
-        { kind: "att", x: 0.80, y: 0.58 }, { kind: "att", x: 0.42, y: 0.36 },
-        { kind: "att", x: 0.60, y: 0.40 },
-        { kind: "def", x: 0.50, y: 0.16 },
-        { kind: "dball", x: 0.80, y: 0.60 }
-      ],
-      strokes: [
-        { mode: "dribble", pts: [[0.80, 0.58], [0.84, 0.42], [0.86, 0.28]] },
-        { mode: "pass", pts: [[0.86, 0.28], [0.50, 0.22]] },   // cross
-        { mode: "run", pts: [[0.42, 0.36], [0.40, 0.20]] },    // near post
-        { mode: "run", pts: [[0.60, 0.40], [0.58, 0.22]] }     // far post
-      ]
-    },
-    {
-      // Third-man run: A into the pivot, pivot releases C who has timed a
-      // run beyond, C finishes. Classic penetrating combination.
-      name: "Third-Man Run",
-      info: {
-        trains: "Penetrating combinations, timing of runs, playing forward",
-        setup: "Player A on the ball deep, a pivot in front of them, player C wide and high ready to run. Goal at the top.",
-        steps: [
-          "A plays into the pivot's feet.",
-          "As the ball travels, C bursts beyond the line.",
-          "Pivot releases C first time in behind.",
-          "C finishes — C is the third man who receives the penetrating pass."
-        ],
-        coaching: [
-          "C's run starts as the first pass is played, not after.",
-          "One touch from the pivot to keep the tempo.",
-          "Run beyond the defence, not to feet."
-        ]
-      },
-      items: [
-        { kind: "goal", x: 0.50, y: 0.10 },
-        { kind: "cone", x: 0.36, y: 0.70 }, { kind: "cone", x: 0.64, y: 0.70 },
-        { kind: "att", x: 0.50, y: 0.84 }, { kind: "att", x: 0.52, y: 0.56 },
-        { kind: "att", x: 0.78, y: 0.66 },
-        { kind: "def", x: 0.50, y: 0.16 },
-        { kind: "dball", x: 0.50, y: 0.86 }
-      ],
-      strokes: [
-        { mode: "pass", pts: [[0.50, 0.84], [0.52, 0.58]] },   // A to pivot
-        { mode: "run", pts: [[0.78, 0.66], [0.66, 0.48], [0.58, 0.38]] }, // third-man run
-        { mode: "pass", pts: [[0.52, 0.56], [0.60, 0.40]] },   // pivot releases C
-        { mode: "pass", pts: [[0.60, 0.40], [0.50, 0.14]] }    // finish
-      ]
-    },
-    {
-      // Possession game in a grid used to coach the defending three:
-      // pressure, cover, balance. App has two player colours, so the working
-      // defensive unit (3) is shown pressing the six in possession.
-      name: "3 v 3 v 3",
-      info: {
-        trains: "Pressure, cover and balance; defending as a unit",
-        setup: "A 20 × 30 yard grid marked with cones. Three groups of three (9 players), shown here in red, blue and yellow; extra players rotate in.",
-        steps: [
-          "Play 3v3v3 for possession — two teams keep the ball, one team defends.",
-          "First defender steps HARD to the ball to pressure it.",
-          "Second defender tucks in behind to cover.",
-          "Third defender reads the play from behind and provides balance.",
-          "Rotate the defending group; run for 14 minutes."
-        ],
-        coaching: [
-          "First defender: quick, aggressive pressure to force the play.",
-          "Cover defender: right angle and distance behind the pressure.",
-          "Balance defender: read from behind and protect the far space."
-        ],
-        progression: [
-          "Make it a competition: each team defends for a two-minute period and counts steals and disruptions.",
-          "The two teams in possession count how many times they split the defenders.",
-          "Score: steals plus disruptions added together, plus splits multiplied by two (2 minutes × 4)."
-        ]
-      },
-      items: [
-        { kind: "cone", x: 0.30, y: 0.28 }, { kind: "cone", x: 0.70, y: 0.28 },
-        { kind: "cone", x: 0.70, y: 0.72 }, { kind: "cone", x: 0.30, y: 0.72 },
-        // three teams of three, mixed as in a possession game
-        { kind: "att", x: 0.38, y: 0.38, color: "#ff453a" },
-        { kind: "att", x: 0.54, y: 0.34, color: "#2f6bff" },
-        { kind: "att", x: 0.64, y: 0.44, color: "#ffd60a" },
-        { kind: "att", x: 0.36, y: 0.55, color: "#2f6bff" },
-        { kind: "att", x: 0.52, y: 0.63, color: "#ffd60a" },
-        { kind: "att", x: 0.64, y: 0.60, color: "#ff453a" },
-        { kind: "att", x: 0.47, y: 0.45, color: "#ffd60a" },
-        { kind: "att", x: 0.45, y: 0.60, color: "#ff453a" },
-        { kind: "att", x: 0.58, y: 0.52, color: "#2f6bff" },
-        { kind: "dball", x: 0.40, y: 0.50 }
-      ],
-      strokes: []
-    },
-    {
-      // Defenders guard one goal; three lines of attackers ~40y out attack on
-      // the coach's call. Focus is the defenders' communication when the
-      // numbers keep changing. Attackers shown yellow, defenders in opp kit.
-      name: "Defensive Communication",
-      info: {
-        trains: "Defensive communication, cover and coordination; defending outnumbered",
-        setup: "One goal defended by 3–4 defenders. Three lines of attackers about 40 yards out, each with a ball.",
-        steps: [
-          "The coach calls out a random attack; the defenders must talk and react to it.",
-          "Vary it constantly: three attackers with one ball; three attackers each with a ball (one per defender); two attackers with one ball; five attackers with one ball; five with two balls, and so on.",
-          "The defenders sort out who takes which attacker as the attack unfolds."
-        ],
-        coaching: [
-          "Talk early and loudly — call who has which attacker.",
-          "When outnumbered, defend the greatest threat first.",
-          "Cover and shift across together as a unit."
-        ]
-      },
-      items: [
-        { kind: "goal", x: 0.50, y: 0.09 },
-        { kind: "def", x: 0.32, y: 0.31 }, { kind: "def", x: 0.44, y: 0.28 },
-        { kind: "def", x: 0.57, y: 0.28 }, { kind: "def", x: 0.69, y: 0.31 },
-        // three lines of attackers ~40y out, each with a ball
-        { kind: "att", x: 0.30, y: 0.60, color: "#ffd60a" },
-        { kind: "att", x: 0.28, y: 0.69, color: "#ffd60a" },
-        { kind: "att", x: 0.31, y: 0.77, color: "#ffd60a" },
-        { kind: "att", x: 0.50, y: 0.60, color: "#ffd60a" },
-        { kind: "att", x: 0.48, y: 0.69, color: "#ffd60a" },
-        { kind: "att", x: 0.51, y: 0.77, color: "#ffd60a" },
-        { kind: "att", x: 0.70, y: 0.60, color: "#ffd60a" },
-        { kind: "att", x: 0.68, y: 0.69, color: "#ffd60a" },
-        { kind: "att", x: 0.71, y: 0.77, color: "#ffd60a" },
-        { kind: "dball", x: 0.30, y: 0.64 }, { kind: "dball", x: 0.50, y: 0.64 },
-        { kind: "dball", x: 0.70, y: 0.64 }
-      ],
-      strokes: [
-        { mode: "dribble", pts: [[0.30, 0.58], [0.34, 0.44], [0.40, 0.34]] },
-        { mode: "dribble", pts: [[0.50, 0.58], [0.50, 0.44], [0.50, 0.34]] },
-        { mode: "dribble", pts: [[0.70, 0.58], [0.66, 0.44], [0.60, 0.34]] }
-      ]
-    }
-  ];
+  // Built-in starter drills. Now loaded from js/drills.js
+  const PRESET_DRILLS = window.PRESET_DRILLS || [];
+  let activePreset = null;
   function loadPreset(p) {
+    activePreset = p;
     setDrillsMode(true);
     clearDrillItems();
-    (p.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color));
-    strokes = (p.strokes || []).map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]), ...(s.color ? { color: s.color } : {}) }));
-    redraw();
+    (p.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color, i.num));
+    const loadedStrokes = (p.strokes || []).map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]), ...(s.color ? { color: s.color } : {}) }));
+    if (p.steps) {
+      drillSteps = p.steps.map(step => step.map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]), ...(s.color ? { color: s.color } : {}) })));
+    } else {
+      drillSteps = [loadedStrokes];
+    }
+    currentStep = 0;
+    changeStep(0);
   }
 
   function drills() { return (store.data && store.data.drills) || []; }
-  function renderPresetRow() {
-    const row = document.getElementById("presetRow");
-    if (!row || row.childElementCount) return;   // build once
-    for (const p of PRESET_DRILLS) {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "presetChip";
-      chip.textContent = p.name;
-      chip.addEventListener("click", () => showDrillInfo(p));
-      row.appendChild(chip);
+  let currentDrillDiff = "Simple";
+  function renderPresetList() {
+    const list = document.getElementById("presetList");
+    if (!list) return;
+    list.innerHTML = "";
+    const filtered = (window.PRESET_DRILLS || []).filter(p => (p.difficulty || "").toLowerCase() === (currentDrillDiff || "").toLowerCase());
+    for (const p of filtered) {
+      const el = document.createElement("div");
+      el.className = "rosterItem presetItem";
+      
+      const details = document.createElement("div");
+      details.className = "rosterDetails";
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "rosterName";
+      nameDiv.textContent = p.name;
+      const sub = document.createElement("div");
+      sub.className = "rosterPos";
+      sub.textContent = p.info ? p.info.trains : "";
+      
+      details.appendChild(nameDiv);
+      details.appendChild(sub);
+      el.appendChild(details);
+      
+      const actions = document.createElement("div");
+      actions.className = "rosterActions";
+      const infoBtn = document.createElement("button");
+      infoBtn.className = "iconBtn";
+      infoBtn.textContent = "ⓘ";
+      infoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showDrillInfo(p);
+      });
+      actions.appendChild(infoBtn);
+      el.appendChild(actions);
+      
+      el.addEventListener("click", () => showDrillInfo(p));
+      list.appendChild(el);
     }
   }
+
+  document.querySelectorAll(".drillTab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".drillTab").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      currentDrillDiff = btn.dataset.diff;
+      renderPresetList();
+    });
+  });
   const drillInfoPanel = document.getElementById("drillInfoPanel");
   function fillList(el, items) {
     el.innerHTML = "";
@@ -1285,6 +1146,8 @@ export function initBoard(store) {
   }
   document.getElementById("diClose").addEventListener("click",
     () => drillInfoPanel.classList.remove("open"));
+  document.getElementById("doneDrillPanel")?.addEventListener("click", 
+    () => drillPanel.classList.remove("open"));
   drillInfoPanel.addEventListener("click", e => {
     if (e.target === drillInfoPanel) drillInfoPanel.classList.remove("open");
   });
@@ -1320,11 +1183,21 @@ export function initBoard(store) {
     }
   }
   function loadDrill(d) {
+    activePreset = d;
     setDrillsMode(true);
+    const dpBar = document.getElementById("drillPlayerBar");
+    if (dpBar) dpBar.classList.remove("hidden");
+    const dpTitle = document.getElementById("dpTitle");
+    if (dpTitle) dpTitle.textContent = d.name || "Drill";
     clearDrillItems();
-    (d.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color));
-    strokes = (d.strokes || []).map(unflatStroke);
-    redraw();
+    (d.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color, i.num));
+    if (d.steps) {
+      drillSteps = d.steps.map(step => step.map(unflatStroke));
+    } else {
+      drillSteps = [(d.strokes || []).map(unflatStroke)];
+    }
+    currentStep = 0;
+    changeStep(0);
   }
   document.getElementById("saveDrillBtn").addEventListener("click", () => {
     const name = drillNameIn.value.trim() || ("Drill " + (drills().length + 1));
@@ -1332,8 +1205,8 @@ export function initBoard(store) {
     const d = {
       id: Date.now(),
       name,
-      items: drillItems.map(({ kind, x, y, color }) => ({ kind, x, y, ...(color ? { color } : {}) })),
-      strokes: strokes.map(flatStroke),
+      items: drillItems.map(({ kind, x, y, color, num }) => ({ kind, x, y, ...(color ? { color } : {}), ...(num ? { num } : {}) })),
+      strokes: drillSteps.flat().map(flatStroke),
       ...(notes ? { instructions: notes } : {})
     };
     store.data.drills = [...drills(), d];
@@ -1343,6 +1216,39 @@ export function initBoard(store) {
     renderDrillList();
   });
 
+
+  // Number Selector Logic
+  document.addEventListener("click", (e) => {
+    const popup = document.getElementById("numSelectorPopup");
+    if (popup && !popup.hidden) {
+      if (e.target.closest(".num-btn")) {
+        const num = e.target.getAttribute("data-num");
+        if (popup.activeItem) {
+          popup.activeItem.num = num || null;
+          // Re-render shape
+          popup.activeItem.el.innerHTML = "";
+          popup.activeItem.el.appendChild(shapeEl(popup.activeItem.kind, effectiveColor(popup.activeItem.kind, popup.activeItem.color), popup.activeItem.num));
+        }
+        popup.hidden = true;
+      } else if (!e.target.closest(".ditem") && !e.target.closest("#numSelectorPopup")) {
+        popup.hidden = true; // hide if clicked outside
+      }
+    }
+  });
+
+  // Drill Navigation Logic
+  document.getElementById("dpPrevDrill")?.addEventListener("click", () => {
+    if (!activePreset) return;
+    const catDrills = PRESET_DRILLS.filter(d => d.difficulty === activePreset.difficulty);
+    const idx = catDrills.indexOf(activePreset);
+    if (idx > 0) loadPreset(catDrills[idx - 1]);
+  });
+  document.getElementById("dpNextDrill")?.addEventListener("click", () => {
+    if (!activePreset) return;
+    const catDrills = PRESET_DRILLS.filter(d => d.difficulty === activePreset.difficulty);
+    const idx = catDrills.indexOf(activePreset);
+    if (idx < catDrills.length - 1) loadPreset(catDrills[idx + 1]);
+  });
   // view / edit a saved drill's instructions
   const drillEditPanel = document.getElementById("drillEditPanel");
   const deNotes = document.getElementById("deNotes");
@@ -1372,7 +1278,7 @@ export function initBoard(store) {
   document.getElementById("deClose").addEventListener("click", () => drillEditPanel.classList.remove("open"));
   drillEditPanel.addEventListener("click", e => { if (e.target === drillEditPanel) drillEditPanel.classList.remove("open"); });
   document.getElementById("drillLibBtn").addEventListener("click", () => {
-    renderPresetRow();
+    renderPresetList();
     renderDrillList();
     drillPanel.classList.add("open");
   });
@@ -1574,7 +1480,7 @@ export function initBoard(store) {
     
     await shareCanvas(cv, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
   }
-  function drillPiecePNG(c, W, kind, x, y, color) {
+  function drillPiecePNG(c, W, kind, x, y, color, num) {
     const u = W * 0.016; // base unit
     c.save(); c.translate(x, y);
     if (kind === "cone") {
@@ -1597,6 +1503,13 @@ export function initBoard(store) {
       c.fillStyle = color || (kind === "att" ? colors().team : colors().opp);
       c.beginPath(); c.arc(0, 0, u, 0, 7); c.fill();
       c.lineWidth = 2.5; c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
+      if (num) {
+        c.fillStyle = "#fff";
+        c.font = `bold ${u*1.1}px sans-serif`;
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.fillText(num, 0, 0);
+      }
     } else if (kind === "goal" || kind === "mini") {
       const w = kind === "goal" ? u * 4 : u * 2.4, h = kind === "goal" ? u * 1.6 : u * 1.1;
       c.lineWidth = kind === "goal" ? 6 : 4;
@@ -1612,7 +1525,7 @@ export function initBoard(store) {
     const { cv, c, W, H } = makeShareCanvas(d.name, (store.data.teamName || "") + "  ·  drill");
     drawPitchPNG(c, W, H);
     (d.strokes || []).map(unflatStroke).forEach(s => drawStrokePNG(c, W, H, s));
-    (d.items || []).forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H, i.color));
+    (d.items || []).forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H, i.color, i.num));
     await shareCanvas(cv, d.name.replace(/\s+/g, "-").toLowerCase() + "-drill.png", d.name);
   }
 
@@ -1950,6 +1863,292 @@ export function initBoard(store) {
     renderGameday();
   });
 
+  /* ---------------- drill animation ---------------- */
+  let drillTimeline = null;
+  const playDrillBtn = document.getElementById("playDrillBtn");
+  const playDrillGlyph = document.getElementById("playDrillGlyph");
+  const playDrillLabel = document.getElementById("playDrillLabel");
+
+  let loopModeActive = false;
+  let currentState = null;
+
+  function stopDrillAnim() {
+    if (drillTimeline) {
+      drillTimeline.pause();
+      drillTimeline = null;
+    }
+    // reset positions
+    drillItems.forEach(item => {
+      setPos(item.el, item.x, item.y);
+      item.el.style.transform = '';
+    });
+    currentState = null;
+    if (playDrillGlyph) playDrillGlyph.textContent = "▶";
+    if (playDrillLabel) playDrillLabel.textContent = "Play";
+    if (playDrillBtn) playDrillBtn.classList.remove("on");
+  }
+  
+  function onTimelineComplete() {
+    if (loopModeActive) {
+      buildTimeline(false); // Loop without resetting
+    } else {
+      stopDrillAnim();
+    }
+  }
+
+  function startDrillAnim() {
+    if (drillTimeline) {
+      stopDrillAnim();
+      return;
+    }
+    buildTimeline(true); // Initial play always resets
+  }
+
+    function injectQueueStrokes(strokes, state) {
+        let movingPieces = new Set();
+        strokes.forEach(stroke => {
+            if (stroke.pts.length < 2) return;
+            const startPt = stroke.pts[0];
+            let closest = null, minD = 0.15;
+            state.forEach(st => {
+                const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+                if (d < minD) { minD = d; closest = st.item; }
+            });
+            if (closest) movingPieces.add(closest);
+        });
+        
+        let newlyMoving = new Set(movingPieces);
+        let syntheticStrokes = [];
+        let changed = true;
+        
+        let numMap = new Map();
+        state.forEach(st => {
+            if (st.item.num) {
+                numMap.set(parseInt(st.item.num), st);
+            }
+        });
+        
+        while(changed) {
+            changed = false;
+            state.forEach(st => {
+                if (newlyMoving.has(st.item)) return;
+                if (st.item.kind === "dball" || st.item.kind === "cone") return;
+                
+                let targetOriginalSpot = null;
+                
+                if (st.item.num) {
+                    const myNum = parseInt(st.item.num);
+                    const precedingSt = numMap.get(myNum - 1);
+                    if (precedingSt && newlyMoving.has(precedingSt.item) && st.item.color === precedingSt.item.color && st.item.kind === precedingSt.item.kind) {
+                        const d = Math.hypot(st.x - precedingSt.x, st.y - precedingSt.y);
+                        if (d < 0.3) { 
+                            targetOriginalSpot = precedingSt;
+                        }
+                    }
+                }
+                
+                if (!targetOriginalSpot) {
+                    let closestMoving = null, minD = 0.08;
+                    state.forEach(mvSt => {
+                        if (!newlyMoving.has(mvSt.item)) return;
+                        if (st.item.kind !== mvSt.item.kind) return;
+                        if (st.item.color !== mvSt.item.color) return;
+                        const d = Math.hypot(st.x - mvSt.x, st.y - mvSt.y);
+                        if (d < minD) {
+                            minD = d;
+                            closestMoving = mvSt;
+                        }
+                    });
+                    if (closestMoving) targetOriginalSpot = closestMoving;
+                }
+                
+                if (targetOriginalSpot) {
+                    syntheticStrokes.push({
+                        mode: "run",
+                        pts: [ [st.x, st.y], [targetOriginalSpot.x, targetOriginalSpot.y] ]
+                    });
+                    newlyMoving.add(st.item);
+                    changed = true;
+                }
+            });
+        }
+        return [...strokes, ...syntheticStrokes];
+    }
+
+  function buildTimeline(resetPositions) {
+    if (!drillsMode || drillSteps.length === 0) return;
+    
+    if (resetPositions || !currentState) {
+      currentState = drillItems.map(item => ({ item, x: item.x, y: item.y }));
+      drillItems.forEach(item => {
+        setPos(item.el, item.x, item.y);
+        item.el.style.transform = '';
+      });
+    } else {
+      // In a loop, apply the final transforms from the previous loop as actual DOM positions!
+      currentState.forEach(st => {
+         setPos(st.item.el, st.x, st.y);
+         st.item.el.style.transform = '';
+      });
+    }
+
+    drillTimeline = anime.timeline({
+      easing: 'linear',
+      complete: onTimelineComplete
+    });
+
+    let hasAnyAnimation = false;
+    let pieceTime = new Map();
+    currentState.forEach(st => { pieceTime.set(st.item, 0); st.hasMoved = false; });
+    
+    let allStrokes = drillSteps.flat();
+    allStrokes = injectQueueStrokes(allStrokes, currentState);
+
+    allStrokes.forEach(stroke => {
+        if (stroke.pts.length < 2) return;
+        const startPt = stroke.pts[0];
+        let closest = null;
+        const pref = (stroke.mode === "pass") ? ["dball"] : 
+                     (stroke.mode === "run" || stroke.mode === "dribble" || stroke.mode === "passrun") ? ["att", "def"] : [];
+        
+        let candidates = [];
+        currentState.forEach(st => {
+           const isPref = pref.includes(st.item.kind);
+           const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+           const threshold = isPref ? 0.15 : 0.05;
+           if (d < threshold) {
+               candidates.push({ st, d, isPref, hasMoved: !!st.hasMoved });
+           }
+        });
+        
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => {
+                if (a.isPref && !b.isPref) return -1;
+                if (!a.isPref && b.isPref) return 1;
+                if (a.hasMoved !== b.hasMoved) return a.hasMoved ? 1 : -1;
+                return a.d - b.d;
+            });
+            closest = candidates[0].st;
+        }
+        
+        let closestBall = null;
+        if (closest && (stroke.mode === "dribble" || stroke.mode === "passrun")) {
+          let minDBall = 0.15; // VERY forgiving 15% distance for the ball too!
+          currentState.forEach(st => {
+            if (st.item !== closest.item && st.item.kind === "dball") {
+              const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+              if (d < minDBall) { minDBall = d; closestBall = st; }
+            }
+          });
+        }
+
+        if (closest) {
+          hasAnyAnimation = true;
+          
+          let pathPts = stroke.pts;
+          if (stroke.mode === "dribble") {
+            const r = board.getBoundingClientRect();
+            const w = wavyPoints(pathPts, r);
+            pathPts = w.map(p => [p[0]/r.width, p[1]/r.height]);
+          }
+          
+          let len = 0;
+          for (let i = 1; i < stroke.pts.length; i++) {
+             len += Math.hypot(stroke.pts[i][0] - stroke.pts[i-1][0], stroke.pts[i][1] - stroke.pts[i-1][1]);
+          }
+          const dur = Math.max(800, len * 3500);
+          
+          let maxDependencyTime = 0;
+          currentState.forEach(st => {
+             const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+             if (d < 0.08) {
+                const pt = pieceTime.get(st.item) || 0;
+                if (pt > maxDependencyTime) maxDependencyTime = pt;
+             }
+          });
+          
+          const offset = maxDependencyTime > 0 ? maxDependencyTime + 150 : 0;
+          const keyframes = pathPts.map(p => ({ left: (p[0]*100)+'%', top: (p[1]*100)+'%' }));
+          
+          drillTimeline.add({
+            targets: closest.item.el,
+            keyframes: keyframes,
+            duration: dur,
+            easing: 'linear'
+          }, offset);
+          
+          const endPt = pathPts[pathPts.length - 1];
+          closest.x = endPt[0];
+          closest.y = endPt[1];
+          closest.hasMoved = true;
+          pieceTime.set(closest.item, offset + dur);
+
+          if (closestBall) {
+             const ballKeyframes = pathPts.map((p, i) => {
+                 let dx = 0, dy = 0;
+                 if (i < pathPts.length - 1) {
+                     dx = pathPts[i+1][0] - p[0];
+                     dy = pathPts[i+1][1] - p[1];
+                 } else if (i > 0) {
+                     dx = p[0] - pathPts[i-1][0];
+                     dy = p[1] - pathPts[i-1][1];
+                 }
+                 const len = Math.hypot(dx, dy) || 1;
+                 return { left: ((p[0] + (dx/len)*0.025)*100)+'%', top: ((p[1] + (dy/len)*0.025)*100)+'%' };
+             });
+             
+             drillTimeline.add({
+               targets: closestBall.item.el,
+               keyframes: ballKeyframes,
+               duration: dur,
+               easing: 'linear'
+             }, offset);
+             
+             const bend = ballKeyframes[ballKeyframes.length - 1];
+             closestBall.x = parseFloat(bend.left) / 100;
+             closestBall.y = parseFloat(bend.top) / 100;
+             pieceTime.set(closestBall.item, offset + dur);
+          }
+        }
+    });
+
+    if (!hasAnyAnimation) {
+      drillTimeline = null;
+      return;
+    }
+
+    if (playDrillGlyph) playDrillGlyph.textContent = "⏹";
+    if (playDrillLabel) playDrillLabel.textContent = "Stop";
+    if (playDrillBtn) playDrillBtn.classList.add("on");
+  }
+
+  const dpInfoBtn = document.getElementById("dpInfoBtn");
+  const dpLoopBtn = document.getElementById("dpLoopBtn");
+  if (dpLoopBtn) {
+    dpLoopBtn.addEventListener("click", () => {
+      loopModeActive = !loopModeActive;
+      dpLoopBtn.classList.toggle("on", loopModeActive);
+    });
+  }
+  const dpSaveBtn = document.getElementById("dpSaveBtn");
+  if (dpSaveBtn) {
+    dpSaveBtn.addEventListener("click", () => {
+      // Open the drills menu
+      const drillPanel = document.getElementById("drillPanel");
+      if (drillPanel) drillPanel.style.display = "flex";
+      // Focus on the Drill Name input if possible
+      const drillNameInput = document.getElementById("drillName");
+      if (drillNameInput) drillNameInput.focus();
+    });
+  }
+  
+  if (dpInfoBtn) {
+    dpInfoBtn.addEventListener("click", () => {
+      if (activePreset) showDrillInfo(activePreset);
+    });
+  }
+  if (playDrillBtn) playDrillBtn.addEventListener("click", startDrillAnim);
+
   /* ---------------- init ---------------- */
   fillFormationOptions();
   renderAll();
@@ -1957,3 +2156,21 @@ export function initBoard(store) {
   buildBall(true);
   resizeCanvas();
 }
+
+
+  const kitToggleBtn = document.getElementById("kitFab");
+  const drillTray = document.getElementById("drillTray");
+  if (kitToggleBtn && drillTray) {
+    kitToggleBtn.addEventListener("click", () => {
+      if(drillTray.classList.contains("translate-y-full")){drillTray.classList.remove("translate-y-full");drillTray.classList.remove("hidden");setTimeout(()=>drillTray.classList.remove("translate-y-full"),10);}else{drillTray.classList.add("translate-y-full");setTimeout(()=>drillTray.classList.add("hidden"),300);}
+    });
+  }
+  // Close tray when dragging starts
+  document.querySelectorAll(".titem").forEach(el => {
+    el.addEventListener("pointerdown", () => {
+      if(drillTray) {
+        drillTray.classList.add("translate-y-full");setTimeout(()=>drillTray.classList.add("hidden"),300);
+        if(kitToggleBtn) kitToggleBtn.classList.remove("on");
+      }
+    });
+  });
