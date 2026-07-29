@@ -27,7 +27,7 @@
   --app-max:520px;                    /* the app column width cap */
   --sz-ctl:clamp(28px,7.6vw,34px);    /* chip / select / segmented height */
   --sz-disc:clamp(22px,6.6vw,30px);   /* bench player disc */
-  --sz-kit:clamp(26px,7.2vw,32px);    /* kit tray icon box */
+  --sz-kit:clamp(30px,8.2vw,38px);    /* kit tray icon box */
   --sz-tool:clamp(38px,10.2vw,44px);  /* toolbar button */
   --sz-fab:clamp(44px,11.5vw,52px);   /* drills launcher */
   --bench-h:clamp(44px,11.5vw,52px);  /* bench bar height */
@@ -510,7 +510,20 @@ body:not(.drillsMode) #playDrillBtn{display:none}
 .cone{width:72%;aspect-ratio:9/8;background:linear-gradient(#ffa02e,#ff7a00);clip-path:polygon(50% 0,90% 100%,10% 100%)}
 .disc{width:62%;aspect-ratio:1;border-radius:50%;background:#ffd60a;border:2px solid rgba(255,255,255,.55)}
 .pole{width:20%;height:100%;border-radius:3px;background:repeating-linear-gradient(#ff453a 0 22%,#fff 22% 44%)}
-.dball{width:62%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 55%,#d9d9d9 100%);position:relative}
+/* The ball must never disappear under a player standing on it. Every .ditem
+   shares z-index 20, so stacking fell to DOM order and the ball lost whenever
+   it happened to be added first. Lift it above the players, and ring it so it
+   reads against a light shirt as well as a dark one. */
+.ditem.d-dball{
+  z-index:26;
+  /* IN FRONT of the player, in the direction that player is about to move.
+     board.js sets --bx/--by per ball from the line departing it (magnitude
+     BALL_VIS_OFF = 0.85 of a piece, which is where the player's 0.5 radius and
+     the ball's 0.35 stop overlapping). The fallback is down-right. */
+  transform:translate(-50%,-50%) translate(var(--bx,60%),var(--by,60%));
+}
+.dball{width:70%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 55%,#d9d9d9 100%);position:relative;
+  box-shadow:0 0 0 1.5px rgba(0,0,0,.65), 0 1px 3px rgba(0,0,0,.5)}
 .dball::after{content:"";position:absolute;inset:30%;background:#111;border-radius:50%;clip-path:polygon(50% 0,95% 35%,78% 90%,22% 90%,5% 35%)}
 .att{width:80%;aspect-ratio:1;border-radius:50%;background:var(--team);border:1.5px solid rgba(0,0,0,.2)}
 .def{width:80%;aspect-ratio:1;border-radius:50%;background:var(--opp);border:1.5px solid rgba(0,0,0,.2)}
@@ -531,13 +544,16 @@ body:not(.drillsMode) #playDrillBtn{display:none}
 .ditem.d-mini{width:clamp(20px,8%,42px)}
 .ditem{
   position:absolute;transform:translate(-50%,-50%);z-index:20;
-  width:clamp(16px,5.5%,30px);aspect-ratio:1;
+  /* Bigger than it looks on a desktop: this is a wet thumb on a phone at the
+     side of a pitch. The grid cell in board.js (GRID_FRAC/MIN/MAX) mirrors
+     these numbers, so "one cell" is "one cone" — change both together. */
+  width:clamp(22px,7.5%,40px);aspect-ratio:1;
   display:flex;align-items:center;justify-content:center;
   cursor:grab;touch-action:none;
   filter:drop-shadow(0 3px 4px rgba(0,0,0,.35));
   transition:left .2s ease,top .2s ease;
 }
-.ditem::before{content:"";position:absolute;inset:-11px;border-radius:50%}
+.ditem::before{content:"";position:absolute;inset:-13px;border-radius:50%}
 /* the cone the queue feeds into — tap a cone in drills to set it */
 .ditem.startCone::after{
   content:"";position:absolute;inset:-7px;border-radius:50%;
@@ -546,6 +562,18 @@ body:not(.drillsMode) #playDrillBtn{display:none}
   pointer-events:none;
 }
 .ditem.dragging{transition:none;z-index:30;cursor:grabbing}
+/* Alignment lattice. Hidden by default — it only appears while a piece is
+   being dragged or a line drawn, which is the moment it is useful and the
+   only moment it is not clutter. Cell size is set from board.js so it always
+   matches one piece. */
+#board.showGrid::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,.13) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.13) 1px, transparent 1px);
+  background-size:var(--grid-cell,28px) var(--grid-cell,28px);
+  animation:fadeIn .12s ease;
+}
 body.drawing .ditem{pointer-events:none}
 
 /* ============ SCALE OVERRIDES FOR TAILWIND-SIZED PARTS ============

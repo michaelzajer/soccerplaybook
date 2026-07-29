@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v131**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v135**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -280,12 +280,79 @@ Playback is built in TWO passes, and the split matters:
 - Touch: tokens/drill pieces have invisible enlarged hit areas (::before inset -11px).
   Tray drag is direction-aware (horizontal = scroll with edge fades, vertical = place).
 
+## Alignment: grid snap + line tidying (v132)
+
+Precision on a phone is the constraint, so the board is forgiving rather than
+asking the coach to be accurate.
+
+- **Pieces are bigger.** `.ditem` went from `clamp(16px,5.5%,30px)` to
+  `clamp(22px,7.5%,40px)`, hit area `inset:-13px`, tray icons up to
+  `clamp(30px,8.2vw,38px)`.
+- **Lattice snap, drills only.** Cell = ONE PIECE WIDE and SQUARE IN PIXELS —
+  the pitch is 68:105, so snapping in normalised units gives stretched cells and
+  cones that align across but not down. `GRID_FRAC/GRID_MIN/GRID_MAX` in
+  board.js mirror `.ditem`'s clamp: change both together. The grid is hidden and
+  fades in only while a piece is dragged or a line drawn (`#board.showGrid`,
+  cell fed in via `--grid-cell`).
+- **Line endpoints snap to a PIECE and to nothing else.** This is the highest
+  value part: the dependency rules match a leg's ends against pieces, so an end
+  dropped a thumb-width off the ball is what let complex3 launch a pass from
+  empty grass. It deliberately does NOT fall back to the lattice — a pass into
+  space must stay where the coach put it.
+- **`tidyStroke()` fits a drawn line to a chord with at most a gentle bow.**
+  Bow = the drawn path's largest sideways departure, damped 0.55, zeroed under
+  7px, capped at 0.22 of the chord; resampled to 17 points (from ~150, which
+  also keeps drills inside Firestore's document limit). `mode:"draw"` is exempt.
+  **Measure the bow against the chord the coach DREW, not the snapped one** —
+  measuring against the snapped chord conflates "how much did they curve it"
+  with "how far did the ends move", so snapping an end to a cone bends an
+  otherwise straight line.
+
+### The ball must stay visible (v133)
+
+Every `.ditem` shares `z-index:20`, so a ball and a player on the same cone
+stacked by DOM order and the ball lost whenever it was added first. `.d-dball`
+is now `z-index:26` with a dark ring (reads on a light shirt as well as a dark
+one) — but on top AND centred it just hid the shirt number instead, so it is
+drawn IN FRONT of the player, in the direction that player is about to move
+(v135): `orientBalls()` finds the line departing each ball, takes its bearing a
+few points in (so a wobbly first pixel cannot set the angle) and writes
+`--bx/--by`. Ties go to the FIRST line drawn — that is the one played first.
+Magnitude `BALL_VIS_OFF` 0.85 of a piece is where the player's 0.5 radius and
+the ball's 0.35 stop overlapping; anything less sat on the shirt. Running the
+offset ALONG the line rather than across it also makes the ball lead correctly
+during playback instead of drifting sideways off its own pass.
+The offset is VISUAL ONLY — `item.x/y` is still the centre — so `snapEndpoint`
+matches a ball at BOTH its true and its drawn position (`BALL_VIS_OFF`, keep it
+in step with the CSS) and returns the true one. Without that, aiming a pass at
+the ball you can see bound it to the player standing beside it. The PNG renderer mirrors both the offset and the ring, and draws
+balls after all other pieces for the same reason.
+
 ## Testing without a browser
 
-jsdom smoke tests work (see /tmp/t4.mjs pattern from the build session): stub
-canvas getContext, setPointerCapture, getBoundingClientRect; set
-`global.Event = window.Event` and `global.requestAnimationFrame`; add `process.exit(0)`
-(the timer setInterval keeps node alive). node --check for syntax always.
+Tests live IN THE REPO as `_*.mjs` (they used to live in /tmp and were lost when
+the scratch dir was cleared, taking the rotation guards with them). `_harness.mjs`
+does the jsdom boot: stubs canvas getContext, pointer capture and
+getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
+anime with a timeline that buffers every `add` and can `settle()` them.
+`node --check js/*.js` first, always. Run: `for t in _laps _shuttle _align _c3
+_copybtn _fixes128 _seq129; do node $t.mjs; done`.
+
+**Two traps that cost a session each:**
+
+- **The stub must respect the scheduling OFFSET.** Legs are added in draw order
+  but run at computed times, and the rotation re-lay is added last yet can
+  finish first. "Last added wins" stacked five players on one cone.
+- **Read a lap from the LEGS THE ENGINE EMITS, not from the DOM.** A player who
+  does not move in a lap gets no leg, so their element keeps its previous
+  position; reading the DOM shows finished players still standing on a cone and
+  makes a correct rotation look like a pile-up. The old DOM-reading test gave a
+  false PASS for laps 5-8 for exactly this reason.
+- **A follow-your-pass square is a CLOSED circuit — four passes, not three.**
+  Omitting the closing `cone4 -> cone1` stroke drains the queue after four laps
+  (nothing is ever recycled to the back) and looks precisely like an engine bug.
+  It is not: with the fourth stroke, all 8 laps match the reference and everyone
+  ends on their original cone.
 
 ## Michael's working preferences (observed)
 

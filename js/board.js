@@ -535,7 +535,144 @@ export function initBoard(store) {
     return `<path id="${id}" d="${d}" stroke="${strokeColor}" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 2px 6px rgba(0,0,0,0.5));" ${dash} ${marker}></path>`;
   }
 
+
+  /* ================= ALIGNMENT: GRID SNAP + LINE TIDYING =================
+     Two problems pitch-side, both of them precision problems on a small
+     screen: pieces are hard to line up by thumb, and a finger-drawn line is
+     never straight. Rather than ask the coach to be accurate, the board is
+     forgiving — pieces land on a lattice, and a drawn line is fitted to a
+     clean shape on release.
+
+     The lattice cell is ONE PIECE WIDE (mirrors .ditem's clamp in styles.css)
+     so "one cell" reads as "one cone", and the cell is SQUARE IN PIXELS: the
+     pitch is 68:105, so a square on screen is a different fraction of the
+     board horizontally and vertically. Snapping in normalised units would give
+     stretched cells and cones that look aligned across but not down.
+     ====================================================================== */
+  const GRID_FRAC = 0.075, GRID_MIN = 22, GRID_MAX = 40;   // must track .ditem
+  function gridCellPx() {
+    const r = board.getBoundingClientRect();
+    return Math.min(GRID_MAX, Math.max(GRID_MIN, GRID_FRAC * r.width));
+  }
+  function gridStep() {
+    const r = board.getBoundingClientRect(), c = gridCellPx();
+    return { x: c / r.width, y: c / r.height };          // square in PIXELS
+  }
+  function snapToGrid(x, y) {
+    const g = gridStep();
+    return [clamp01(Math.round(x / g.x) * g.x), clamp01(Math.round(y / g.y) * g.y)];
+  }
+  /* A line endpoint snaps to a PIECE, and to nothing else. That is what makes
+     playback exact: the dependency rules match a leg's ends against pieces, so
+     an end dropped a thumb-width off the ball left the engine guessing (in
+     complex3 it launched a pass from empty grass). It deliberately does NOT
+     fall back to the lattice — a pass played into space has to stay where the
+     coach put it, and snapping it to a grid line both moved the pass and,
+     because the chord shifted under the drawn path, invented a bend. */
+  /* ---- where a ball is DRAWN relative to the player on its square ----
+     The ball sits IN FRONT of the player, in the direction that player is
+     about to move — so it is read as "this is the ball they are about to play"
+     rather than a disc stacked on their shirt. The direction is taken from the
+     line that departs from the ball; with no line it falls back to down-right.
+
+     0.85 of a piece is the gap at which the two circles just stop overlapping
+     (player radius 0.5 + ball radius 0.35). Because the offset now runs ALONG
+     the line of travel rather than across it, the ball also leads correctly
+     during playback instead of drifting sideways off the pass. */
+  const BALL_VIS_OFF = 0.85;
+  const BALL_DEF_DIR = [Math.SQRT1_2, Math.SQRT1_2];        // down-right
+  function ballFacing(bx, by) {
+    const r = board.getBoundingClientRect(), reach = gridCellPx() * 1.3;
+    let best = null, bd = reach;
+    strokes.forEach(st => {
+      const q = st.pts; if (!q || q.length < 2) return;
+      const d = Math.hypot((q[0][0] - bx) * r.width, (q[0][1] - by) * r.height);
+      if (d < bd) { bd = d; best = q; }
+    });
+    if (!best) return BALL_DEF_DIR;
+    // look a little way down the line, so a wobbly first pixel cannot set the angle
+    const far = best[Math.min(4, best.length - 1)];
+    const vx = (far[0] - best[0][0]) * r.width, vy = (far[1] - best[0][1]) * r.height;
+    const L = Math.hypot(vx, vy);
+    return L < 1 ? BALL_DEF_DIR : [vx / L, vy / L];
+  }
+  /* Point every ball at the line it is about to travel down, and remember the
+     offset on the item so hit-testing can use it. Cheap: a handful of balls. */
+  function orientBalls() {
+    const r = board.getBoundingClientRect(), c = gridCellPx();
+    drillItems.forEach(it => {
+      if (it.kind !== "dball" || !it.el) return;
+      const [ux, uy] = ballFacing(it.x, it.y);
+      it.offVis = [ux * BALL_VIS_OFF * c / r.width, uy * BALL_VIS_OFF * c / r.height];
+      it.el.style.setProperty("--bx", (ux * BALL_VIS_OFF * 100) + "%");
+      it.el.style.setProperty("--by", (uy * BALL_VIS_OFF * 100) + "%");
+    });
+  }
+  /* A ball is DRAWN clear of its player, so the ball the coach can SEE is not
+     where the ball's model position is. Match a ball at BOTH points and always
+     return its true centre — otherwise aiming at the visible ball bound the
+     line to the player standing beside it. */
+  function snapEndpoint(x, y) {
+    const r = board.getBoundingClientRect(), reach = gridCellPx() * 0.7;
+    let best = null, bd = reach;
+    drillItems.forEach(it => {
+      const dx = (it.x - x) * r.width, dy = (it.y - y) * r.height;
+      let d = Math.hypot(dx, dy);
+      if (it.kind === "dball" && it.offVis)
+        d = Math.min(d, Math.hypot(dx + it.offVis[0] * r.width,
+                                   dy + it.offVis[1] * r.height));
+      if (d < bd) { bd = d; best = it; }
+    });
+    return best ? [best.x, best.y] : [x, y];
+  }
+  /* Fit a finger-drawn line to a straight chord with, at most, a gentle bow.
+     The bow is the drawn path's largest sideways departure from the chord,
+     damped: small wobble becomes dead straight, a deliberate arc stays an arc
+     but a shallow one. Also collapses ~150 captured points to 17, which is
+     what keeps the drill inside Firestore's document limits. */
+  function tidyStroke(st) {
+    const pts = st.pts;
+    if (!pts || pts.length < 2 || st.mode === "draw") return st;  // freehand stays freehand
+    const r = board.getBoundingClientRect();
+    const A0 = pts[0], B0 = pts[pts.length - 1];
+    const A = snapEndpoint(A0[0], A0[1]);
+    const B = snapEndpoint(B0[0], B0[1]);
+    const vx = (B[0] - A[0]) * r.width, vy = (B[1] - A[1]) * r.height;
+    const L = Math.hypot(vx, vy);
+    if (L < 8) return st;                       // a tap, not a line
+    const nx = -vy / L, ny = vx / L;            // unit normal to the chord
+    /* Measure the bow against the chord the coach actually DREW, not the
+       snapped one. Measuring against the snapped chord conflated "how much did
+       they curve it" with "how far did the ends move", so snapping an end to a
+       cone bent an otherwise straight line. */
+    const v0x = (B0[0] - A0[0]) * r.width, v0y = (B0[1] - A0[1]) * r.height;
+    const L0 = Math.hypot(v0x, v0y) || 1;
+    const n0x = -v0y / L0, n0y = v0x / L0;
+    let dev = 0;
+    pts.forEach(p => {
+      const d = ((p[0] - A0[0]) * r.width) * n0x + ((p[1] - A0[1]) * r.height) * n0y;
+      if (Math.abs(d) > Math.abs(dev)) dev = d;
+    });
+    dev *= 0.55;                                          // keep it straightish
+    if (Math.abs(dev) < 7) dev = 0;                       // shaky hand -> straight
+    dev = Math.max(-L * 0.22, Math.min(L * 0.22, dev));   // never let it loop
+    const cx = (A[0] + B[0]) / 2 + (nx * 2 * dev) / r.width;
+    const cy = (A[1] + B[1]) / 2 + (ny * 2 * dev) / r.height;
+    const out = [];
+    for (let i = 0; i <= 16; i++) {                       // quadratic bezier A->C->B
+      const t = i / 16, m = 1 - t;
+      out.push([m*m*A[0] + 2*m*t*cx + t*t*B[0], m*m*A[1] + 2*m*t*cy + t*t*B[1]]);
+    }
+    st.pts = out;
+    return st;
+  }
+  const showGrid = on => {
+    if (on && drillsMode) board.style.setProperty("--grid-cell", gridCellPx() + "px");
+    board.classList.toggle("showGrid", !!on && drillsMode);
+  };
+
   function redraw() {
+    if (drillsMode) orientBalls();      // the ball points down the line it will travel
     const r = board.getBoundingClientRect();
     ctx.clearRect(0, 0, r.width, r.height);
     let svgHtml = `
@@ -579,6 +716,7 @@ export function initBoard(store) {
     board.setPointerCapture(e.pointerId);
     const r = board.getBoundingClientRect();
     current = { mode, pts: [[(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]] };
+    showGrid(true);
     if (drillsMode && drillColor !== "#ffffff") current.color = drillColor; // colour drill lines only
     // BIND the stroke to whatever piece it started on. The coach's finger is
     // literally on that piece, so record it once here rather than re-guessing
@@ -605,8 +743,8 @@ export function initBoard(store) {
       redraw();
     };
     const up = () => {
-      if (current && current.pts.length > 1) strokes.push(current);
-      current = null; redraw();
+      if (current && current.pts.length > 1) strokes.push(tidyStroke(current));
+      current = null; showGrid(false); redraw();
       board.removeEventListener("pointermove", mv);
       board.removeEventListener("pointerup", up);
       board.removeEventListener("pointercancel", up);
@@ -1121,17 +1259,19 @@ export function initBoard(store) {
       item.el.classList.add("dragging"); dragging = true;
       const r = board.getBoundingClientRect();
       let lastX = e.clientX, lastY = e.clientY;
+      showGrid(true);
       const mv = ev => {
         lastX = ev.clientX; lastY = ev.clientY;
-        item.x = clamp01((ev.clientX - r.left) / r.width);
-        item.y = clamp01((ev.clientY - r.top) / r.height);
+        const [gx, gy] = snapToGrid((ev.clientX - r.left) / r.width,
+                                    (ev.clientY - r.top) / r.height);
+        item.x = gx; item.y = gy;
         setPos(item.el, item.x, item.y);
         const tz = drillTray.getBoundingClientRect();
         drillTray.classList.toggle("dropTarget",
           lastX >= tz.left && lastX <= tz.right && lastY >= tz.top && lastY <= tz.bottom);
       };
       const up = () => {
-        item.el.classList.remove("dragging"); dragging = false;
+        item.el.classList.remove("dragging"); dragging = false; showGrid(false);
         item.el.removeEventListener("pointermove", mv);
         item.el.removeEventListener("pointerup", up);
         item.el.removeEventListener("pointercancel", up);
@@ -1189,10 +1329,9 @@ export function initBoard(store) {
         if (gesture !== "drag") return;
         const r = board.getBoundingClientRect();
         if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-          addDrillItem(kind,
-            clamp01((ev.clientX - r.left) / r.width),
-            clamp01((ev.clientY - r.top) / r.height),
-            drillColor);
+          const [gx, gy] = snapToGrid((ev.clientX - r.left) / r.width,
+                                      (ev.clientY - r.top) / r.height);
+          addDrillItem(kind, gx, gy, drillColor);
           // Deliberately left open: a drill is laid out with several pieces in
           // a row, so closing the pane after each one meant reopening it every
           // time. It closes on the Drill Setup segment or when leaving drills.
@@ -1689,7 +1828,7 @@ export function initBoard(store) {
     
     await shareCanvas(cv, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
   }
-  function drillPiecePNG(c, W, kind, x, y, color, num) {
+  function drillPiecePNG(c, W, kind, x, y, color, num, dir) {
     const u = W * 0.016; // base unit
     c.save(); c.translate(x, y);
     if (kind === "cone") {
@@ -1706,8 +1845,15 @@ export function initBoard(store) {
       c.fillRect(-u * .18, -u * .9, u * .36, u * .5);
       c.fillRect(-u * .18, u * .1, u * .36, u * .5);
     } else if (kind === "dball") {
-      c.fillStyle = "#fff"; c.beginPath(); c.arc(0, 0, u * .8, 0, 7); c.fill();
-      c.fillStyle = "#111"; c.beginPath(); c.arc(0, 0, u * .3, 0, 7); c.fill();
+      /* Matches the board: in front of the player, along its direction of
+         travel, ringed so it reads on any shirt. `u` is the player RADIUS and
+         the ball's is .8u, so 1.8u between centres stops them overlapping. */
+      const d0 = dir || [Math.SQRT1_2, Math.SQRT1_2];
+      const ox = d0[0] * u * 1.8, oy = d0[1] * u * 1.8;
+      c.fillStyle = "#fff";
+      c.beginPath(); c.arc(ox, oy, u * .8, 0, 7); c.fill();
+      c.lineWidth = 2; c.strokeStyle = "rgba(0,0,0,.65)"; c.stroke();
+      c.fillStyle = "#111"; c.beginPath(); c.arc(ox, oy, u * .3, 0, 7); c.fill();
     } else if (kind === "att" || kind === "def") {
       c.fillStyle = color || (kind === "att" ? colors().team : colors().opp);
       c.beginPath(); c.arc(0, 0, u, 0, 7); c.fill();
@@ -1734,7 +1880,26 @@ export function initBoard(store) {
     const { cv, c, W, H } = makeShareCanvas(d.name, (store.data.teamName || "") + "  ·  drill");
     drawPitchPNG(c, W, H);
     (d.strokes || []).map(unflatStroke).forEach(s => drawStrokePNG(c, W, H, s));
-    (d.items || []).forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H, i.color, i.num));
+    /* Balls last, for the same reason they sit above players on the board:
+       drawn in item order a ball under a player was painted over. */
+    const _its = (d.items || []);
+    _its.filter(i => i.kind !== "dball")
+        .forEach(i => drillPiecePNG(c, W, i.kind, i.x * W, i.y * H, i.color, i.num));
+    // ...and each ball in front of its player, facing the line it departs on,
+    // exactly as the board draws it (see orientBalls / ballFacing)
+    _its.filter(i => i.kind === "dball").forEach(i => {
+      let dir = [Math.SQRT1_2, Math.SQRT1_2], bd = W * 0.10;
+      (d.strokes || []).forEach(st => {
+        const q = unflatStroke(st).pts; if (!q || q.length < 2) return;
+        const dd = Math.hypot((q[0][0] - i.x) * W, (q[0][1] - i.y) * H);
+        if (dd < bd) {
+          const f = q[Math.min(4, q.length - 1)];
+          const vx = (f[0] - q[0][0]) * W, vy = (f[1] - q[0][1]) * H, L = Math.hypot(vx, vy);
+          if (L > 1) { bd = dd; dir = [vx / L, vy / L]; }
+        }
+      });
+      drillPiecePNG(c, W, i.kind, i.x * W, i.y * H, i.color, i.num, dir);
+    });
     await shareCanvas(cv, d.name.replace(/\s+/g, "-").toLowerCase() + "-drill.png", d.name);
   }
 
