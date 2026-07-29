@@ -4,33 +4,70 @@
     "cleanUrls": true,
     "ignore": [
       "firebase.json",
+      "src/**",
+      "firestore.rules",
       "**/.*",
+      ".git/**",
+      ".firebase/**",
       "**/node_modules/**",
-      "README.md",
-      "tactics-board.html",
+      "node_modules/**",
       "ios/**",
-      "android/**"
+      "android/**",
+      "capacitor.config.json",
+      "dist/**",
+      "README.md",
+      "CLAUDE.md",
+      "tactics-board.html",
+      "_*.mjs",
+      "package.json",
+      "package-lock.json",
+      "firebase-debug.log"
     ],
     "headers": [
       {
         "source": "/",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       },
       {
         "source": "/app.html",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       },
       {
         "source": "/sw.js",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       },
       {
         "source": "/manifest.json",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       },
       {
         "source": "**/*.@(js|css|png|svg)",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
       }
     ]
   },
