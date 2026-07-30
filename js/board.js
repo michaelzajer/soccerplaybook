@@ -165,9 +165,9 @@ export function initBoard(store) {
     return el;
   }
   function setPos(el, x, y) { el.style.left = (x * 100) + "%"; el.style.top = (y * 100) + "%"; }
-  // Pixel variant, used only while a drill animation is running. anime.js reads
+  // Pixel variant, used only while a drill animation is running. The timeline reads
   // the element's INLINE left/top as its start value; if that is a % string and
-  // the keyframes are px, anime converts between units using offsetWidth for
+  // the keyframes are px; mixing units let the library convert via offsetWidth for
   // both axes and the pieces jump (they were landing near 0,0 before playing).
   // Keeping start value and keyframes in the same unit avoids that entirely.
   function setPosPx(el, x, y) {
@@ -269,26 +269,267 @@ export function initBoard(store) {
     document.getElementById("subPos").value = outP.pos;   // default to the spot being filled
     subPanel.classList.add("open");
   }
+  /* ONE swap path, used by the drag-and-drop sheet and the substitutions modal.
+     The player coming on inherits the spot being vacated; the position is theirs
+     to keep or change. */
+  function applySubs(pairs) {
+    const b = bstate();
+    let rosterDirty = false, done = 0;
+    /* Read every vacated spot BEFORE mutating anything. Applying one at a time is
+       safe only while the pairs are disjoint, and taking the snapshot first means
+       it stays safe even if that ever stops being true. */
+    const spots = pairs.map(pr => b.placed[pr.outId] ? { ...b.placed[pr.outId] } : null);
+    pairs.forEach((pr, i) => {
+      if (!spots[i]) return;
+      b.placed[pr.inId] = spots[i];
+      delete b.placed[pr.outId];
+      const pos = (pr.pos || "").trim().toUpperCase();
+      if (pos) {
+        const inP = roster().find(p => p.id === pr.inId);
+        if (inP && inP.pos !== pos) { inP.pos = pos; rosterDirty = true; }
+      }
+      done++;
+    });
+    if (!done) return 0;
+    if (rosterDirty) saveRoster(roster(), store.data.nextId);
+    logSubs(pairs.filter((pr, i) => spots[i]));   // all at the same match minute
+    renderTeam(); renderBench(); saveBoard();     // once, not once per swap
+    return done;
+  }
+  const applySub = (inId, outId, newPos) => applySubs([{ inId, outId, pos: newPos }]) > 0;
   document.getElementById("subConfirm").addEventListener("click", () => {
     if (!subCtx) return;
-    const b = bstate(), { inId, outId } = subCtx;
-    const newPos = (document.getElementById("subPos").value.trim() || "").toUpperCase();
-    if (b.placed[outId]) { b.placed[inId] = { ...b.placed[outId] }; delete b.placed[outId]; }
-    if (newPos) {
-      const inP = roster().find(p => p.id === inId);
-      if (inP && inP.pos !== newPos) {
-        inP.pos = newPos;
-        saveRoster(roster(), store.data.nextId);
-      }
-    }
+    applySub(subCtx.inId, subCtx.outId, document.getElementById("subPos").value);
     subSel = null; subCtx = null;
     subPanel.classList.remove("open");
-    renderTeam(); renderBench(); saveBoard();
   });
   document.getElementById("subCancel").addEventListener("click", () => {
     subCtx = null; subPanel.classList.remove("open");
   });
   subPanel.addEventListener("click", e => { if (e.target === subPanel) { subCtx = null; subPanel.classList.remove("open"); } });
+
+  /* ================= SUBSTITUTIONS MODAL =================
+     A game-day sheet rather than a drag-and-drop puzzle: who is on, who is
+     waiting, pick one from each and confirm. Broadcast language throughout —
+     red down-arrow off, green up-arrow on. It stays open, because a double
+     change is one visit to this screen, and each swap is stamped with the
+     match minute and kept with the game.
+     ======================================================= */
+  const subsModal = document.getElementById("subsModal");
+  /* Arrays, in the order they were tapped: the nth player off is paired with the
+     nth player on. That is how a coach calls a triple change — "Jack, Tom and Ali
+     off; Sam, Ben and Leo on" — so pairing by order needs no extra interaction,
+     as long as the pairing is shown plainly enough to check. */
+  let subsOut = [], subsIn = [], subsPos = {};
+
+  const matchMinute = () => Math.floor(gtElapsed() / 60000)
+    + (gt.period > 1 ? (gt.period - 1) * gt.cfg.mins : 0);
+  function logSubs(pairs) {
+    const g = store.data.gameday;
+    if (!g || !pairs.length) return;      // only worth recording during a game
+    g.subs = g.subs || [];
+    const min = matchMinute(), period = gt.period;
+    pairs.forEach(pr => g.subs.push({ inId: pr.inId, outId: pr.outId, min, period }));
+    store.save({ gameday: g });
+  }
+  function subsRow(p, order) {
+    const b = document.createElement("button");
+    b.className = "subsRow" + (order > 0 ? " sel" : "");
+    b.type = "button";
+    b.dataset.id = p.id;
+    const n = document.createElement("span");
+    n.className = "num";
+    n.textContent = (p.pos || "?").slice(0, 2);
+    const w = document.createElement("span");
+    w.className = "who"; w.textContent = p.name;
+    const o = document.createElement("span");
+    o.className = "ord"; o.textContent = order;      // only shown when selected
+    /* The position is editable in place: tap it and type. Keeps a wrong position
+       fixable from the screen you noticed it on, rather than a trip to My Squad. */
+    const s2 = document.createElement("span");
+    s2.className = "pos edit";
+    s2.textContent = p.pos || "—";
+    s2.setAttribute("role", "button");
+    s2.setAttribute("tabindex", "0");
+    s2.title = "Tap to change position";
+    s2.addEventListener("click", ev => { ev.stopPropagation(); beginPosEdit(s2, p.id); });
+    s2.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); beginPosEdit(s2, p.id); }
+    });
+    b.append(n, w, o, s2);
+    return b;
+  }
+  /* Swap the label for an input IN PLACE rather than re-rendering — the lists are
+     rebuilt on every state change, which would blow away a freshly focused
+     field mid-keystroke. */
+  function beginPosEdit(span, id) {
+    if (span.dataset.editing) return;
+    span.dataset.editing = "1";
+    const p = roster().find(x => x.id === id);
+    const was = p ? (p.pos || "") : "";
+    const inp = document.createElement("input");
+    inp.className = "posEdit";
+    inp.value = was;
+    inp.maxLength = 3;
+    inp.setAttribute("list", "posList");
+    inp.setAttribute("aria-label", "Position");
+    span.replaceWith(inp);
+    inp.focus(); inp.select();
+    let done = false;
+    const commit = save => {
+      if (done) return; done = true;
+      const next = save ? (inp.value || "").trim().toUpperCase().slice(0, 3) : was;
+      if (save && next && next !== was && p) {
+        p.pos = next;
+        saveRoster(roster(), store.data.nextId);
+        renderTeam();                 // the token on the pitch carries the label
+      }
+      renderBench();
+      renderSubsModal();              // safe now: the input is on its way out
+    };
+    inp.addEventListener("keydown", ev => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+      if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+    });
+    inp.addEventListener("click", ev => ev.stopPropagation());
+    inp.addEventListener("blur", () => commit(true));
+  }
+  // the complete pairs: the nth off with the nth on
+  const subsPairs = () => {
+    const n = Math.min(subsOut.length, subsIn.length), out = [];
+    for (let i = 0; i < n; i++) {
+      const outId = subsOut[i];
+      /* THE PLAYER COMING ON TAKES THE SPOT AND THE POSITION of the player they
+         replace — a striker on for a centre mid plays centre mid. Defaulting to
+         null here meant the pair row DISPLAYED the outgoing position but never
+         applied it unless the coach retyped it, so the sub kept their own
+         position and the pitch label was wrong. */
+      const outP = roster().find(x => x.id === outId);
+      out.push({ outId, inId: subsIn[i],
+                 pos: subsPos[outId] != null ? subsPos[outId] : (outP ? outP.pos : null) });
+    }
+    return out;
+  };
+  function renderSubsModal() {
+    const b = bstate();
+    const onPitch = roster().filter(p => b.placed[p.id]);
+    const bench   = roster().filter(p => !b.placed[p.id] && !isOut(p.id));
+
+    // a swap invalidates selections, so drop anyone no longer in their column
+    subsOut = subsOut.filter(id => onPitch.some(p => p.id === id));
+    subsIn  = subsIn.filter(id => bench.some(p => p.id === id));
+
+    const fill = (node, list, sel, empty) => {
+      node.innerHTML = "";
+      if (!list.length) {
+        const d = document.createElement("div");
+        d.className = "subsEmpty"; d.textContent = empty;
+        node.appendChild(d); return;
+      }
+      list.forEach(p => node.appendChild(subsRow(p, sel.indexOf(p.id) + 1)));
+    };
+    fill(document.getElementById("subsOnList"), onPitch, subsOut, "Nobody on the pitch yet.");
+    fill(document.getElementById("subsBenchList"), bench, subsIn, "No subs available.");
+
+    /* Pair rows, plus a greyed row for anyone picked without a partner yet, so
+       an odd selection is obvious rather than silently ignored. */
+    const wrap = document.getElementById("subsPairs");
+    wrap.innerHTML = "";
+    const nameOf = id => { const p = roster().find(x => x.id === id); return p ? firstName(p.name) : "?"; };
+    const posOf  = id => { const p = roster().find(x => x.id === id); return p ? (p.pos || "") : ""; };
+    const rows = Math.max(subsOut.length, subsIn.length);
+    for (let i = 0; i < rows; i++) {
+      const oId = subsOut[i], iId = subsIn[i], complete = oId != null && iId != null;
+      const row = document.createElement("div");
+      row.className = "subsPairRow" + (complete ? "" : " part");
+      const ord = document.createElement("span");
+      ord.className = "ord"; ord.textContent = complete ? (i + 1) : "";
+      const off = document.createElement("span");
+      off.className = "subsChip off" + (oId != null ? " set" : "");
+      off.innerHTML = '<span class="subsArrow">&#9660;</span>' +
+        (oId != null ? nameOf(oId) + " · " + posOf(oId) : "waiting for a player");
+      const sw = document.createElement("span");
+      sw.className = "subsSwap"; sw.innerHTML = "&#8646;";
+      const on = document.createElement("span");
+      on.className = "subsChip on" + (iId != null ? " set" : "");
+      on.innerHTML = '<span class="subsArrow">&#9650;</span>' +
+        (iId != null ? nameOf(iId) + " · " + posOf(iId) : "waiting for a sub");
+      row.append(ord, off, sw, on);
+      if (complete) {                     // the spot the incoming player takes
+        const pi = document.createElement("input");
+        pi.className = "pp"; pi.maxLength = 3; pi.setAttribute("list", "posList");
+        pi.value = subsPos[oId] != null ? subsPos[oId] : posOf(oId);
+        pi.addEventListener("input", () => { subsPos[oId] = pi.value; });
+        row.appendChild(pi);
+      }
+      wrap.appendChild(row);
+    }
+    const pairs = subsPairs();
+    document.getElementById("subsPickHint").textContent = pairs.length
+      ? "The player coming on takes that spot — change it if they play elsewhere."
+      : "Tap a player on the pitch, then their replacement. Pick several for a double or triple change.";
+    const go = document.getElementById("subsGoBtn");
+    go.disabled = !pairs.length;
+    go.textContent = pairs.length > 1 ? "Make " + pairs.length + " changes" : "Make the swap";
+
+    const clock = document.getElementById("subsClock");
+    clock.textContent = store.data.gameday ? plabel() + gt.period + " " + fmt(gtElapsed()) : "";
+
+    // what has already been changed this game
+    const log = document.getElementById("subsLog");
+    log.innerHTML = "";
+    const subs = (store.data.gameday && store.data.gameday.subs) || [];
+    subs.slice(-6).forEach(sv => {
+      const o = roster().find(p => p.id === sv.outId), i = roster().find(p => p.id === sv.inId);
+      const row = document.createElement("div");
+      row.className = "subsLogRow";
+      row.innerHTML = '<span class="min">' + sv.min + "'</span>" +
+        '<span class="o">&#9660; ' + (o ? firstName(o.name) : "?") + "</span>" +
+        '<span class="i">&#9650; ' + (i ? firstName(i.name) : "?") + "</span>";
+      log.appendChild(row);
+    });
+  }
+  function openSubsModal() {
+    subsOut = []; subsIn = []; subsPos = {};
+    renderSubsModal();
+    subsModal?.classList.add("open");
+  }
+  document.getElementById("openSubsBtn")?.addEventListener("click", openSubsModal);
+  document.querySelector("#benchZone .benchLabel")?.addEventListener("click", () => {
+    if (currentView === "game") openSubsModal();
+  });
+  const toggleIn = (arr, id) => {
+    const i = arr.indexOf(id);
+    if (i > -1) arr.splice(i, 1); else arr.push(id);   // tap again to take back out
+  };
+  document.getElementById("subsOnList")?.addEventListener("click", e => {
+    const r = e.target.closest(".subsRow"); if (!r) return;
+    const id = +r.dataset.id;
+    toggleIn(subsOut, id);
+    if (!subsOut.includes(id)) delete subsPos[id];
+    renderSubsModal();
+  });
+  document.getElementById("subsBenchList")?.addEventListener("click", e => {
+    const r = e.target.closest(".subsRow"); if (!r) return;
+    toggleIn(subsIn, +r.dataset.id);
+    renderSubsModal();
+  });
+  document.getElementById("subsGoBtn")?.addEventListener("click", () => {
+    const pairs = subsPairs();
+    if (!pairs.length) return;
+    applySubs(pairs);                     // one change, one minute, one save
+    subsOut = []; subsIn = []; subsPos = {};
+    renderSubsModal();
+    /* Back to the pitch. Multi-select already lets a double or triple change be
+       made in one visit, so there is nothing to stay open for — and the thing a
+       coach wants to see straight after a change is the new shape. */
+    subsModal.classList.remove("open");
+  });
+  subsModal?.addEventListener("click", e => {
+    if (e.target === subsModal) subsModal.classList.remove("open");
+  });
+
   function buildOpp() {
     oppTokens.forEach(t => t.remove()); oppTokens = [];
     const b = bstate();
@@ -532,7 +773,21 @@ export function initBoard(store) {
     // the direction, and the marker cluttered the end of every short pass.
     let marker = (s.mode === "passrun") ? `marker-end="url(#arrow-${s.mode})"` : "";
     
-    return `<path id="${id}" d="${d}" stroke="${strokeColor}" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 2px 6px rgba(0,0,0,0.5));" ${dash} ${marker}></path>`;
+    let numLabel = "";
+    if (s.seq != null) {
+        let mx, my;
+        if (s.mode === "dribble") {
+            const w = wavyPoints(pts, r);
+            const midIdx = Math.floor(w.length / 2);
+            mx = w[midIdx][0]; my = w[midIdx][1];
+        } else {
+            const midIdx = Math.floor(pts.length / 2);
+            mx = pts[midIdx][0] * r.width; my = pts[midIdx][1] * r.height;
+        }
+        numLabel = `<circle cx="${mx}" cy="${my}" r="9" fill="#1e293b" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));" /><text x="${mx}" y="${my}" fill="white" font-size="11" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="central">${s.seq}</text>`;
+    }
+    
+    return `<path id="${id}" d="${d}" stroke="${strokeColor}" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 2px 6px rgba(0,0,0,0.5));" ${dash} ${marker}></path>${numLabel}`;
   }
 
 
@@ -549,6 +804,10 @@ export function initBoard(store) {
      board horizontally and vertically. Snapping in normalised units would give
      stretched cells and cones that look aligned across but not down.
      ====================================================================== */
+  /* The board is a real pitch. Used for aspect-correct distances (so a leg's
+     duration depends on how far it is, not which way it points) and by the
+     metre-based notation in js/drill-text.js. */
+  const PITCH_WID = 68, PITCH_LEN = 105;
   const GRID_FRAC = 0.075, GRID_MIN = 22, GRID_MAX = 40;   // must track .ditem
   function gridCellPx() {
     const r = board.getBoundingClientRect();
@@ -612,10 +871,10 @@ export function initBoard(store) {
      where the ball's model position is. Match a ball at BOTH points and always
      return its true centre — otherwise aiming at the visible ball bound the
      line to the player standing beside it. */
-  function snapEndpoint(x, y) {
+  function snapEndpoint(x, y, items) {
     const r = board.getBoundingClientRect(), reach = gridCellPx() * 0.7;
     let best = null, bd = reach;
-    drillItems.forEach(it => {
+    (items || drillItems).forEach(it => {
       const dx = (it.x - x) * r.width, dy = (it.y - y) * r.height;
       let d = Math.hypot(dx, dy);
       if (it.kind === "dball" && it.offVis)
@@ -630,13 +889,14 @@ export function initBoard(store) {
      damped: small wobble becomes dead straight, a deliberate arc stays an arc
      but a shallow one. Also collapses ~150 captured points to 17, which is
      what keeps the drill inside Firestore's document limits. */
-  function tidyStroke(st) {
+  function tidyStroke(st, items, snapFn) {
     const pts = st.pts;
     if (!pts || pts.length < 2 || st.mode === "draw") return st;  // freehand stays freehand
     const r = board.getBoundingClientRect();
     const A0 = pts[0], B0 = pts[pts.length - 1];
-    const A = snapEndpoint(A0[0], A0[1]);
-    const B = snapEndpoint(B0[0], B0[1]);
+    const snap = snapFn || function (x, y) { return snapEndpoint(x, y, items); };
+    const A = snap(A0[0], A0[1]);
+    const B = snap(B0[0], B0[1]);
     const vx = (B[0] - A[0]) * r.width, vy = (B[1] - A[1]) * r.height;
     const L = Math.hypot(vx, vy);
     if (L < 8) return st;                       // a tap, not a line
@@ -666,6 +926,42 @@ export function initBoard(store) {
     st.pts = out;
     return st;
   }
+  /* Bring a drill saved under the older, looser rules up to the current ones:
+     cones onto the lattice, then every line end onto a piece and every line
+     fitted to a clean chord. Order matters — snap the pieces FIRST, so the line
+     ends are matched against where the pieces have just moved to.
+     Works on drill DATA, so it can fix a drill without loading it. */
+  function tidyDrillData(d) {
+    const r = board.getBoundingClientRect(), reach = gridCellPx() * 0.7;
+    const orig  = (d.items || []).map(i => ({ x:+i.x, y:+i.y }));
+    const items = (d.items || []).map((i, k) => {
+      const g = snapToGrid(orig[k].x, orig[k].y);
+      return Object.assign({}, i, { x:g[0], y:g[1] });
+    });
+    /* Decide which piece an end BELONGS to using where that piece WAS, then put
+       the end where the piece now IS. Matching against the moved pieces instead
+       let a cone shift out of reach of its own line end, so ends that were 12px
+       off ended up 19px off — snapping made the alignment worse, not better. */
+    const snap = function (x, y) {
+      let hit = -1, bd = reach;
+      orig.forEach((o, k) => {
+        const dd = Math.hypot((o.x - x) * r.width, (o.y - y) * r.height);
+        if (dd < bd) { bd = dd; hit = k; }
+      });
+      return hit >= 0 ? [items[hit].x, items[hit].y] : [x, y];
+    };
+    const strokes = (d.strokes || []).map(st => {
+      const u = unflatStroke(st);
+      const fixed = tidyStroke(
+        { mode:u.mode, color:u.color, pts:u.pts.map(pt => [pt[0], pt[1]]) }, items, snap);
+      const out = flatStroke(fixed);
+      if (u.color) out.color = u.color;
+      return out;
+    });
+    return Object.assign({}, d, { items:items, strokes:strokes });
+  }
+  window.__tidyDrillData = tidyDrillData;      // used by the regression tests
+
   const showGrid = on => {
     if (on && drillsMode) board.style.setProperty("--grid-cell", gridCellPx() + "px");
     board.classList.toggle("showGrid", !!on && drillsMode);
@@ -1114,7 +1410,7 @@ export function initBoard(store) {
     const s = document.createElement("div");
     s.className = kind; s.style.pointerEvents = "none";
     paintPiece(s, kind, effectiveColor(kind, color));
-    if (num && isPlayerKind(kind)) {
+    if (num && (isPlayerKind(kind) || kind === "cone")) {
        // Styling lives in .hasNum (styles.css). Setting it inline made the text
        // the flex item's min-content width, so a numbered player stretched into
        // an ellipse instead of staying a circle.
@@ -1152,7 +1448,7 @@ export function initBoard(store) {
     }
 
     // Number picker logic
-    if (kind === "att" || kind === "def") {
+    if (kind === "att" || kind === "def" || kind === "cone") {
       el.addEventListener("click", (e) => {
         if (!drillsMode) return;
         // keep this click from reaching the document handler below, which would
@@ -1345,11 +1641,19 @@ export function initBoard(store) {
 
   /* ---------------- drill library ---------------- */
   // Firestore cannot store nested arrays, so stroke points are flattened on save.
-  const flatStroke = s => ({ mode: s.mode, pts: s.pts.flat(), ...(s.color ? { color: s.color } : {}), ...(s.from != null ? { from: s.from } : {}) });
+  const flatStroke = s => {
+    if (!s) return { mode: "run", pts: [] };
+    if (!s.pts) return { ...s, pts: [] };
+    if (s.pts.length > 0 && typeof s.pts[0] !== 'number') return { ...s, pts: s.pts.flat() };
+    return s;
+  };
   function unflatStroke(s) {
+    if (!s) return { mode: "run", pts: [] };
+    if (!s.pts) return { ...s, pts: [] };
+    if (s.pts.length > 0 && typeof s.pts[0] === 'object') return s;
     const pts = [];
     for (let i = 0; i + 1 < s.pts.length; i += 2) pts.push([s.pts[i], s.pts[i + 1]]);
-    return { mode: s.mode, pts, ...(s.color ? { color: s.color } : {}), ...(s.from != null ? { from: s.from } : {}) };
+    return { ...s, pts };
   }
   const drillPanel = document.getElementById("drillPanel");
   const drillNameIn = document.getElementById("drillName");
@@ -1622,6 +1926,117 @@ export function initBoard(store) {
     }
     setTimeout(() => { btn.textContent = was; }, 2000);
   });
+  /* Re-tidy a saved drill with the current rules. Drills built before the
+     snapping existed have line ends sitting a thumb-width off the ball, which
+     is exactly what left the playback engine guessing. */
+  document.getElementById("deTidyBtn")?.addEventListener("click", (e) => {
+    if (!editingDrill) return;
+    const list = drills();
+    const i = list.findIndex(x => x.id === editingDrill.id);
+    if (i < 0) return;
+    const before = (list[i].strokes || []).reduce((n, st) => n + unflatStroke(st).pts.length, 0);
+    list[i] = tidyDrillData(list[i]);
+    const after = (list[i].strokes || []).reduce((n, st) => n + unflatStroke(st).pts.length, 0);
+    editingDrill = list[i];
+    store.save({ drills: store.data.drills });
+    if (currentView === "drills") loadDrill(list[i]);   // show the result at once
+    const btn = e.currentTarget, was = btn.textContent;
+    btn.textContent = "Tidied (" + before + " → " + after + " points)";
+    setTimeout(() => { btn.textContent = was; }, 2600);
+    renderDrillList();
+  });
+
+  /* Playback pace, cycled from the transport bar. Bigger = slower. Kept on the
+     device (not synced) — it is a viewing preference, not part of the drill. */
+  const SPEEDS = [0.6, 1, 1.6, 2.4];
+  /* localStorage can THROW, not just be absent — Safari private browsing is the
+     common case for a PWA, and it is read here at init rather than behind a
+     click, so an unguarded access would take the whole board down. */
+  const lsGet = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+  let drillSpeed = +(lsGet("spbDrillSpeed") || 1);
+  if (!SPEEDS.includes(drillSpeed)) drillSpeed = 1;
+  const speedBtn = document.getElementById("dpSpeedBtn");
+  function renderSpeed() {
+    if (!speedBtn) return;
+    const label = drillSpeed === 1 ? "1×" : (Math.round(10 / drillSpeed) / 10) + "×";
+    speedBtn.textContent = label;                 // 0.6 -> "1.7x" reads as faster
+    speedBtn.title = "Playback speed";
+  }
+  speedBtn?.addEventListener("click", () => {
+    drillSpeed = SPEEDS[(SPEEDS.indexOf(drillSpeed) + 1) % SPEEDS.length];
+    lsSet("spbDrillSpeed", String(drillSpeed));
+    renderSpeed();
+    if (drillTimeline) { stopDrillAnim(); startDrillAnim(); }   // apply at once
+  });
+  renderSpeed();
+
+  /* ================= DRILL BUILDER =================
+     A form over the text notation — NOT a second model. Every control writes one
+     line of CONES / PLAYERS / SEQUENCE, js/drill-text.js parses it, and the
+     result is loaded onto the REAL pitch on each change. The sheet is short so
+     the pitch shows above it, which means the preview cannot disagree with the
+     drill: it IS the drill. Saving just persists what is already on screen.
+     ================================================= */
+  /* ---- import a drill from text ----
+     Accepts the drill notation (parsed by js/drill-text.js, shared with
+     tools/drill-from-text.mjs so the two cannot drift) or the JSON that
+     "Copy drill data" emits. Strokes arrive as [x,y] pairs or already
+     flattened; Firestore needs them flat, so normalise either way. */
+  const importPanel = document.getElementById("importPanel");
+  document.getElementById("importDrillBtn")?.addEventListener("click", () => {
+    drillPanel.classList.remove("open");
+    document.getElementById("impError").textContent = "";
+    importPanel?.classList.add("open");
+  });
+  importPanel?.addEventListener("click", e => {
+    if (e.target === importPanel) importPanel.classList.remove("open");
+  });
+  document.getElementById("impGoBtn")?.addEventListener("click", () => {
+    const box = document.getElementById("impText");
+    const errEl = document.getElementById("impError");
+    const txt = (box.value || "").trim();
+    errEl.textContent = "";
+    if (!txt) { errEl.textContent = "Nothing to import."; return; }
+    let d;
+    try {
+      if (txt[0] === "{") {
+        d = JSON.parse(txt);
+      } else if (typeof window.parseDrillText === "function") {
+        d = window.parseDrillText(txt);
+      } else {
+        throw new Error("Text notation is not available — paste drill JSON instead.");
+      }
+      if (!d || !Array.isArray(d.items) || !d.items.length)
+        throw new Error("No pieces found. Check the GRID block.");
+      d.id = d.id || ("imp-" + Date.now().toString(36));
+      d.name = (d.name || "Imported drill").slice(0, 60);
+      d.items = d.items.map(i => ({
+        kind: i.kind, x: clamp01(+i.x), y: clamp01(+i.y),
+        ...(i.num != null ? { num: String(i.num) } : {}),
+        ...(i.color ? { color: i.color } : {}),
+        ...(i.startCone ? { startCone: true } : {})
+      }));
+      d.strokes = (d.strokes || []).map(st => {
+        const pts = Array.isArray(st.pts && st.pts[0])
+          ? st.pts.map(pt => [+pt[0], +pt[1]])        // [[x,y],...]
+          : unflatStroke(st).pts;                     // already flat
+        return flatStroke({ mode: st.mode || "run", pts,
+                            ...(st.color ? { color: st.color } : {}) });
+      });
+    } catch (ex) {
+      errEl.textContent = String(ex.message || ex);
+      return;
+    }
+    store.data.drills = store.data.drills || [];
+    store.data.drills.push(d);
+    store.save({ drills: store.data.drills });
+    importPanel.classList.remove("open");
+    box.value = "";
+    setView("drills");
+    loadDrill(d);
+    renderDrillList();
+  });
   document.getElementById("deClose")?.addEventListener("click", () => drillEditPanel.classList.remove("open"));
   drillEditPanel.addEventListener("click", e => { if (e.target === drillEditPanel) drillEditPanel.classList.remove("open"); });
   document.getElementById("drillLibBtn").addEventListener("click", () => {
@@ -1854,7 +2269,7 @@ export function initBoard(store) {
       c.beginPath(); c.arc(ox, oy, u * .8, 0, 7); c.fill();
       c.lineWidth = 2; c.strokeStyle = "rgba(0,0,0,.65)"; c.stroke();
       c.fillStyle = "#111"; c.beginPath(); c.arc(ox, oy, u * .3, 0, 7); c.fill();
-    } else if (kind === "att" || kind === "def") {
+    } else if (kind === "att" || kind === "def" || kind === "cone") {
       c.fillStyle = color || (kind === "att" ? colors().team : colors().opp);
       c.beginPath(); c.arc(0, 0, u, 0, 7); c.fill();
       c.lineWidth = 2.5; c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
@@ -2083,7 +2498,7 @@ export function initBoard(store) {
   const TKEY = "spbGameTimer";
   let gt = { running: false, startAt: 0, period: 1, base: {}, cfg: { periods: 2, mins: 30 } };
   try {
-    const t = JSON.parse(localStorage.getItem(TKEY));
+    const t = JSON.parse(lsGet(TKEY));
     if (t && t.cfg && t.base) gt = t;
   } catch (e) {}
   const timerDisplay = document.getElementById("timerDisplay");
@@ -2093,7 +2508,7 @@ export function initBoard(store) {
   const cfgPeriods = document.getElementById("cfgPeriods");
   const cfgMinutes = document.getElementById("cfgMinutes");
 
-  function gtSave() { try { localStorage.setItem(TKEY, JSON.stringify(gt)); } catch (e) {} }
+  function gtSave() { lsSet(TKEY, JSON.stringify(gt)); }
   function gtElapsed() { return (gt.base[gt.period] || 0) + (gt.running ? Date.now() - gt.startAt : 0); }
   function fmt(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
@@ -2177,7 +2592,7 @@ export function initBoard(store) {
   const SKEY = "spbSubsTimer";
   let st = { running: false, startAt: 0, base: 0, int: 10 };
   try {
-    const t = JSON.parse(localStorage.getItem(SKEY));
+    const t = JSON.parse(lsGet(SKEY));
     if (t && t.int) st = t;
   } catch (e) {}
   const subsDisplay = document.getElementById("subsDisplay");
@@ -2185,7 +2600,7 @@ export function initBoard(store) {
   const subsStartBtn = document.getElementById("subsStart");
   const cfgSubInt = document.getElementById("cfgSubInt");
 
-  function stSave() { try { localStorage.setItem(SKEY, JSON.stringify(st)); } catch (e) {} }
+  function stSave() { lsSet(SKEY, JSON.stringify(st)); }
   function stRemaining() {
     const el = st.base + (st.running ? Date.now() - st.startAt : 0);
     return st.int * 60000 - el;
@@ -2263,9 +2678,7 @@ export function initBoard(store) {
   }
   
   function onTimelineComplete() {
-    if (loopModeActive) {
-      buildTimeline(false); // Loop without resetting
-    } else {
+    if (!loopModeActive) {
       stopDrillAnim();
     }
   }
@@ -2368,12 +2781,11 @@ export function initBoard(store) {
         }
         if (Math.hypot(st.x - slot.x, st.y - slot.y) < 0.005) return;
         const t = pieceTime.get(st.item) || 0;
-        drillTimeline.add({
-          targets: st.item.el,
+        drillTimeline.to(st.item.el, {
           keyframes: [{ left: (slot.x * rect.width) + "px", top: (slot.y * rect.height) + "px" }],
-          duration: 700,
-          easing: "linear"
-        }, t + 100);
+          duration: 700 / 1000,
+          ease: "none"
+        }, (t + 100) / 1000);
         st.x = slot.x; st.y = slot.y;
         pieceTime.set(st.item, t + 100 + 700);
       });
@@ -2381,6 +2793,7 @@ export function initBoard(store) {
   }
 
   function buildTimeline(resetPositions) {
+    try {
     if (!drillsMode || drillSteps.length === 0) return;
     
     // seed positions in px so they match the px keyframes below
@@ -2398,9 +2811,9 @@ export function initBoard(store) {
       });
     }
 
-    drillTimeline = anime.timeline({
-      easing: 'linear',
-      complete: onTimelineComplete
+    drillTimeline = gsap.timeline({
+      defaults: { ease: 'none' },
+      onComplete: onTimelineComplete
     });
 
     let hasAnyAnimation = false;
@@ -2424,6 +2837,16 @@ export function initBoard(store) {
        off before playing it — which is what emptied the left lane of complex3. */
     const LOOSE_TOL = 0.15;
     const LEG_GAP = 150;          // breath between a leg finishing and the next
+    /* Pace. These were roughly halved for a small drill: a 14 m leg fell on the
+       minimum clamp, so every pass took the same 800ms and the whole thing read
+       as a blur. `drillSpeed` is the coach's multiplier from the transport bar —
+       larger number = slower, so 1.5 means "take half again as long". */
+    /* Calibrated against the pitch: 9000ms to cover its 68 m width is about
+       7.5 m/s — quicker than a real jog, but a diagram has to be watchable. */
+    const RUN_MS_PER_UNIT  = 9000 * drillSpeed;
+    const BALL_MS_PER_UNIT = 5000 * drillSpeed;   // a struck ball, ~1.8x quicker
+    const MIN_RUN  = 1200 * drillSpeed;
+    const MIN_BALL =  700 * drillSpeed;
 
     /* ---- PASS A — WHO does WHAT, and WHERE it ends -------------------
        Walked in draw order because working out the actor depends on where
@@ -2467,6 +2890,15 @@ export function initBoard(store) {
                 return a.d - b.d;
             });
             closest = candidates[0].st;
+        } else if (pref.length > 0) {
+            let forced = null; let forcedD = Infinity;
+            currentState.forEach(st => {
+                if (pref.includes(st.item.kind)) {
+                    const d = Math.hypot(st.x - startPt[0], st.y - startPt[1]);
+                    if (d < forcedD) { forcedD = d; forced = st; }
+                }
+            });
+            if (forced) closest = forced;
         }
         
         let closestBall = null;
@@ -2490,11 +2922,29 @@ export function initBoard(store) {
             pathPts = w.map(p => [p[0]/r.width, p[1]/r.height]);
           }
           
+          /* Length in REAL distance, not normalised units. The pitch is 68 x 105,
+             so an unweighted hypot made a 21 m pass across the pitch measure 0.31
+             and the same 21 m pass up the pitch measure 0.20 — the horizontal one
+             animated half again as slowly. Weighting dy by the aspect ratio makes
+             a leg's duration depend on how far it actually is, not its direction.
+             Units are pitch WIDTHS of real distance. */
+          const AR = PITCH_LEN / PITCH_WID;
           let len = 0;
           for (let i = 1; i < stroke.pts.length; i++) {
-             len += Math.hypot(stroke.pts[i][0] - stroke.pts[i-1][0], stroke.pts[i][1] - stroke.pts[i-1][1]);
+             len += Math.hypot(stroke.pts[i][0] - stroke.pts[i-1][0],
+                               (stroke.pts[i][1] - stroke.pts[i-1][1]) * AR);
           }
-          const dur = Math.max(800, len * 3500);
+          /* A BALL TRAVELS FASTER THAN A PLAYER RUNS. Both used to move over the
+             same duration, so a passer shadowed their own pass the whole way
+             and the ball never actually got to the receiver first. A struck
+             ball covers the same ground in a bit over half the time. */
+          const runDur  = Math.max(MIN_RUN,  len * RUN_MS_PER_UNIT);
+          const passDur = Math.max(MIN_BALL, len * BALL_MS_PER_UNIT);
+          const isBallActor = closest.item.kind === "dball";
+          const dur = isBallActor ? passDur : runDur;
+          /* A dribbler carries the ball, so it moves at HIS pace; a pass+run
+             plays the ball ahead, so it moves at ball pace and arrives first. */
+          const ballDur = (stroke.mode === "dribble") ? runDur : passDur;
 
           // Snapshot of who has to be standing on my start point. Taken HERE,
           // while currentState still holds the positions for this point in the
@@ -2513,7 +2963,7 @@ export function initBoard(store) {
              Start the path from the piece's real position instead. */
           pathPts = [[closest.x, closest.y], ...pathPts.slice(1)];
 
-          // Animate in PIXELS, not %. anime.js converts a % keyframe to px using
+          // Animate in PIXELS, not %. A % keyframe gets converted to px using
           // the element's offsetWidth for BOTH axes, so on a 68:105 pitch every
           // vertical move was scaled by width/height (~0.65) and the drill
           // squashed as it played. Pixels are unambiguous.
@@ -2547,7 +2997,7 @@ export function initBoard(store) {
           plan.push({
             actor: closest.item, ball: closestBall ? closestBall.item : null,
             isBallLeg: closest.item.kind === "dball",
-            startPt, endPt, dur, keyframes, ballKeyframes, startDeps
+            startPt, endPt, dur, ballDur, keyframes, ballKeyframes, startDeps
           });
 
           closest.x = endPt[0];
@@ -2592,7 +3042,16 @@ export function initBoard(store) {
 
     plan.forEach((p, i) => {
       let t = Math.max(timeOf(p.actor), p.ball ? timeOf(p.ball) : 0);
-      p.startDeps.forEach(it => { t = Math.max(t, timeOf(it)); });
+      /* Rule 2, but only for pieces this leg actually NEEDS. It used to wait for
+         everything arriving at the start point, which meant a receiver could not
+         play on until the passer had finished jogging over to him — the moment
+         the ball started arriving first, that became the thing holding the drill
+         up. A BALL arriving still counts (you cannot pass a ball you have not
+         received); another player merely running in behind you does not. */
+      p.startDeps.forEach(it => {
+        if (it !== p.actor && it !== p.ball && isPlayerKind(it.kind)) return;
+        t = Math.max(t, timeOf(it));
+      });
 
       if (p.isBallLeg) {                       // rule 3a: pass to a moving target
         for (let j = 0; j < i; j++)
@@ -2615,20 +3074,24 @@ export function initBoard(store) {
            moment the ball leaves your foot. */
         for (let j = 0; j < i; j++)
           if (plan[j].isBallLeg && nearPt(plan[j].startPt, p.startPt, LOOSE_TOL))
-            p.start = Math.max(p.start, plan[j].start);
+            p.start = Math.max(p.start, plan[j].start + (plan[j].dur * 0.1));
       }
       p.end = p.start + p.dur;
 
-      drillTimeline.add({
-        targets: p.actor.el, keyframes: p.keyframes, duration: p.dur, easing: 'linear'
-      }, p.start);
+      drillTimeline.to(p.actor.el, {
+        keyframes: p.keyframes, duration: p.dur / 1000
+      }, p.start / 1000);
       pieceTime.set(p.actor, p.end);
 
       if (p.ball) {
-        drillTimeline.add({
-          targets: p.ball.el, keyframes: p.ballKeyframes, duration: p.dur, easing: 'linear'
-        }, p.start);
-        pieceTime.set(p.ball, p.end);
+        /* Its own duration, so on a pass+run the ball ARRIVES BEFORE the player
+           who played it. Tracked separately too: the next leg waiting on the
+           ball must wait for the ball, not for the runner still jogging over. */
+        p.ballEnd = p.start + p.ballDur;
+        drillTimeline.to(p.ball.el, {
+          keyframes: p.ballKeyframes, duration: p.ballDur / 1000
+        }, p.start / 1000);
+        pieceTime.set(p.ball, p.ballEnd);
       }
     });
 
@@ -2645,9 +3108,30 @@ export function initBoard(store) {
       return;
     }
 
+    let maxBallTime = 0;
+    let maxRunTime = 0;
+    plan.forEach(p => {
+       if (p.isBallLeg) maxBallTime = Math.max(maxBallTime, p.ballEnd || p.end);
+       else maxRunTime = Math.max(maxRunTime, p.end);
+    });
+    
+    // In continuous passing drills, don't wait for the last trailing runner to finish jogging
+    // before starting the next lap. Start as soon as the ball finishes its sequence!
+    const loopTriggerTime = (maxBallTime > 0) ? maxBallTime : maxRunTime;
+    if (loopModeActive && loopTriggerTime > 0) {
+        drillTimeline.call(() => {
+            if (loopModeActive) buildTimeline(false);
+        }, [], loopTriggerTime / 1000);
+    }
+
     if (playDrillGlyph) playDrillGlyph.textContent = "⏹";
     if (playDrillLabel) playDrillLabel.textContent = "Stop";
     if (playDrillBtn) playDrillBtn.classList.add("on");
+    } catch (e) {
+      alert("Error in buildTimeline:\n" + e.stack);
+      console.error(e);
+      drillTimeline = null;
+    }
   }
 
   const dpInfoBtn = document.getElementById("dpInfoBtn");
@@ -2682,7 +3166,52 @@ export function initBoard(store) {
   }
   if (playDrillBtn) playDrillBtn.addEventListener("click", startDrillAnim);
 
+
+  // Semantic Drill Parser auto-animations
+  const handleSemanticInput = (e) => {
+    if (typeof window.parseSequenceLines === 'function') {
+      const text = e.target.value;
+      if (text.trim() === "") return;
+      
+      const strokes = window.parseSequenceLines(text, drillItems);
+      if (strokes && strokes.length > 0) {
+        // Group all semantic strokes into a single step so they draw simultaneously
+        drillSteps = [strokes];
+        if (typeof strokeBufs !== 'undefined') strokeBufs.drills = drillSteps[0];
+        currentStep = 0;
+        changeStep(0);
+        
+        // Stop current animation and redraw board with new lines
+        if (typeof stopDrillAnim === 'function') stopDrillAnim();
+        if (typeof draw === 'function') draw();
+        
+        // Let the state save automatically so the visual lines persist
+        if (typeof pushState === 'function') pushState();
+      }
+    }
+  };
+
+  const drillNotesBox = document.getElementById("drillNotes");
+  const liveNotesBox = document.getElementById("liveNotes");
+
+  const handleLiveNotesInput = (e) => {
+    // Sync the two boxes so saving works seamlessly
+    if (e.target === drillNotesBox) {
+      if (liveNotesBox) liveNotesBox.value = drillNotesBox.value;
+    } else if (e.target === liveNotesBox) {
+      if (drillNotesBox) drillNotesBox.value = liveNotesBox.value;
+    }
+    handleSemanticInput({target: {value: e.target.value}});
+  };
+
+  if (drillNotesBox) drillNotesBox.addEventListener("input", handleLiveNotesInput);
+  if (liveNotesBox) liveNotesBox.addEventListener("input", handleLiveNotesInput);
+  
+  const deNotesBox = document.getElementById("deNotes");
+  if (deNotesBox) deNotesBox.addEventListener("input", handleSemanticInput);
+
   /* ---------------- init ---------------- */
+
   fillFormationOptions();
   renderAll();
   renderGameday();
@@ -2716,11 +3245,21 @@ export function initBoard(store) {
     // last-used pen mode silently blocks moving pieces
     if (!on && window.setBoardMoveMode) window.setBoardMoveMode();
   }
+  const notesPane = document.getElementById("drillNotesPane");
   function setDrillPane(name) {
     openPane = (openPane === name) ? null : name;   // tapping the active one closes it
     setKitOpen(openPane === "kit");
     setLinesOpen(openPane === "lines");
     if (playBar) playBar.classList.toggle("hidden", openPane !== "play");
+    if (notesPane) notesPane.classList.toggle("hidden", openPane !== "notes");
+    
+    if (openPane === "notes" && notesPane) {
+      setTimeout(() => {
+        const ln = document.getElementById("liveNotes");
+        if (ln) ln.focus();
+      }, 50);
+    }
+    
     if (drillDock) drillDock.querySelectorAll("button[data-pane]").forEach(b =>
       b.classList.toggle("on", b.dataset.pane === openPane));
     // lifts the colour palette clear of whichever pane is open (see styles.css)
@@ -2740,6 +3279,7 @@ export function initBoard(store) {
     openPane = null;
     setKitOpen(false); setLinesOpen(false);
     if (playBar) playBar.classList.add("hidden");
+    if (notesPane) notesPane.classList.add("hidden");
     if (drillDock) drillDock.querySelectorAll("button").forEach(b => b.classList.remove("on"));
     document.body.classList.remove("paneOpen");
   };

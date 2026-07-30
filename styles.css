@@ -200,6 +200,125 @@ body.gameView #matchBar{display:flex}
 }
 body.paneOpen #drillColors{bottom:calc(var(--dock-h) + 92px + env(safe-area-inset-bottom))}
 #drillColors.open{display:flex}
+/* ---------- substitutions modal ----------
+   Two columns, broadcast language: red down-arrow coming off, green up-arrow
+   coming on. Tall sheet, but .sheet scrolls so nothing can be pushed out of
+   reach on a phone. */
+.sheet.subs{gap:10px}
+.subsHead{display:flex;align-items:baseline;gap:10px}
+.subsHead h2{flex:1}
+.subsClock{font-size:13px;font-weight:700;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.subsCols{display:flex;gap:9px;min-height:0}
+.subsCol{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.subsColHead{
+  display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);
+}
+.subsColHead.off .subsArrow{color:#ff5c4d}
+.subsColHead.on  .subsArrow{color:#3ddc84}
+.subsArrow{font-size:10px;line-height:1}
+.subsList{
+  display:flex;flex-direction:column;gap:5px;
+  max-height:34dvh;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:5px;
+}
+.subsRow{
+  display:flex;align-items:center;gap:8px;width:100%;
+  background:var(--surface-2);border:1px solid transparent;border-radius:9px;
+  padding:7px 8px;font-family:inherit;color:var(--ink);text-align:left;cursor:pointer;
+}
+.subsRow .num{
+  width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:var(--team);
+  color:var(--team-ink);display:grid;place-items:center;font-size:11px;font-weight:700;
+}
+.subsRow .who{flex:1;min-width:0;font-size:13.5px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subsRow .pos{font-size:10.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.05em}
+/* tappable: a dashed underline is enough of a hint without shouting */
+.subsRow .pos.edit{
+  border:1px dashed var(--line-strong);border-radius:6px;padding:2px 5px;
+  min-width:30px;text-align:center;cursor:pointer;
+}
+.subsRow .pos.edit:hover,.subsRow .pos.edit:focus-visible{
+  color:var(--ink);border-color:var(--accent);border-style:solid;
+}
+input.posEdit{
+  width:44px;flex:0 0 auto;height:24px;padding:0 4px;text-align:center;text-transform:uppercase;
+  font-family:inherit;font-size:11.5px;font-weight:700;letter-spacing:.05em;
+  background:var(--bg);border:1px solid var(--accent);border-radius:6px;color:var(--ink);
+}
+/* the order you tapped them in, shown once more than one is picked */
+.subsRow .ord{
+  width:17px;height:17px;flex:0 0 auto;border-radius:5px;
+  display:none;place-items:center;font-size:10px;font-weight:800;
+}
+.subsRow.sel .ord{display:grid}
+.subsCol:first-child .subsRow.sel .ord{background:#ff5c4d;color:#fff}
+.subsCol:last-child  .subsRow.sel .ord{background:#3ddc84;color:#08341d}
+.subsRow.sel{border-color:var(--accent);background:rgba(59,130,246,.16)}
+.subsCol:first-child .subsRow.sel{border-color:#ff5c4d;background:rgba(255,92,77,.15)}
+.subsCol:last-child  .subsRow.sel{border-color:#3ddc84;background:rgba(61,220,132,.14)}
+.subsEmpty{padding:14px 8px;text-align:center;font-size:12.5px;color:var(--ink-faint)}
+.subsPick{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 10px}
+.subsPairs{display:flex;flex-direction:column;gap:7px}
+.subsPairs:empty{display:none}
+.subsPairs:empty + .hint{margin:0}
+.subsPairRow{display:flex;align-items:center;gap:8px}
+.subsPairRow .ord{
+  width:18px;height:18px;flex:0 0 auto;border-radius:5px;background:var(--bg);
+  color:var(--ink-faint);display:grid;place-items:center;font-size:10.5px;font-weight:800;
+}
+.subsPairRow.part .ord{background:transparent}
+.subsPairRow input.pp{
+  width:56px;flex:0 0 auto;height:28px;padding:0 5px;text-align:center;text-transform:uppercase;
+  font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+}
+.subsPairRow.part{opacity:.6}
+.subsPickRow{display:flex;align-items:center;gap:8px}
+.subsChip{
+  flex:1;min-width:0;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+  color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.subsChip.off .subsArrow{color:#ff5c4d}
+.subsChip.on  .subsArrow{color:#3ddc84}
+.subsChip.set{color:var(--ink)}
+.subsSwap{flex:0 0 auto;color:var(--ink-faint);font-size:15px}
+.subsPos{display:flex;align-items:center;gap:8px;margin-top:8px;
+  font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim)}
+.subsPos input{width:66px;flex:0 0 auto;text-align:center;text-transform:uppercase;
+  height:32px;padding:0 6px;font-size:14px}
+#subsGoBtn:disabled{opacity:.4}
+.subsLog{display:flex;flex-direction:column;gap:4px}
+.subsLog:empty{display:none}
+.subsLogRow{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim)}
+.subsLogRow .min{width:34px;flex:0 0 auto;font-weight:700;color:var(--ink-faint);
+  font-variant-numeric:tabular-nums}
+.subsLogRow .o{color:#ff8f84}
+.subsLogRow .i{color:#7ee2ab}
+/* the bench bar's "Subs" label becomes the way in */
+.benchLabel{cursor:pointer}
+#openSubsBtn{
+  background:var(--accent);color:var(--accent-ink);border:none;border-radius:999px;
+  font-family:inherit;font-size:11px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;padding:5px 11px;flex:0 0 auto;
+}
+body:not(.gameView) #openSubsBtn{display:none}
+
+/* ---- drill builder sheet: kept short so the live drill stays visible above ---- */
+.sheet.builder{gap:7px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.sheet.builder h2{margin-bottom:2px}
+.brow{display:flex;align-items:center;gap:10px;min-height:32px}
+.brow > label{width:62px;flex:0 0 auto;font-size:12px;font-weight:600;color:var(--ink-dim)}
+.brow select{flex:1;min-width:0;height:32px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:9px;padding:0 8px;font-family:inherit;font-size:14px}
+.brow input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+.bval{width:46px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
+.bchips{display:flex;gap:5px;flex:1;min-width:0}
+.bchip{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--ink-dim);
+  border-radius:999px;padding:6px 4px;font-family:inherit;font-size:11.5px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bchip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.bchip[disabled]{opacity:.35}
 .palRow{display:flex;align-items:center;gap:10px}
 .palLbl{width:52px;flex:0 0 auto;text-align:right;font-size:11px;font-weight:700;
   letter-spacing:.04em;text-transform:uppercase;color:var(--ink-dim)}
@@ -878,6 +997,12 @@ body.gameView #scoreBar{display:flex}
 
 /* Loop toggle: reads as a switch, not a picture. Off = quiet outline;
    on = filled accent with the label, so its state is unmistakable. */
+#dpSpeedBtn{
+  min-width:34px;height:32px;padding:0 7px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink-dim);border-radius:999px;
+  font-family:inherit;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
+}
+#dpSpeedBtn:hover{color:var(--ink)}
 #dpLoopBtn{
   display:flex;align-items:center;gap:5px;
   height:var(--sz-ctl);padding:0 10px;

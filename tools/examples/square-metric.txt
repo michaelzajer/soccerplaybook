@@ -1,0 +1,15 @@
+DRILL Passing square
+
+# Everything in METRES. The board is a real pitch, 68 m wide by 105 m long,
+# so distances convert exactly. The app's snapping square is about 5 m.
+
+CONES
+square 14              # 4 cones, 14 m sides
+centre 50% 55%         # where to put it (default is the middle of the pitch)
+
+PLAYERS
+12 spread evenly       # 3 to each cone: one on it, two queued behind
+start bottom-left      # that cone is the entry, and player 1 stands on it
+
+SEQUENCE
+pass and follow        # each player passes to the next cone and follows the pass

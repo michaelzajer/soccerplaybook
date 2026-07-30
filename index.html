@@ -2,195 +2,687 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>My Soccer Coach</title>
-<meta name="description" content="My Soccer Coach is a free, mobile coaching app. Build your squad, set formations on a tactics board, plan drills, and run game day with line-ups, a match clock and a subs timer.">
-<!-- Open Graph / social preview -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>My Soccer Coach — draw a drill, press play, watch it run</title>
+<meta name="description" content="Free coaching app for grassroots football. Draw a training drill on your phone and press play to watch the players and ball move through it. Squad, formations, line-ups, match clock and subs timer. Works offline, no sign-up to try.">
+<link rel="canonical" href="https://mysoccercoach.app/">
+<meta name="robots" content="index, follow">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="My Soccer Coach">
-<meta property="og:title" content="My Soccer Coach — The ultimate digital toolkit for grassroots soccer coaches">
-<meta property="og:description" content="Build your squad, set formations, plan drills, and run game day with line-ups and timers. Free, mobile, works offline.">
+<meta property="og:title" content="My Soccer Coach — draw a drill, press play, watch it run">
+<meta property="og:description" content="Draw a session on your phone and watch the players and ball move through it. Plus squad, formations, line-ups and game-day timers. Free, offline, no sign-up to try.">
 <meta property="og:url" content="https://mysoccercoach.app/">
 <meta property="og:image" content="https://mysoccercoach.app/img/og-banner.jpg">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="My Soccer Coach — The ultimate digital toolkit for grassroots soccer coaches">
-<meta name="twitter:description" content="Build your squad, set formations, plan drills, and run game day with line-ups and timers. Free, mobile, works offline.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="My Soccer Coach — draw a drill, press play, watch it run">
+<meta name="twitter:description" content="Draw a session on your phone and watch the players and ball move through it. Free, offline, no sign-up to try.">
 <meta name="twitter:image" content="https://mysoccercoach.app/img/og-banner.jpg">
-<!-- Structured Data -->
 <script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "My Soccer Coach",
-  "operatingSystem": "Web, iOS, Android",
-  "applicationCategory": "SportsApplication",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "description": "My Soccer Coach is a free, mobile coaching app. Build your squad, set formations on a tactics board, plan drills, and run game day with line-ups, a match clock and a subs timer.",
-  "url": "https://mysoccercoach.app"
-}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Soccer Coach",
+"operatingSystem":"Web, iOS, Android","applicationCategory":"SportsApplication",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},
+"featureList":["Animated drill playback","Tactics board with formations","Drag-and-drop squad management","Live substitutions","Match clock and subs timer","Works offline"],
+"description":"Free coaching app for grassroots football. Draw a training drill and press play to watch the players and ball move through it.",
+"url":"https://mysoccercoach.app"}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"Is My Soccer Coach free?","acceptedAnswer":{"@type":"Answer","text":"Yes. My Soccer Coach is a completely free toolkit built by coaches, for coaches. You can try it without creating an account."}},
+{"@type":"Question","name":"Does the app work offline?","acceptedAnswer":{"@type":"Answer","text":"Yes. It installs to your phone and keeps working with no signal, which matters on most grassroots pitches. Your squad and drills sync again once you are back online."}},
+{"@type":"Question","name":"Can I animate my own drills?","acceptedAnswer":{"@type":"Answer","text":"Yes. Place your cones and players, draw the passes and runs, then press play. The app works out who does what and in what order, including passes into space, players running onto a pass, and the rotation back to the queue."}},
+{"@type":"Question","name":"Can I track substitutions during the game?","acceptedAnswer":{"@type":"Answer","text":"Yes. Game day has a bench, an out-of-play zone, a match clock and an independent subs timer that rolls over automatically."}}]}
 </script>
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #111;
-    --ink: #eee;
-    --accent: #3b82f6;
-    --line: #333;
+  :root{
+    --bg:#0d1210; --surface:#151b17; --surface-2:#1c231e;
+    --ink:#edefea; --dim:#9aa59e; --faint:#66716a;
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+    --accent:#3b82f6; --accent-ink:#fff; --accent-soft:rgba(59,130,246,.14);
+    --grass-a:#2e7c4a; --grass-b:#256540;
+    --r:14px; --r-lg:22px;
+    --wrap:1120px;
   }
-  body {
-    margin: 0; padding: 0; background: var(--bg); color: var(--ink);
-    font-family: system-ui, -apple-system, sans-serif;
-    display: flex; flex-direction: column; min-height: 100vh;
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
   }
-  header { padding: 20px; text-align: center; border-bottom: 1px solid var(--line); }
-  h1 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; text-transform: uppercase; }
-  h1 span { color: var(--accent); }
-  .hero { text-align: center; padding: 40px 20px; }
-  .hero p { font-size: 20px; color: #ccc; max-width: 600px; margin: 0 auto 30px; }
-  .btn {
-    display: inline-block; background: var(--accent); color: #fff;
-    padding: 15px 30px; border-radius: 30px; text-decoration: none; font-weight: bold; font-size: 18px;
-    border: none; cursor: pointer; transition: opacity 0.2s;
-  }
-  .btn:hover { opacity: 0.9; }
-  
-  /* Slider */
-  .slider-container {
-    max-width: 800px; margin: 20px auto; position: relative; overflow: hidden;
-    border-radius: 12px; border: 1px solid var(--line);
-  }
-  .slides { display: flex; transition: transform 0.4s ease-in-out; }
-  .slide { min-width: 100%; box-sizing: border-box; padding: 20px 15px 10px; text-align: center; background: #1a1a1a; }
-  .slide img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-  .slide h2 { margin: 0 0 10px 0; color: var(--accent); }
-  .slide p { margin: 0; color: #bbb; }
-  
-  .slider-controls {
-    display: flex; justify-content: center; gap: 10px; margin-top: 20px;
-  }
-  .dot {
-    width: 12px; height: 12px; border-radius: 50%; background: var(--line); cursor: pointer;
-  }
-  .dot.active { background: var(--accent); }
+  h1,h2,h3,.wordmark{font-family:'Barlow Condensed',system-ui,sans-serif;letter-spacing:-.01em;line-height:1.05}
+  a{color:inherit}
+  .wrap{max-width:var(--wrap);margin:0 auto;padding:0 22px}
 
-  footer {
-    margin-top: auto; padding: 20px; text-align: center; border-top: 1px solid var(--line);
-    font-size: 14px;
+  /* ---------- nav ---------- */
+  nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(13,18,16,.82);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
   }
-  footer a { color: #888; text-decoration: none; margin: 0 10px; }
-  footer a:hover { color: #fff; }
-  .faq { max-width: 800px; margin: 40px auto; text-align: left; padding: 20px; background: #1a1a1a; border-radius: 12px; border: 1px solid var(--line); }
-  .faq h2 { color: var(--accent); text-align: center; margin-bottom: 20px; }
-  .faq h3 { color: #fff; margin-bottom: 5px; }
-  .faq p { color: #bbb; margin-top: 0; margin-bottom: 20px; }
+  nav .wrap{display:flex;align-items:center;gap:16px;height:60px}
+  .wordmark{font-size:22px;font-weight:700;text-transform:uppercase;text-decoration:none;letter-spacing:.06em}
+  .wordmark span{color:var(--accent)}
+  .wordmark::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;
+    background:var(--accent);margin-right:9px;vertical-align:3px}
+  nav .spacer{flex:1}
+  nav .navlink{color:var(--dim);text-decoration:none;font-size:14px;font-weight:600}
+  nav .navlink:hover{color:var(--ink)}
+  @media (max-width:640px){nav .navlink{display:none}}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    background:var(--accent);color:var(--accent-ink);text-decoration:none;
+    font-size:16px;font-weight:700;padding:14px 24px;border-radius:999px;border:none;
+    cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,filter .2s ease;
+    box-shadow:0 8px 24px rgba(59,130,246,.28);
+  }
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.07)}
+  .btn:active{transform:translateY(0)}
+  .btn.sm{padding:9px 18px;font-size:14px;box-shadow:none}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-2);box-shadow:none}
+  .btn.ghost:hover{border-color:var(--accent);color:#fff}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;padding:clamp(38px,7vw,84px) 0 clamp(30px,5vw,60px);overflow:hidden}
+  .hero::before{
+    content:"";position:absolute;inset:-30% 0 auto;height:620px;pointer-events:none;
+    background:radial-gradient(58% 62% at 50% 0%,rgba(59,130,246,.20) 0%,transparent 72%);
+  }
+  .hero .wrap{position:relative;display:grid;gap:clamp(30px,5vw,58px);
+    grid-template-columns:1.06fr .94fr;align-items:center}
+  @media (max-width:900px){.hero .wrap{grid-template-columns:1fr;text-align:center}}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--accent-soft);color:#9dc2ff;border:1px solid rgba(59,130,246,.3);
+    padding:6px 14px;border-radius:999px;font-size:12.5px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;margin-bottom:20px;
+  }
+  .eyebrow b{color:#fff;font-weight:700}
+  h1{font-size:clamp(40px,7.4vw,72px);font-weight:700;margin:0 0 18px;text-transform:uppercase}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{font-size:clamp(17px,2.1vw,20px);color:var(--dim);margin:0 0 30px;max-width:34em}
+  @media (max-width:900px){.lede{margin-inline:auto}}
+  .cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+  @media (max-width:900px){.cta-row{justify-content:center}}
+  .trust{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13.5px;color:var(--faint);margin:0;padding:0;list-style:none}
+  @media (max-width:900px){.trust{justify-content:center}}
+  .trust li{display:flex;align-items:center;gap:7px}
+  .trust svg{width:14px;height:14px;color:#4ea471;flex:0 0 auto}
+
+  /* ---------- the phone ---------- */
+  .phone-hold{display:flex;justify-content:center}
+  .phone{
+    position:relative;width:min(310px,84vw);
+    border-radius:38px;padding:11px;
+    background:linear-gradient(160deg,#2a322c,#131816);
+    border:1px solid var(--line-2);
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.8),0 0 0 1px rgba(0,0,0,.5) inset;
+  }
+  .phone::after{content:"";position:absolute;top:20px;left:50%;transform:translateX(-50%);
+    width:70px;height:5px;border-radius:99px;background:rgba(0,0,0,.55)}
+  .screen{background:#0f1310;border-radius:28px;overflow:hidden}
+  .screen-bar{
+    display:flex;align-items:center;gap:7px;padding:16px 14px 9px;
+    font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.1em;color:var(--dim);
+  }
+  .screen-bar .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .screen-bar .live{margin-left:auto;display:flex;align-items:center;gap:5px;color:#67d391;font-size:11px}
+  .screen-bar .live i{width:6px;height:6px;border-radius:50%;background:#67d391;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  #pitch{display:block;width:100%;height:auto;background:linear-gradient(178deg,var(--grass-a),var(--grass-b))}
+  .screen-foot{
+    display:flex;align-items:center;gap:6px;padding:9px 12px 14px;
+  }
+  .seg{display:flex;gap:3px;background:#1b211d;border:1px solid var(--line);border-radius:999px;padding:3px;flex:1}
+  .seg span{flex:1;text-align:center;font-size:11px;font-weight:700;color:var(--faint);
+    padding:5px 0;border-radius:999px;font-family:'Barlow Condensed',sans-serif;
+    text-transform:uppercase;letter-spacing:.06em}
+  .seg span.on{background:var(--accent);color:#fff}
+  .replay{
+    background:var(--accent);border:none;color:#fff;cursor:pointer;
+    width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  }
+  .replay svg{width:15px;height:15px}
+  .caption{text-align:center;color:var(--dim);font-size:13.5px;margin:16px auto 0;max-width:30em}
+  .caption.sub{color:var(--faint);font-size:12.5px;margin-top:10px}
+  .demo-meta{text-align:center}
+  .dots{display:flex;gap:8px;justify-content:center;margin-top:11px}
+  .dots button{
+    width:34px;height:5px;border-radius:99px;border:none;padding:0;cursor:pointer;
+    background:rgba(255,255,255,.16);transition:background .25s ease;
+  }
+  .dots button[aria-selected="true"]{background:var(--accent)}
+
+  /* ---------- sections ---------- */
+  section{padding:clamp(48px,7vw,92px) 0}
+  .band{border-top:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.014),transparent)}
+  .sec-head{max-width:44rem;margin:0 auto clamp(30px,4vw,48px);text-align:center}
+  .kicker{color:var(--accent);font-size:12.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;margin:0 0 12px}
+  h2{font-size:clamp(28px,4.4vw,44px);font-weight:700;margin:0 0 14px;text-transform:uppercase}
+  .sec-head p{color:var(--dim);font-size:17px;margin:0}
+
+  .steps{display:grid;gap:18px;grid-template-columns:repeat(3,1fr);counter-reset:s}
+  @media (max-width:820px){.steps{grid-template-columns:1fr}}
+  .step{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:26px 24px}
+  .step::before{
+    counter-increment:s;content:counter(s);
+    display:grid;place-items:center;width:34px;height:34px;border-radius:10px;
+    background:var(--accent-soft);color:#9dc2ff;border:1px solid rgba(59,130,246,.3);
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;
+  }
+  .step h3{font-size:21px;margin:0 0 8px;text-transform:uppercase}
+  .step p{color:var(--dim);font-size:15px;margin:0}
+
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(3,1fr)}
+  @media (max-width:980px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:620px){.grid{grid-template-columns:1fr}}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+    overflow:hidden;display:flex;flex-direction:column;
+    transition:border-color .2s ease,transform .2s ease;
+  }
+  .card:hover{border-color:var(--line-2);transform:translateY(-2px)}
+  .card .txt{padding:22px 22px 6px}
+  .card h3{font-size:20px;margin:0 0 7px;text-transform:uppercase}
+  .card p{color:var(--dim);font-size:14.5px;margin:0}
+  .card img{width:100%;height:auto;display:block;margin-top:18px;
+    border-top:1px solid var(--line);background:#0f1310}
+
+  /* ---------- faq ---------- */
+  .faq{max-width:46rem;margin:0 auto}
+  details{border-bottom:1px solid var(--line);padding:18px 0}
+  summary{
+    cursor:pointer;font-weight:700;font-size:17px;list-style:none;
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";color:var(--accent);font-size:22px;font-weight:400;flex:0 0 auto}
+  details[open] summary::after{content:"–"}
+  details p{color:var(--dim);margin:12px 0 0;font-size:15.5px}
+
+  /* ---------- close ---------- */
+  .final{text-align:center}
+  .final h2{margin-bottom:12px}
+  .final p{color:var(--dim);max-width:34em;margin:0 auto 28px;font-size:17px}
+  footer{border-top:1px solid var(--line);padding:34px 0;text-align:center}
+  footer nav{position:static;background:none;border:none;backdrop-filter:none}
+  .flinks{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:center;margin-bottom:16px}
+  .flinks a{color:var(--dim);text-decoration:none;font-size:14px}
+  .flinks a:hover{color:var(--ink)}
+  footer small{color:var(--faint);font-size:12.5px}
+
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *{animation:none!important;transition:none!important}
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>My Soccer<span>Coach</span></h1>
+<nav>
+  <div class="wrap">
+    <a class="wordmark" href="/">My Soccer<span>Coach</span></a>
+    <div class="spacer"></div>
+    <a class="navlink" href="#how">How it works</a>
+    <a class="navlink" href="#features">Features</a>
+    <a class="navlink" href="#faq">FAQ</a>
+    <a class="btn sm" href="/app.html">Open the app</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">New &middot; <b>Animated drill playback</b></span>
+      <h1>Draw a drill.<br>Press play.<br><em>Watch it run.</em></h1>
+      <p class="lede">Every other tactics board leaves you staring at arrows. Place your cones, draw the passes and
+        runs, then hit play — the players move, the ball travels, and the queue rotates just like it will on grass.</p>
+      <div class="cta-row">
+        <a class="btn" href="/app.html">Start free — no sign-up</a>
+        <a class="btn ghost" href="#how">See how it works</a>
+      </div>
+      <ul class="trust">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Free, no ads</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Works offline</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Installs to your phone</li>
+      </ul>
+    </div>
+
+    <div class="phone-hold">
+      <div class="phone">
+        <div class="screen">
+          <div class="screen-bar"><span class="dot"></span>Pumas
+            <span class="live"><i></i><span id="drillTag">Drills</span></span>
+          </div>
+          <svg id="pitch" viewBox="0 0 300 430" role="img"
+               aria-label="Animation of a four-cone passing drill: players pass around a square, follow their pass, and rotate through a queue.">
+            <defs>
+              <radialGradient id="ballSheen" cx="35%" cy="30%">
+                <stop offset="55%" stop-color="#fff"/><stop offset="100%" stop-color="#d4d4d4"/>
+              </radialGradient>
+            </defs>
+            <g stroke="rgba(255,255,255,.22)" fill="none" stroke-width="1.5">
+              <rect x="10" y="10" width="280" height="410" rx="2"/>
+              <line x1="10" y1="215" x2="290" y2="215"/>
+              <circle cx="150" cy="215" r="42"/>
+              <rect x="70" y="10" width="160" height="52"/>
+              <rect x="70" y="368" width="160" height="52"/>
+            </g>
+            <g id="lines"></g>
+            <g id="pieces"></g>
+          </svg>
+          <div class="screen-foot">
+            <div class="seg"><span>Team</span><span>Game day</span><span class="on">Drills</span></div>
+            <button class="replay" id="replay" aria-label="Replay the drill">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="demo-meta">
+    <p class="caption" id="drillCaption">Passing square &middot; follow your pass</p>
+    <div class="dots" id="drillDots" role="tablist" aria-label="Choose a drill"></div>
+    <p class="caption sub">These are real drills, running here in your browser.</p>
+  </div>
 </header>
 
-<main class="hero">
-  <p>Your pitch-side coaching companion. Build your squad, plan drills, and run game day seamlessly.</p>
-  <a href="/app.html" class="btn">Open Web App</a>
-  
-  <div class="slider-container">
-    <div class="slides" id="slides">
-      <div class="slide">
-        <h2>Tactics Board</h2>
-        <p>Set formations and organize your squad instantly.</p>
-        <img src="img/teamview_one.png" alt="My Soccer Coach app tactics board showing a 4-4-2 formation with player positioning">
+<section id="how" class="band">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker">How it works</p>
+      <h2>Three taps from idea to session</h2>
+      <p>No stylus, no laptop, no course to complete. It is built for a phone in one hand at the side of a pitch.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h3>Lay out the drill</h3>
+        <p>Drag cones, balls, goals and numbered players onto the pitch. Everything snaps to an invisible grid, so
+          your square actually looks square.</p>
       </div>
-      <div class="slide">
-        <h2>Easy Drag & Drop</h2>
-        <p>Intuitive touch controls make moving players and markers effortless.</p>
-        <img src="img/teamview_two.png" alt="My Soccer Coach app highlighting easy drag and drop mechanics for organizing soccer formations">
+      <div class="step">
+        <h3>Draw the movement</h3>
+        <p>Sketch passes, runs and dribbles with a finger. Wobbly lines straighten themselves and the ends clip
+          neatly onto the nearest cone or ball.</p>
       </div>
-      <div class="slide">
-        <h2>Powerful Menus</h2>
-        <p>Customize team colors, kits, and match details with ease.</p>
-        <img src="img/Team_Options.png" alt="My Soccer Coach app powerful options menu for customizing team colors, match details, and substitutions">
-      </div>
-      <div class="slide">
-        <h2>Live Substitutions</h2>
-        <p>Manage subs on the fly with dedicated bench zones and out-of-play tracking.</p>
-        <img src="img/teamview_three.png" alt="My Soccer Coach app live substitutions tracker with dedicated bench and out-of-play zones">
-      </div>
-      <div class="slide">
-        <h2>Drills Planner</h2>
-        <p>Design training sessions with cones, markers, goals, and passing lines.</p>
-        <img src="img/drills_one.png" alt="My Soccer Coach app drills planner showing cones, markers, and passing lines drawn on the pitch">
-      </div>
-      <div class="slide">
-        <h2>Game Day Manager</h2>
-        <p>Run match day like a pro with line-ups, a match clock, and a subs timer.</p>
-        <img src="img/gamesetup_one.png" alt="My Soccer Coach game day manager showing match clock, score board, and active player line-ups">
+      <div class="step">
+        <h3>Press play</h3>
+        <p>The app works out the order on its own — passes into space, a player running onto a pass, and everyone
+          rotating back through the queue.</p>
       </div>
     </div>
-    
-    <div class="slider-controls" id="dots">
-      <div class="dot active" data-index="0"></div>
-      <div class="dot" data-index="1"></div>
-      <div class="dot" data-index="2"></div>
-      <div class="dot" data-index="3"></div>
-      <div class="dot" data-index="4"></div>
-      <div class="dot" data-index="5"></div>
+  </div>
+</section>
+
+<section id="features" class="band">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker">Everything else</p>
+      <h2>The rest of your matchday, handled</h2>
+      <p>Drills are the headline. This is what you use every other minute of the week.</p>
+    </div>
+    <div class="grid">
+      <article class="card">
+        <div class="txt"><h3>Tactics board</h3>
+          <p>Set 11-a-side or 9-a-side, pick a formation, and drag your named squad into shape.</p></div>
+        <img src="img/teamview_one.png" loading="lazy" width="600" height="1000"
+             alt="Tactics board showing a 4-4-2 formation with named players in position">
+      </article>
+      <article class="card">
+        <div class="txt"><h3>Live substitutions</h3>
+          <p>A bench and an out-of-play zone. Drag a player off, drag a sub on, positions update themselves.</p></div>
+        <img src="img/teamview_three.png" loading="lazy" width="600" height="1000"
+             alt="Substitutions bar with bench players and an out-of-play zone">
+      </article>
+      <article class="card">
+        <div class="txt"><h3>Game day timers</h3>
+          <p>A match clock per period and an independent subs countdown that rolls over on its own.</p></div>
+        <img src="img/gamesetup_one.png" loading="lazy" width="600" height="1000"
+             alt="Game day screen with match clock, scoreboard and line-up">
+      </article>
+      <article class="card">
+        <div class="txt"><h3>Drill library</h3>
+          <p>Save every session you build, add coaching notes, and load one onto the pitch in a tap.</p></div>
+        <img src="img/drills_one.png" loading="lazy" width="600" height="1000"
+             alt="Drills planner with cones, markers and passing lines drawn on the pitch">
+      </article>
+      <article class="card">
+        <div class="txt"><h3>Your colours</h3>
+          <p>Set your kit and the opposition's so the board looks like the game you are about to play.</p></div>
+        <img src="img/Team_Options.png" loading="lazy" width="600" height="1000"
+             alt="Team options menu for kit colours and match details">
+      </article>
+      <article class="card">
+        <div class="txt"><h3>Share to the group chat</h3>
+          <p>Send the team sheet or a drill as an image straight into WhatsApp. Parents get it in seconds.</p></div>
+        <img src="img/teamview_two.png" loading="lazy" width="600" height="1000"
+             alt="Drag and drop player positioning on the tactics board">
+      </article>
     </div>
   </div>
-  
-  <div class="faq">
-    <h2>Frequently Asked Questions</h2>
-    <h3>Is My Soccer Coach free?</h3>
-    <p>Yes! My Soccer Coach is a completely free toolkit built by coaches, for coaches.</p>
-    
-    <h3>Does the app work offline?</h3>
-    <p>Absolutely. We know reception at the pitch can be terrible. Once loaded, the app works entirely offline, so your tactics board and game clock will never let you down.</p>
-    
-    <h3>Can I track substitutions during the game?</h3>
-    <p>Yes. The Game Day Manager includes a dedicated subs timer and out-of-play zones so you can accurately track exactly how many minutes each player has been on the field.</p>
+</section>
+
+<section id="faq" class="band">
+  <div class="wrap">
+    <div class="sec-head"><p class="kicker">FAQ</p><h2>Questions coaches ask</h2></div>
+    <div class="faq">
+      <details open><summary>Is My Soccer Coach free?</summary>
+        <p>Yes — a completely free toolkit built by coaches, for coaches. You can use it without creating an
+          account at all; you only need one if you want your squad and drills saved and synced.</p></details>
+      <details><summary>Does the app work offline?</summary>
+        <p>Yes. It installs to your phone and keeps working with no signal, which matters on most grassroots
+          pitches. Anything you change syncs again once you are back in range.</p></details>
+      <details><summary>Can I animate my own drills?</summary>
+        <p>Yes, and that is the point of it. Place your cones and players, draw the passes and runs, then press
+          play. The app works out who does what and in what order — including a pass into space, a player
+          running onto a pass, and the rotation back to the end of the queue.</p></details>
+      <details><summary>Can I track substitutions during the game?</summary>
+        <p>Yes. Game day gives you a bench, an out-of-play zone for anyone injured or unavailable, a match
+          clock per period and an independent subs timer.</p></details>
+      <details><summary>Do I need to install anything?</summary>
+        <p>No. It runs in your phone's browser. If you want it on your home screen like a normal app, use
+          "Add to Home Screen" and it will open full screen and work offline.</p></details>
+    </div>
   </div>
-</main>
+</section>
+
+<section class="band final">
+  <div class="wrap">
+    <h2>Build tonight's session now</h2>
+    <p>It takes about a minute to lay out your first drill and watch it run. No account, no card, nothing to cancel.</p>
+    <a class="btn" href="/app.html">Start free — no sign-up</a>
+  </div>
+</section>
 
 <footer>
-  <a href="/about.html">About</a>
-  <a href="/info.html">Info</a>
-  <a href="/feedback.html">Feedback</a>
-  <a href="/sitemap.xml">Sitemap</a>
-  <br><br>
-  <span style="color:#666;">&copy; 2026 My Soccer Coach</span>
+  <div class="wrap">
+    <div class="flinks">
+      <a href="/about.html">About</a>
+      <a href="/info.html">Info</a>
+      <a href="/feedback.html">Feedback</a>
+      <a href="/app.html">Open the app</a>
+      <a href="/sitemap.xml">Sitemap</a>
+    </div>
+    <small>&copy; 2026 My Soccer Coach &middot; Made for grassroots coaches</small>
+  </div>
 </footer>
 
 <script>
-  const slides = document.getElementById('slides');
-  const dots = document.querySelectorAll('.dot');
-  let currentSlide = 0;
+/* ============================================================
+   Hero drill demos. Three real drill shapes, cycled.
 
-  dots.forEach(dot => {
-    dot.addEventListener('click', (e) => {
-      currentSlide = parseInt(e.target.dataset.index);
-      updateSlider();
-    });
-  });
+   Players stand BESIDE their cone, never on top of it — the cone
+   marks the spot, the player waits next to it. "Beside" is worked
+   out per drill: the direction from the shape's centre outward,
+   so players always sit on the outside of the circuit and the
+   cone stays visible.
 
-  function updateSlider() {
-    slides.style.transform = `translateX(-${currentSlide * 100}%)`;
-    dots.forEach((dot, index) => {
-      dot.classList.toggle('active', index === currentSlide);
+   Hand-rolled rAF tweens, no libraries — this is a landing page
+   and it has to load fast.
+   ============================================================ */
+(function () {
+  var svg = document.getElementById("pitch");
+  if (!svg) return;
+  var gPieces = document.getElementById("pieces"),
+      gLines  = document.getElementById("lines"),
+      capEl   = document.getElementById("drillCaption"),
+      tagEl   = document.getElementById("drillTag"),
+      dotsEl  = document.getElementById("drillDots"),
+      NS = "http://www.w3.org/2000/svg";
+
+  /* A PASS BEATS ITS PASSER. The ball is struck and gets there well before the
+     man who played it jogs across — they used to share one duration, so the
+     passer escorted his own pass the whole way. The next leg is chained off the
+     BALL landing, so play flows while runners are still catching up. */
+  var BALL_MS = 430, RUN_MS = 840, GAP = 200, PLAYER_OFF = 17, BALL_OFF = 12;
+  /* Equal AIRTIME per drill, not an equal number of laps: a shuttle lap is
+     ~1.7s and a passing square ~4.2s, so counting laps gave the shuttle three
+     seconds on screen and the square nine. Advance on the first lap boundary
+     after this long. */
+  var DRILL_MS = 9000;
+
+  /* ---- the drills ------------------------------------------------------
+     circuit : stations in order, ball goes round them; the passer follows
+               the pass; the last one joins the back of the queue and the
+               front of the queue steps on.
+     shuttle : two facing lines, fronts swap ends and join the far back. */
+  var DRILLS = [
+    { name:"Passing square", note:"follow your pass", type:"circuit",
+      stations:[{x:88,y:288},{x:88,y:142},{x:212,y:142},{x:212,y:288}], queued:4 },
+    { name:"Shuttle lines",  note:"two lines, players swap ends", type:"shuttle",
+      stations:[{x:150,y:132},{x:150,y:300}], queued:2 },
+    { name:"Passing triangle", note:"three stations, tight angles", type:"circuit",
+      stations:[{x:150,y:126},{x:224,y:284},{x:76,y:284}], queued:4 }
+  ];
+
+  function el(tag, a) { var n = document.createElementNS(NS, tag);
+    for (var k in a) n.setAttribute(k, a[k]); return n; }
+  function place(n, x, y) { n.setAttribute("transform","translate("+x+","+y+")"); }
+  function unit(dx, dy) { var L = Math.hypot(dx,dy) || 1; return [dx/L, dy/L]; }
+  var ease = function (t) { return t<.5 ? 2*t*t : -1+(4-2*t)*t; };
+  var lin  = function (t) { return t; };
+
+  /* Where a player stands relative to station i: outside the shape, so the
+     cone is never covered. For two stations "outside" is along the axis
+     between them, pushed away from the middle. */
+  function besides(d) {
+    var cx = 0, cy = 0, S = d.stations;
+    S.forEach(function (s) { cx += s.x; cy += s.y; });
+    cx /= S.length; cy /= S.length;
+    return S.map(function (s) {
+      var u = unit(s.x - cx, s.y - cy);
+      return { x:s.x + u[0]*PLAYER_OFF, y:s.y + u[1]*PLAYER_OFF, u:u };
     });
   }
-  
-  // Auto-advance
-  setInterval(() => {
-    currentSlide = (currentSlide + 1) % dots.length;
-    updateSlider();
-  }, 5000);
-</script>
 
+  var cur = -1, D, spots, ball, cones, onSt, queues, qSlots, mountedAt;
+
+  function mount(idx) {
+    cur = idx; D = DRILLS[idx];
+    gPieces.textContent = ""; gLines.textContent = "";
+    spots = besides(D);
+
+    cones = D.stations.map(function (s) {
+      return gPieces.appendChild(el("polygon", {
+        points:(s.x-7)+","+(s.y+7)+" "+s.x+","+(s.y-8)+" "+(s.x+7)+","+(s.y+7),
+        fill:"#ffb020", stroke:"rgba(0,0,0,.4)", "stroke-width":"1" }));
+    });
+
+    /* queue slots trail away from each station that owns a queue, in the same
+       outward direction the player stands in */
+    qSlots = D.stations.map(function (s, i) {
+      var out = spots[i].u, n = (D.type === "shuttle") ? D.queued : (i === 0 ? D.queued : 0), a = [];
+      for (var k = 1; k <= n; k++)
+        a.push({ x:spots[i].x + out[0]*28*k, y:spots[i].y + out[1]*28*k });
+      return a;
+    });
+
+    /* Number the players the way a coach lays them out: everyone on a cone
+       first (1,2,3,4...), then the queue behind (5,6,7,8...). Numbering
+       station-then-its-own-queue gave a square reading 1,6,7,8. */
+    onSt = []; queues = [];
+    var num = 1;
+    D.stations.forEach(function (s, i) { onSt[i] = mk(num++, spots[i]); });
+    D.stations.forEach(function (s, i) {
+      queues[i] = qSlots[i].map(function (q) { return mk(num++, q); });
+    });
+
+    ball = el("g", {});
+    ball.appendChild(el("circle", { r:6.5, fill:"url(#ballSheen)",
+      stroke:"rgba(0,0,0,.65)", "stroke-width":"1.4" }));
+    ball.appendChild(el("circle", { r:2.2, fill:"#111" }));
+    gPieces.appendChild(ball);
+    seatBall(0);
+    mountedAt = null;                    // stamped on the first frame after mounting
+
+    if (capEl) capEl.innerHTML = D.name + " &middot; " + D.note;
+    if (tagEl) tagEl.textContent = D.name;
+    [].forEach.call(dotsEl ? dotsEl.children : [], function (b, i) {
+      b.setAttribute("aria-selected", i === idx ? "true" : "false");
+    });
+  }
+  function mk(n, at) {
+    var g = el("g", { transform:"translate("+at.x+","+at.y+")" });
+    g.appendChild(el("circle", { r:11, fill:"#2563eb",
+      stroke:"rgba(0,0,0,.4)", "stroke-width":"1.5" }));
+    var t = el("text", { y:4.5, "text-anchor":"middle", fill:"#fff",
+      "font-size":"12.5", "font-weight":"700", "font-family":"system-ui,sans-serif" });
+    t.textContent = String(n);
+    g.appendChild(t); gPieces.appendChild(g);
+    return { g:g, n:n };
+  }
+  // the ball sits in front of whoever holds it, pointing at the next station
+  function seatBall(from) {
+    var to = (from + 1) % D.stations.length;
+    var u = unit(spots[to].x - spots[from].x, spots[to].y - spots[from].y);
+    place(ball, spots[from].x + u[0]*BALL_OFF, spots[from].y + u[1]*BALL_OFF);
+  }
+
+  function tweenLine(from, to, t0, dur, off) {
+    var o = off || 0, u = unit(to.x - from.x, to.y - from.y);
+    var px = -u[1]*o, py = u[0]*o;
+    return { a:{x:from.x+px,y:from.y+py}, b:{x:to.x+px,y:to.y+py}, t0:t0, dur:dur };
+  }
+
+  function buildLap() {
+    var tw = [], lines = [], S = D.stations.length;
+
+    if (D.type === "circuit") {
+      var carry = onSt.slice(), stepper = queues[0][0];
+      for (var k = 0; k < S; k++) {
+        var t0 = k * (BALL_MS + GAP), i2 = (k + 1) % S;
+        var bu = unit(spots[i2].x - spots[k].x, spots[i2].y - spots[k].y);
+        var b2 = unit(spots[(i2+1) % S].x - spots[i2].x, spots[(i2+1) % S].y - spots[i2].y);
+        tw.push({ node:ball, ease:lin, t0:t0, dur:BALL_MS,
+          from:{ x:spots[k].x + bu[0]*BALL_OFF,  y:spots[k].y + bu[1]*BALL_OFF },
+          to:  { x:spots[i2].x + b2[0]*BALL_OFF, y:spots[i2].y + b2[1]*BALL_OFF } });
+        lines.push(tweenLine(D.stations[k], D.stations[i2], t0, BALL_MS));
+        var mv = carry[k];
+        var dest = (k === S - 1) ? qSlots[0][qSlots[0].length - 1] : spots[i2];
+        // sets off with the pass, arrives long after it
+        tw.push({ node:mv.g, ease:ease, t0:t0 + 70, dur:RUN_MS,
+          from:{x:spots[k].x,y:spots[k].y}, to:{x:dest.x,y:dest.y} });
+      }
+      tw.push({ node:stepper.g, ease:ease, t0:130, dur:RUN_MS,
+        from:{x:qSlots[0][0].x,y:qSlots[0][0].y}, to:{x:spots[0].x,y:spots[0].y} });
+      for (var q = 1; q < queues[0].length; q++)
+        tw.push({ node:queues[0][q].g, ease:ease, t0:190 + q*70, dur:540,
+          from:{x:qSlots[0][q].x,y:qSlots[0][q].y},
+          to:{x:qSlots[0][q-1].x,y:qSlots[0][q-1].y} });
+
+      onSt = [stepper].concat(carry.slice(0, S - 1));
+      queues[0] = queues[0].slice(1).concat([carry[S - 1]]);
+
+    } else {                                    // shuttle: both fronts swap ends
+      var a = onSt[0], b = onSt[1];
+      [[0,1,a,-9],[1,0,b,9]].forEach(function (r, ri) {
+        var f = r[0], t = r[1], mv = r[2], off = r[3];
+        tw.push({ node:mv.g, ease:ease, t0:110, dur:RUN_MS + 180, off:off,
+          from:{x:spots[f].x,y:spots[f].y},
+          to:{x:qSlots[t][qSlots[t].length-1].x, y:qSlots[t][qSlots[t].length-1].y} });
+        lines.push(tweenLine(D.stations[f], D.stations[t], 110, RUN_MS, off));
+        if (ri === 0) {                         // the ball travels with one of them
+          tw.push({ node:ball, ease:ease, t0:110, dur:RUN_MS + 180,   // carried, not struck
+            from:{x:spots[f].x - 9, y:spots[f].y + BALL_OFF},
+            to:{x:qSlots[t][qSlots[t].length-1].x - 9, y:qSlots[t][qSlots[t].length-1].y} });
+        }
+      });
+      [0,1].forEach(function (i) {
+        var nf = queues[i][0];
+        tw.push({ node:nf.g, ease:ease, t0:260, dur:RUN_MS,
+          from:{x:qSlots[i][0].x,y:qSlots[i][0].y}, to:{x:spots[i].x,y:spots[i].y} });
+        for (var q = 1; q < queues[i].length; q++)
+          tw.push({ node:queues[i][q].g, ease:ease, t0:300 + q*70, dur:520,
+            from:{x:qSlots[i][q].x,y:qSlots[i][q].y}, to:{x:qSlots[i][q-1].x,y:qSlots[i][q-1].y} });
+      });
+      var newA = queues[0][0], newB = queues[1][0];
+      queues[0] = queues[0].slice(1).concat([b]);
+      queues[1] = queues[1].slice(1).concat([a]);
+      onSt = [newA, newB];
+    }
+
+    var last = 0;
+    tw.forEach(function (t) { last = Math.max(last, t.t0 + t.dur); });
+    return { tw:tw, lines:lines, len:last + 620 };
+  }
+
+  var lap = null, t0 = 0, raf = null;
+  function startLap(now) {
+    lap = buildLap(); t0 = now; gLines.textContent = "";
+    lap.lines.forEach(function (L) {
+      L.node = gLines.appendChild(el("line", { x1:L.a.x, y1:L.a.y, x2:L.a.x, y2:L.a.y,
+        stroke:"rgba(255,255,255,.7)", "stroke-width":"2",
+        "stroke-dasharray":"6 6", "stroke-linecap":"round" }));
+    });
+  }
+  function frame(now) {
+    if (mountedAt === null) mountedAt = now;
+    if (!lap) startLap(now);
+    var t = now - t0;
+    lap.tw.forEach(function (a) {
+      var u = (t - a.t0) / a.dur; if (u <= 0) return; if (u > 1) u = 1;
+      var e = a.ease(u), o = a.off || 0;
+      var dx = a.to.x - a.from.x, dy = a.to.y - a.from.y, un = unit(dx, dy);
+      // a lateral shift makes two players crossing pass each other, not collide
+      var bow = Math.sin(Math.PI * u) * o;
+      place(a.node, a.from.x + dx*e - un[1]*bow, a.from.y + dy*e + un[0]*bow);
+    });
+    lap.lines.forEach(function (L) {
+      var u = (t - L.t0) / L.dur; if (u < 0) u = 0; if (u > 1) u = 1;
+      L.node.setAttribute("x2", L.a.x + (L.b.x - L.a.x) * u);
+      L.node.setAttribute("y2", L.a.y + (L.b.y - L.a.y) * u);
+      L.node.setAttribute("opacity",
+        String(0.18 + 0.6 * (1 - Math.max(0, Math.min(1, (t - L.t0 - L.dur) / 800)))));
+    });
+    if (t > lap.len) {
+      lap = null;
+      if (now - mountedAt >= DRILL_MS) mount((cur + 1) % DRILLS.length);
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  // dots: let people pick a drill, which is the point of showing three
+  if (dotsEl) {
+    DRILLS.forEach(function (d, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.setAttribute("role","tab");
+      b.setAttribute("aria-selected", i === 0 ? "true" : "false");
+      b.setAttribute("aria-label", d.name);
+      b.addEventListener("click", function () { stop(); mount(i); run(); });
+      dotsEl.appendChild(b);
+    });
+  }
+  function run()  { if (!raf) raf = requestAnimationFrame(frame); }
+  function stop() { if (raf) { cancelAnimationFrame(raf); raf = null; } lap = null; }
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  mount(0);
+  if (!reduce) {
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (es) { es[0].isIntersecting ? run() : stop(); },
+        { threshold:0.2 }).observe(svg);          // no point burning battery off-screen
+    } else { run(); }
+    document.addEventListener("visibilitychange", function () { document.hidden ? stop() : run(); });
+    document.getElementById("replay").addEventListener("click", function () {
+      stop(); mount(cur); run();
+    });
+  } else {
+    document.getElementById("replay").style.display = "none";
+    D.stations.forEach(function (s, k) {
+      var n = D.stations[(k+1) % D.stations.length];
+      gLines.appendChild(el("line", { x1:s.x, y1:s.y, x2:n.x, y2:n.y,
+        stroke:"rgba(255,255,255,.5)", "stroke-width":"2", "stroke-dasharray":"6 6" }));
+    });
+  }
+})();
+</script>
 </body>
 </html>

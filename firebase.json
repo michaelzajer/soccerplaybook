@@ -19,6 +19,9 @@
       "CLAUDE.md",
       "tactics-board.html",
       "_*.mjs",
+      "tools/**",
+      "DRILL-NOTATION.md",
+      "**/*.bak",
       "package.json",
       "package-lock.json",
       "firebase-debug.log"

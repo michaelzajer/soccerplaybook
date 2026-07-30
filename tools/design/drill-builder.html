@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drill builder — screen concept</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d1210; --surface:#151b17; --surface-2:#1c231e;
+    --ink:#edefea; --dim:#9aa59e; --faint:#66716a;
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.16);
+    --accent:#3b82f6; --team:#2563eb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px;background:var(--bg);color:var(--ink);
+       font-family:system-ui,-apple-system,sans-serif;line-height:1.5}
+  h1,h2,h3,.seg span,.hdr{font-family:'Barlow Condensed',system-ui,sans-serif;
+       text-transform:uppercase;letter-spacing:.05em}
+  h1{font-size:26px;margin:0 0 6px}
+  .lede{color:var(--dim);font-size:14px;max-width:56em;margin:0 0 26px}
+  .stage{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+
+  /* ---------- phone ---------- */
+  .phone{width:330px;flex:0 0 auto;border-radius:38px;padding:11px;
+    background:linear-gradient(160deg,#2a322c,#131816);border:1px solid var(--line-2);
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.8)}
+  .screen{background:#0f1310;border-radius:28px;overflow:hidden}
+  .hdr{display:flex;align-items:center;gap:8px;padding:15px 14px 8px;font-size:15px;font-weight:700}
+  .hdr .dot{width:8px;height:8px;border-radius:50%;background:var(--team)}
+  .hdr .x{margin-left:auto;color:var(--dim);font-size:19px;font-family:system-ui}
+  .tabs{display:flex;gap:3px;margin:0 12px 10px;background:#1b211d;border:1px solid var(--line);
+    border-radius:999px;padding:3px}
+  .tabs span{flex:1;text-align:center;font-size:11.5px;font-weight:700;color:var(--faint);
+    padding:6px 0;border-radius:999px}
+  .tabs span.on{background:var(--accent);color:#fff}
+
+  /* live preview */
+  .pitchwrap{position:relative;margin:0 12px}
+  #pitch{display:block;width:100%;height:auto;border-radius:10px}
+  .pitchtag{position:absolute;top:8px;right:9px;background:rgba(0,0,0,.5);color:#cfe3ff;
+    font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;letter-spacing:.05em}
+
+  /* the form */
+  .form{padding:14px 14px 16px;display:flex;flex-direction:column;gap:13px}
+  .grp{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 13px}
+  .grp h3{font-size:12px;color:var(--accent);margin:0 0 9px;letter-spacing:.12em}
+  .row{display:flex;align-items:center;gap:9px}
+  .row+.row{margin-top:9px}
+  label.lbl{font-size:12px;color:var(--dim);width:74px;flex:0 0 auto}
+  select,input[type=text]{flex:1;background:#0f1310;color:var(--ink);border:1px solid var(--line);
+    border-radius:9px;padding:8px 9px;font-family:inherit;font-size:14px;min-width:0}
+  input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+  .val{width:52px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{background:#0f1310;border:1px solid var(--line);color:var(--dim);border-radius:999px;
+    padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .hint{font-size:11.5px;color:var(--faint);margin-top:8px}
+  .cta{display:flex;gap:9px;padding:0 14px 16px}
+  .btn{flex:1;background:var(--accent);color:#fff;border:none;border-radius:999px;
+    padding:12px;font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink)}
+
+  /* ---------- notes + generated notation ---------- */
+  .side{flex:1;min-width:320px;max-width:560px}
+  .side h2{font-size:19px;margin:0 0 10px}
+  .side ol{margin:0 0 22px;padding-left:20px;color:var(--dim);font-size:14px}
+  .side li{margin-bottom:9px}
+  .side li b{color:var(--ink);font-weight:600}
+  pre{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:15px;font-size:12.5px;color:#c9d6cf;overflow-x:auto;margin:0}
+  pre b{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<h1>Drill builder</h1>
+<p class="lede">A form over the text notation, not a new idea: every control below writes one line of
+<code>CONES</code> / <code>PLAYERS</code> / <code>SEQUENCE</code>, and the pitch above redraws from the same
+maths the parser uses. Drag-and-drop stays for anything irregular — this is for the 80% of sessions
+that are a shape, a number of players and a pattern. Try the controls; the preview and the notation
+both update.</p>
+
+<div class="stage">
+  <div class="phone"><div class="screen">
+    <div class="hdr"><span class="dot"></span>New drill<span class="x">&times;</span></div>
+    <div class="tabs"><span>Team</span><span>Game day</span><span class="on">Drills</span></div>
+
+    <div class="pitchwrap">
+      <svg id="pitch" viewBox="0 0 300 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2e7c4a"/><stop offset="1" stop-color="#256540"/></linearGradient>
+          <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffa02e"/><stop offset="1" stop-color="#ff7a00"/></linearGradient>
+          <radialGradient id="ball" cx="35%" cy="30%">
+            <stop offset="55%" stop-color="#fff"/><stop offset="100%" stop-color="#d9d9d9"/></radialGradient>
+        </defs>
+        <rect width="300" height="460" fill="url(#grass)"/>
+        <g stroke="rgba(255,255,255,.16)" fill="none" stroke-width="1.4">
+          <rect x="7" y="7" width="286" height="446" rx="2"/>
+          <line x1="7" y1="230" x2="293" y2="230"/><circle cx="150" cy="230" r="40"/>
+          <rect x="80" y="7" width="140" height="48"/><rect x="80" y="405" width="140" height="48"/>
+        </g>
+        <g id="lines"></g><g id="pieces"></g>
+      </svg>
+      <div class="pitchtag" id="tag">14 m square</div>
+    </div>
+
+    <div class="form">
+      <div class="grp">
+        <h3>Markers</h3>
+        <div class="row"><label class="lbl">Shape</label>
+          <select id="shape">
+            <option value="square">Square</option>
+            <option value="rectangle">Rectangle</option>
+            <option value="diamond">Diamond</option>
+            <option value="triangle">Triangle</option>
+            <option value="line">Line</option>
+            <option value="pair">Two markers</option>
+          </select></div>
+        <div class="row"><label class="lbl">Size</label>
+          <input type="range" id="size" min="6" max="30" step="1" value="14">
+          <span class="val" id="sizeV">14 m</span></div>
+        <div class="row" id="countRow" style="display:none"><label class="lbl">How many</label>
+          <input type="range" id="count" min="2" max="6" step="1" value="4">
+          <span class="val" id="countV">4</span></div>
+        <div class="hint">One grid square is about 5 m, so 14 m is just under three squares a side.</div>
+      </div>
+
+      <div class="grp">
+        <h3>Players</h3>
+        <div class="row"><label class="lbl">Squad</label>
+          <input type="range" id="players" min="2" max="16" step="1" value="12">
+          <span class="val" id="playersV">12</span></div>
+        <div class="row"><label class="lbl">Spread</label>
+          <div class="chips">
+            <span class="chip on" data-spread="even">Evenly</span>
+            <span class="chip" data-spread="one">All at the start</span>
+          </div></div>
+        <div class="row"><label class="lbl">Start at</label>
+          <select id="start"></select></div>
+        <div class="hint" id="spreadHint">3 to each marker: one on it, two queued behind.</div>
+      </div>
+
+      <div class="grp">
+        <h3>What happens</h3>
+        <div class="chips">
+          <span class="chip on" data-seq="follow">Pass &amp; follow</span>
+          <span class="chip" data-seq="shuttle">Shuttle</span>
+          <span class="chip" data-seq="custom">Step by step…</span>
+        </div>
+        <div class="hint" id="seqHint">Each player passes to the next marker and follows the pass.
+          The circuit closes, so everyone recycles.</div>
+      </div>
+    </div>
+
+    <div class="cta">
+      <button class="btn ghost">Preview</button>
+      <button class="btn">Save drill</button>
+    </div>
+  </div></div>
+
+  <div class="side">
+    <h2>Why this shape of screen</h2>
+    <ol>
+      <li><b>The preview is the point.</b> It sits above the controls and redraws on every change,
+        so the coach never has to imagine the outcome. This is the one thing a drag-and-drop board
+        cannot give you — an instant, correct layout.</li>
+      <li><b>Three groups, in the order a coach thinks.</b> Markers, then players, then what happens.
+        That is how you described it, and it is how you would brief an assistant.</li>
+      <li><b>Metres, not pixels.</b> The size slider is in real distances because a coach knows
+        "12 to 15 metres", not "0.2 of the board".</li>
+      <li><b>It writes the notation.</b> Nothing new to maintain: the screen is a front end to the
+        parser that already exists, so anything the builder makes can also be typed, shared as text,
+        or generated by me.</li>
+      <li><b>Drawing stays.</b> "Step by step…" drops into the existing draw tools for combination
+        play like complex3. The builder handles shapes and patterns; the pencil handles the rest.</li>
+    </ol>
+
+    <h2>The notation it is writing</h2>
+    <pre id="out"></pre>
+  </div>
+</div>
+
+<script>
+/* The preview and the notation come from the same numbers, so they cannot
+   disagree — the same reason the app and the CLI share one parser. */
+const PW = 68, PH = 105;                       // the pitch, in metres
+const S = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const el = (t,a) => { const n=document.createElementNS(NS,t); for(const k in a) n.setAttribute(k,a[k]); return n; };
+let spread = "even", seq = "follow";
+
+function shapePts(kind, size, count) {
+  const cx = PW/2, cy = PH*0.55, s = size/2;
+  // bottom-left first, then clockwise — y grows downward
+  if (kind === "square" || kind === "rectangle") {
+    const h = (kind === "rectangle" ? size*0.7 : size)/2;
+    return [[cx-s,cy+h],[cx-s,cy-h],[cx+s,cy-h],[cx+s,cy+h]];
+  }
+  if (kind === "diamond")  return [[cx,cy+s],[cx-s,cy],[cx,cy-s],[cx+s,cy]];
+  if (kind === "triangle") { const hh = size*Math.sqrt(3)/2;
+    return [[cx-s,cy+hh/3],[cx,cy-hh*2/3],[cx+s,cy+hh/3]]; }
+  if (kind === "pair")     return [[cx,cy+s],[cx,cy-s]];
+  const span=(count-1)*size/2, out=[];               // line
+  for(let i=0;i<count;i++) out.push([cx-span+i*size, cy]);
+  return out;
+}
+
+function build() {
+  const kind = S("shape").value, size = +S("size").value,
+        count = +S("count").value, total = +S("players").value;
+  S("countRow").style.display = (kind === "line") ? "" : "none";
+  S("sizeV").textContent = size + " m";
+  S("countV").textContent = count;
+  S("playersV").textContent = total;
+
+  const cones = shapePts(kind, size, count);
+  // keep the start selector in step with how many markers there are
+  const sel = S("start"), keep = Math.min(+sel.value || 0, cones.length-1);
+  sel.innerHTML = "";
+  const names = ["bottom-left","next round","then","then","then","then"];
+  cones.forEach((c,i)=>{ const o=document.createElement("option");
+    o.value=i; o.textContent = "Marker "+(i+1)+(i===0?" (bottom-left)":""); sel.appendChild(o); });
+  sel.value = keep;
+  const startIdx = +sel.value;
+  const ring = cones.slice(startIdx).concat(cones.slice(0,startIdx));
+
+  // players: depth-major so player 2 is at the next marker round
+  const per = spread==="even" ? Math.floor(total/ring.length) : 0,
+        extra = spread==="even" ? total%ring.length : 0;
+  const quota = ring.map((_,k)=> spread==="even" ? per+(k<extra?1:0) : (k===0?total:0));
+  const cxm=PW/2, cym=PH*0.55, GAP=5;
+  const players=[]; let num=1;
+  for(let depth=0; depth<Math.max(...quota,0); depth++)
+    for(let k=0;k<ring.length;k++){
+      if(depth>=quota[k]) continue;
+      const b=ring[k], ux=b[0]-cxm, uy=b[1]-cym, L=Math.hypot(ux,uy)||1;
+      players.push({n:num++, x:b[0]+ux/L*GAP*depth, y:b[1]+uy/L*GAP*depth});
+    }
+
+  /* ---- draw ---- */
+  const gp=S("pieces"), gl=S("lines");
+  gp.textContent=""; gl.textContent="";
+  const X=m=>m/PW*300, Y=m=>m/PH*460;
+  const N=ring.length;
+  const legs = seq==="shuttle" ? (N>=2?[[0,1],[1,0]]:[])
+             : seq==="follow"  ? ring.map((_,i)=>[i,(i+1)%N])
+             : [];
+  legs.forEach(([a,b])=>gl.appendChild(el("line",{x1:X(ring[a][0]),y1:Y(ring[a][1]),
+    x2:X(ring[b][0]),y2:Y(ring[b][1]),stroke:"rgba(255,255,255,.72)","stroke-width":2,
+    "stroke-dasharray":"9 8","stroke-linecap":"round"})));
+  ring.forEach((c,i)=>{
+    if(i===0) gp.appendChild(el("circle",{cx:X(c[0]),cy:Y(c[1]),r:14,fill:"none",
+      stroke:"#3b82f6","stroke-width":2,opacity:".95"}));
+    gp.appendChild(el("polygon",{points:
+      (X(c[0]))+","+(Y(c[1])-9)+" "+(X(c[0])+8)+","+(Y(c[1])+8)+" "+(X(c[0])-8)+","+(Y(c[1])+8),
+      fill:"url(#cone)"}));
+  });
+  players.forEach(p=>{
+    const g=el("g",{transform:"translate("+X(p.x)+","+Y(p.y)+")"});
+    g.appendChild(el("circle",{r:10.5,fill:"#2563eb",stroke:"rgba(0,0,0,.25)","stroke-width":1.5}));
+    const t=el("text",{y:4,"text-anchor":"middle",fill:"#fff","font-size":11.5,
+      "font-weight":700,"font-family":"system-ui,sans-serif"});
+    t.textContent=p.n; g.appendChild(t); gp.appendChild(g);
+  });
+  // the ball, in front of the first player, pointing down its first pass
+  if(ring.length>1){
+    const a=ring[0], b=ring[1%N], ux=b[0]-a[0], uy=b[1]-a[1], L=Math.hypot(ux,uy)||1;
+    const bg=el("g",{transform:"translate("+X(a[0]+ux/L*4)+","+Y(a[1]+uy/L*4)+")"});
+    bg.appendChild(el("circle",{r:6.5,fill:"url(#ball)",stroke:"rgba(0,0,0,.65)","stroke-width":1.4}));
+    bg.appendChild(el("polygon",{points:"0,-2.4 2.3,-0.7 1.5,2 -1.5,2 -2.3,-0.7",fill:"#111"}));
+    gp.appendChild(bg);
+  }
+
+  /* ---- hints + notation ---- */
+  const each = spread==="even" ? Math.floor(total/ring.length) : total;
+  S("tag").textContent = size+" m "+(kind==="pair"?"gap":kind);
+  S("spreadHint").textContent = spread==="even"
+    ? each+" to each marker"+(each>1?": one on it, "+(each-1)+" queued behind":"")+"."
+    : "All "+total+" queued at the start marker.";
+  S("seqHint").textContent = seq==="follow"
+    ? "Each player passes to the next marker and follows the pass. The circuit closes, so everyone recycles."
+    : seq==="shuttle" ? "The front of each line travels to the other and joins the back."
+    : "Drop into the drawing tools and sketch each pass and run yourself.";
+
+  const shapeLine = kind==="square"    ? "square "+size
+                  : kind==="rectangle" ? "rectangle "+size+" x "+Math.round(size*0.7)
+                  : kind==="diamond"   ? "diamond "+size
+                  : kind==="triangle"  ? "triangle "+size
+                  : kind==="pair"      ? "pair "+size
+                  : "line "+count+" x "+size;
+  S("out").innerHTML =
+    "<b>DRILL</b> My drill\\n\\n"+
+    "<b>CONES</b>\\n"+shapeLine+"\\ncentre 50% 55%\\n\\n"+
+    "<b>PLAYERS</b>\\n"+total+(spread==="even"?" spread evenly":" all at c1")+
+    "\\nstart cone c"+(startIdx+1)+"\\n\\n"+
+    "<b>SEQUENCE</b>\\n"+(seq==="follow"?"pass and follow":seq==="shuttle"?"shuttle":"# drawn by hand");
+}
+
+["shape","size","count","players","start"].forEach(id=>{
+  S(id).addEventListener("input", build);
+  S(id).addEventListener("change", build);
+});
+document.querySelectorAll("[data-spread]").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll("[data-spread]").forEach(x=>x.classList.remove("on"));
+  c.classList.add("on"); spread=c.dataset.spread; build();
+}));
+document.querySelectorAll("[data-seq]").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll("[data-seq]").forEach(x=>x.classList.remove("on"));
+  c.classList.add("on"); seq=c.dataset.seq; build();
+}));
+build();
+</script>
+</body>
+</html>

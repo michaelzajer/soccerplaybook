@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pass &amp; Follow — restyled with the app's own pieces</title>
+<style>
+  /* ---- pulled straight from styles.css so the pieces match the app ---- */
+  :root{
+    --bg:#0d1210; --surface:#151b17; --ink:#edefea; --dim:#9aa59e;
+    --accent:#3b82f6; --team:#2563eb; --opp:#ff453a;
+    --grass-a:#2e7c4a; --grass-b:#256540;
+  }
+  body{margin:0;padding:28px;background:var(--bg);color:var(--ink);
+       font-family:system-ui,-apple-system,sans-serif}
+  h2{font-family:'Barlow Condensed',system-ui,sans-serif;text-transform:uppercase;
+     letter-spacing:.06em;margin:0 0 4px}
+  p.note{color:var(--dim);font-size:14px;max-width:52em;margin:0 0 22px}
+  .frame{display:inline-block;background:var(--surface);border:1px solid rgba(255,255,255,.1);
+         border-radius:20px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  svg{display:block;border-radius:12px}
+
+  /* ===== TIMING =====
+     One BEAT = one pass plus the follow-up run.
+     The ball visits 4 cones, so its cycle is 4 beats.
+     A player passes through 4 cones plus one stint in the queue, so their cycle
+     is 5 beats — and staggering five players by one beat each means there is
+     always exactly one player standing on the cone the ball is arriving at.
+     The original had the ball on a 10s loop against players on 50s, so the ball
+     lapped the players four times over.
+     ================================================================= */
+  /* beat = 2.2s  ->  ball 8.8s, players 11s, stagger 2.2s */
+
+  /* The ball is STRUCK: it covers the leg in about a quarter of the beat and
+     then waits to be played again. That is what makes it beat the passer there,
+     the same rule the app's engine uses. */
+  @keyframes ballMove {
+    0%           { transform: translate(60px,  60px); }
+    6%,  25%     { transform: translate(240px, 60px); }
+    31%, 50%     { transform: translate(240px, 210px); }
+    56%, 75%     { transform: translate(60px,  210px); }
+    81%, 100%    { transform: translate(60px,  60px); }
+  }
+  /* The player leaves as the ball is struck and arrives well after it. */
+  @keyframes playerMove {
+    0%,  1%      { transform: translate(60px,  60px); }   /* on cone 1, plays the pass */
+    16%, 20%     { transform: translate(240px, 60px); }   /* arrives at cone 2, waits its turn */
+    21%          { transform: translate(240px, 60px); }
+    36%, 40%     { transform: translate(240px, 210px); }
+    41%          { transform: translate(240px, 210px); }
+    56%, 60%     { transform: translate(60px,  210px); }
+    61%          { transform: translate(60px,  210px); }
+    76%, 80%     { transform: translate(18px,  102px); }  /* back of the queue */
+    96%, 100%    { transform: translate(60px,  60px); }   /* steps up to cone 1 */
+  }
+  .ball-anim{animation:ballMove 8.8s linear infinite}
+  .pl{animation:playerMove 11s linear infinite}
+  .pl.p2{animation-delay:-2.2s}
+  .pl.p3{animation-delay:-4.4s}
+  .pl.p4{animation-delay:-6.6s}
+  .pl.p5{animation-delay:-8.8s}
+  @media (prefers-reduced-motion:reduce){ .ball-anim,.pl{animation:none} }
+</style>
+</head>
+<body>
+<h2>Pass &amp; Follow</h2>
+<p class="note">The same drill, drawn with the app's own pieces: cone gradient and shape from
+<code>.cone</code>, player token from <code>.att</code>, ball from <code>.dball</code> including its dark ring,
+and the entry cone marked the way the app marks it — a blue ring, not a different colour.
+Pass lines are dashed with no arrowhead; the run line keeps its arrow.</p>
+
+<div class="frame">
+<svg width="300" height="270" viewBox="0 0 300 270" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- .cone : linear-gradient(#ffa02e,#ff7a00) -->
+    <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffa02e"/><stop offset="1" stop-color="#ff7a00"/>
+    </linearGradient>
+    <!-- .dball : radial-gradient(circle at 35% 30%, #fff 0 55%, #d9d9d9 100%) -->
+    <radialGradient id="ball" cx="35%" cy="30%">
+      <stop offset="55%" stop-color="#fff"/><stop offset="100%" stop-color="#d9d9d9"/>
+    </radialGradient>
+    <!-- the pitch, from --grass-a / --grass-b -->
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e7c4a"/><stop offset="1" stop-color="#256540"/>
+    </linearGradient>
+    <marker id="arrowRun" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,.9)"/>
+    </marker>
+    <!-- the entry-cone ring: .ditem.startCone::after -->
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="300" height="270" rx="12" fill="url(#grass)"/>
+  <!-- pitch markings, as the app draws them -->
+  <g stroke="rgba(255,255,255,.18)" fill="none" stroke-width="1.5">
+    <rect x="8" y="8" width="284" height="254" rx="2"/>
+    <line x1="8" y1="135" x2="292" y2="135"/>
+    <circle cx="150" cy="135" r="34"/>
+  </g>
+
+  <!-- the circuit: PASS lines are dashed and carry NO arrowhead (v129) -->
+  <g stroke="rgba(255,255,255,.75)" stroke-width="2" fill="none"
+     stroke-dasharray="9 8" stroke-linecap="round">
+    <line x1="60" y1="60" x2="240" y2="60"/>
+    <line x1="240" y1="60" x2="240" y2="210"/>
+    <line x1="240" y1="210" x2="60" y2="210"/>
+    <line x1="60" y1="210" x2="60" y2="60"/>
+  </g>
+  <!-- the queue feeding the entry cone is a RUN, so it keeps its arrow -->
+  <line x1="18" y1="102" x2="52" y2="68" stroke="rgba(255,255,255,.55)"
+        stroke-width="2" marker-end="url(#arrowRun)"/>
+
+  <!-- cones. .cone is a triangle: polygon(50% 0, 90% 100%, 10% 100%) -->
+  <g>
+    <circle cx="60" cy="60" r="15" fill="none" stroke="#3b82f6" stroke-width="2"
+            filter="url(#glow)" opacity=".95"/>
+    <polygon points="60,50 68,68 52,68"   fill="url(#cone)"/>
+    <polygon points="240,50 248,68 232,68" fill="url(#cone)"/>
+    <polygon points="240,200 248,218 232,218" fill="url(#cone)"/>
+    <polygon points="60,200 68,218 52,218" fill="url(#cone)"/>
+  </g>
+
+  <!-- players. .att : team colour, 1.5px rgba(0,0,0,.2) border -->
+  <g class="pl p1"><circle r="11" fill="#2563eb" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>
+    <text y="4" text-anchor="middle" fill="#fff" font-size="12" font-weight="700"
+          font-family="system-ui,sans-serif">1</text></g>
+  <g class="pl p2"><circle r="11" fill="#2563eb" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>
+    <text y="4" text-anchor="middle" fill="#fff" font-size="12" font-weight="700"
+          font-family="system-ui,sans-serif">2</text></g>
+  <g class="pl p3"><circle r="11" fill="#2563eb" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>
+    <text y="4" text-anchor="middle" fill="#fff" font-size="12" font-weight="700"
+          font-family="system-ui,sans-serif">3</text></g>
+  <g class="pl p4"><circle r="11" fill="#2563eb" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>
+    <text y="4" text-anchor="middle" fill="#fff" font-size="12" font-weight="700"
+          font-family="system-ui,sans-serif">4</text></g>
+  <g class="pl p5"><circle r="11" fill="#2563eb" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>
+    <text y="4" text-anchor="middle" fill="#fff" font-size="12" font-weight="700"
+          font-family="system-ui,sans-serif">5</text></g>
+
+  <!-- ball. .dball : white radial, dark ring, dark pentagon inside -->
+  <g class="ball-anim">
+    <circle r="7" fill="url(#ball)" stroke="rgba(0,0,0,.65)" stroke-width="1.5"/>
+    <polygon points="0,-2.6 2.5,-0.8 1.6,2.2 -1.6,2.2 -2.5,-0.8" fill="#111"/>
+  </g>
+</svg>
+</div>
+</body>
+</html>

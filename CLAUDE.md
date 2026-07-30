@@ -32,7 +32,7 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
    both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v135**.
+   and `CACHE = "spb-vNN"` in sw.js. Currently at **v146**.
 2. `node --check js/*.js` before declaring done.
 3. Always give Michael this block at the end (his standing request):
 
@@ -55,7 +55,8 @@ controllerchange → reload).
   colors:{team,opp},                       // hex; defaults #2563eb / #ff453a
   unavailable:[id...],                     // injured/unavailable roster ids (team-wide, ongoing)
   board:{squad:"11"|"9", formation, showOpp, showNames, placed:{id:{x,y}}},
-  gameday:{id?, date, time, opp, notes, score:{us,them}, lineup:{formation,squad,placed,at}|null},
+  gameday:{id?, date, time, opp, notes, score:{us,them}, lineup:{formation,squad,placed,at}|null,
+           subs:[{inId,outId,min,period}]},   // the game's substitution record
   games:[gameday...],                      // saved games library
   drills:[{id,name,items:[{kind,x,y,color?}], strokes:[{mode,pts:FLAT,color?}]}],
                                      // color (hex) optional: cones/markers/players + lines
@@ -110,7 +111,7 @@ A drill is a **circuit plus a queue**, not a cloud of pieces to be guessed at.
   1->cone2, 2->cone3, 3->cone4, 5->cone1, 6/7/8 shuffle up, 4 to the back.
   It must keep cycling: L2 c1:P6 c2:P5 c3:P1 c4:P2 ... and after 8 laps with
   8 players everyone is back on their original cone. /tmp/laps.mjs pattern
-  (stub anime, capture cfg.complete, call it to advance a lap) tests this —
+  (stub the timeline, capture `onComplete`, call it to advance a lap) tests this —
   a test that only counts occupied slots will NOT catch a frozen rotation.
 - Second reference drill ("medium"): TWO lanes side by side, each a shuttle
   between a top line and a bottom line of 3. Front of each line travels to the
@@ -170,7 +171,59 @@ Playback is built in TWO passes, and the split matters:
   drill edit sheet (Drills → library → the ⓘ on a drill row) has "Copy drill
   data" → JSON (strokes unflattened) on the clipboard. Use it rather than guessing at a drill's geometry.
 
-### Animation gotchas (anime.js 3.2.1)
+### A pass beats its passer (v136)
+
+Ball and player used to share one duration, so on a pass+run the passer escorted
+his own pass the whole way and the ball never reached the receiver first.
+
+- `RUN_MS_PER_UNIT` 3500 vs `BALL_MS_PER_UNIT` 1900 — a struck ball covers the
+  same ground about 1.8x quicker. A leg's actor uses whichever applies to its own
+  kind; `ballDur` is the pass speed EXCEPT for `dribble`, where the ball is at the
+  player's feet and moves at his pace.
+- The ball's arrival is tracked separately (`p.ballEnd`), because a following leg
+  waiting on the ball must wait for the BALL, not for the runner still jogging in.
+- **Rule 2 had to be narrowed at the same time.** It waited for everything
+  arriving at a leg's start point, so the moment the ball started arriving first,
+  a receiver still could not play on until the passer finished jogging over —
+  the delay just moved. It now waits only for the pieces the leg NEEDS: the actor
+  and its ball. A ball arriving still counts (you cannot pass what you have not
+  received); another player running in behind you does not.
+- Knock-on for rule 3b: a pass into space now lands and WAITS to be collected
+  rather than arriving with the runner, because `passEnd - runDur` goes negative
+  and clamps to the runner's own earliest start. That is correct for an underhit
+  pass into space, and `_seq129.mjs` asserts the ball lands first rather than
+  the old "arrive together".
+
+### Pace, and why a leg's length is aspect-weighted (v141)
+
+- `RUN_MS_PER_UNIT` 9000 / `BALL_MS_PER_UNIT` 5000, minimums 1200 / 700, all
+  multiplied by `drillSpeed` (transport bar, cycles 1.7x / 1x / 0.6x / 0.4x,
+  remembered in `localStorage` as `spbDrillSpeed`; bigger constant = slower).
+  The old 3500/1900 with an 800ms floor meant every leg of a small drill hit the
+  floor, so all passes took the same 800ms and it read as a blur.
+- **A leg's length must be measured in REAL distance.** `len` used an unweighted
+  hypot of normalised coordinates, so on a 68x105 pitch a 21 m pass ACROSS
+  measured 0.31 and the same 21 m pass UP measured 0.20 — the horizontal one
+  animated 1.5x slower. `dy` is now weighted by `PITCH_LEN / PITCH_WID`, so a
+  square drill's four legs take the same time. Units are pitch WIDTHS of real
+  distance.
+- `localStorage` is read at init for the speed, so it goes through `lsGet/lsSet`:
+  it THROWS (not just returns null) in Safari private browsing, which would have
+  taken the whole board down. The two timer reads were switched to it as well.
+
+### Playback library: GSAP 3.12.5 (migrated from anime.js)
+
+`drillTimeline = gsap.timeline({ defaults:{ease:'none'}, onComplete })`, and each
+leg is `drillTimeline.to(el, {keyframes, duration: ms/1000}, startMs/1000)`.
+GSAP works in SECONDS, so the engine keeps all its own arithmetic in ms and
+divides at the call site only. The test harness stub mirrors that: it implements
+`to(target, vars, position)` and multiplies back up by 1000, and reads
+`cfg.onComplete` (not `cfg.complete`).
+
+The notes below were written against anime.js. They still apply, because the code
+still seeds positions and animates in PIXELS for the same reasons.
+
+### Animation gotchas (px keyframes and seeding)
 - **Animate `left`/`top` in PIXELS, never `%`.** anime converts a % keyframe to
   px using `offsetWidth` for BOTH axes, so on a 68:105 pitch vertical motion was
   scaled by ~0.65 and drills played back squashed.
@@ -328,19 +381,169 @@ in step with the CSS) and returns the true one. Without that, aiming a pass at
 the ball you can see bound it to the player standing beside it. The PNG renderer mirrors both the offset and the ring, and draws
 balls after all other pieces for the same reason.
 
+### Retro-fitting old drills (v137)
+
+Drills saved before the snapping existed have cones off the lattice and line ends
+a thumb-width off the ball. `tidyDrillData(d)` brings a saved drill up to the
+current rules and is exposed on the drill edit sheet as **Tidy lines & cones**
+(Drills → library → ⓘ). It works on drill DATA, so it does not need the drill
+loaded, and it reports the point count before/after.
+
+- **Resolve which piece an end BELONGS to against where that piece WAS, then move
+  the end to where the piece now IS.** Snapping the pieces first and then matching
+  ends against the moved pieces let a cone shift out of reach of its own line end:
+  ends that were 12px off finished 19px off, so tidying made alignment worse. Get
+  this order wrong and the migration is actively harmful.
+- On Michael's real complex3 the effect is 2416 points → 272 (17 per line), all 18
+  pieces on the lattice, worst end-to-piece gap 11.8px → 0, worst bow → 0.
+- It CANNOT fix a pass struck from where a ball comes to rest *during playback* —
+  that is a runtime position, not a stored one. `LOOSE_TOL` handles that case.
+
+## Substitutions modal (v142, multi-swap v143)
+
+Game day → **⇄ Subs** on the bench bar (or tap the "Subs" label). A team-sheet
+layout rather than a drag-and-drop puzzle: ON THE PITCH on the left, BENCH on the
+right, tap one from each and confirm. Broadcast language — red down-arrow off,
+green up-arrow on.
+
+- **A double or triple change is ONE action (v143).** Both columns multi-select and
+  pair in TAP ORDER — nth off with nth on, which is how a coach calls it ("Jack,
+  Tom and Ali off; Sam, Ben and Leo on"), so no extra interaction is needed as
+  long as the pairing is shown plainly. Order badges on the rows, a pair list
+  under them, and anyone picked without a partner shows as a greyed incomplete
+  pair rather than being silently ignored. Tap again to take someone back out.
+- All pairs go on at the SAME match minute, with one save and one render —
+  `applySubs(pairs)` snapshots every vacated spot before mutating anything, so
+  the batch stays correct regardless of ordering. `applySub` is a one-pair wrapper
+  over it for the drag-and-drop path.
+- It **closes and returns to the pitch** after a change (v145). Multi-select
+  already allows a double or triple change in one visit, so there is nothing to
+  stay open for, and the new shape is what the coach wants to see next.
+- Every swap is logged to `gameday.subs` with the match minute and period, and the
+  last six show in the modal. That is the start of a real game-day record.
+- The unavailable list is respected: an injured player is never offered as a sub.
+- `applySub(inId, outId, newPos)` is now the SINGLE swap path — the drag-and-drop
+  `#subPanel` and this modal both call it, so the two cannot diverge.
+- **The player coming on inherits the position they come into (v144)** — a striker
+  on for a centre mid becomes a centre mid, so the pitch label is right. Each pair
+  has its own position box, pre-filled with the vacated position and overriding it
+  if typed (kept in `subsPos` keyed by the outgoing id so a redraw cannot eat it).
+  The v143 bug: `subsPairs()` defaulted `pos` to null, so the row DISPLAYED the
+  outgoing position but never applied it unless the coach retyped it. Note this
+  rewrites the player's squad position, which is what makes the token read
+  correctly; a per-game override would be a bigger change.
+- **Any position is editable in place (v146)** — tap the position label on either
+  column and type. `beginPosEdit()` swaps the label for an input rather than
+  re-rendering, because the lists rebuild on every state change and a re-render
+  would destroy a freshly focused field mid-keystroke; the re-render happens on
+  commit instead. The click must `stopPropagation()` so it does not also select
+  the player for a swap. Enter commits, Escape abandons, a blank box keeps the
+  old value, and `renderTeam()` runs so the pitch token picks up the new label.
+- `_subs.mjs` must reset the roster from a PRISTINE deep copy between sections —
+  `applySubs` mutates player objects in place, so re-copying the live array
+  carries the drift forward and makes correct behaviour look broken.
+
+## Drill notation (v138)
+
+A text format for describing a drill precisely: a GRID picture of the layout plus
+LINES in draw order. Full spec and examples in **DRILL-NOTATION.md**.
+
+- TWO input styles, same parser. **Metric** (`CONES` / `PLAYERS` / `SEQUENCE`) is
+  the natural one: a shape and its size in METRES, how the players are spread,
+  then what happens. **Grid** (`GRID` / `LINES`) is for irregular layouts.
+  Metres convert exactly because the board is a real pitch, 68 x 105 m; the
+  snapping square is ~5 m, and `QUEUE_GAP` is one square for that reason — a
+  literal 2 m queue gap collapses two players onto one lattice point.
+  Players stand one snapping square BEHIND their cone, never on it (v141), and
+  the generated `pass and follow` / `shuttle` legs run between those FRONT
+  positions rather than the cone centres — the pass leaves the man behind one
+  cone and arrives at the man behind the next. An explicit `cN` reference still
+  means the cone itself.
+  Cones are numbered from the BOTTOM-LEFT clockwise; player numbering is
+  depth-major (1..N one per cone, then N+1.. the second in each queue) so
+  "1 passes to 2" always means "to the next cone round".
+  `pass and follow` emits a CLOSED circuit — N passes for N cones.
+- Parser: `js/drill-text.js`, exposing `window.parseDrillText`. It is the SINGLE
+  source — `tools/drill-from-text.mjs` evals the same file (handing it a stand-in
+  `window`) so the CLI and the app cannot drift apart.
+- App import: Drills → **Import from text…** accepts the notation OR the JSON that
+  Copy drill data emits, normalises strokes to FLAT points, saves and loads it.
+- `o+1` stacks two things on one square (a cone with a player on it) — without
+  that a grid cannot express the reference square at all.
+- DRAW ORDER IS SEMANTICS. The LINES order is what the sequencing rules read
+  backwards through; it is not presentation.
+- `_notation.mjs` takes the example file all the way from text through the engine
+  and asserts the rotation, then imports the same text through the app's own UI.
+
+## Drill builder (v140)
+
+Drills → **Build from a shape…**. A form over the notation, deliberately NOT a
+second model: each control writes one line of CONES/PLAYERS/SEQUENCE, the shared
+parser builds it, and `loadDrill()` puts it on the REAL pitch on every change.
+The sheet is short (`.sheet.builder`) so the pitch shows above it — the preview
+IS the drill, so the two cannot disagree, and Save just persists what is already
+on screen.
+
+- Reload is debounced 70ms: a range input fires a burst of events, and each one
+  rebuilds every piece. `_builder.mjs` has to await that; a synchronous test
+  reads the previous state and looks like the controls do nothing.
+- "Shuttle" is disabled unless there are exactly 2 markers, and the pattern falls
+  back to pass-and-follow. Guard the CONTROL rather than letting the parser throw
+  an error at the coach.
+
+## ARCHITECTURE: is the inference engine the right approach? (reviewed v140)
+
+Verdict: the model is right, the STORAGE is wrong. Playback re-derives intent
+from geometry on every run, so precision problems become behaviour problems.
+
+Evidence: ~10 tuned tolerances in the playback path (`DEP_TOL` 0.08, `LOOSE_TOL`
+0.15, actor `threshold` 0.15/0.05, `minDBall` 0.15, `hitD` 0.07, snap `reach`
+0.7/1.3 cell, `BALL_VIS_OFF` 0.85), ~310 lines of inference (pass A/B + stations),
+and every bug logged above was an inference failure, not a rendering one: a pass
+bound to a player instead of the ball, a passer leaving before playing, a ball
+teleporting to a drawn start, a queue draining.
+
+The smell: `current.from = hit.id` (line ~776) records the piece the coach's
+finger was on AT DRAW TIME, and the engine deliberately ignores it (see the note
+at ~2689) because pinning a leg to a PLAYER froze the rotation. That was the
+right diagnosis but the wrong conclusion — the fix is to store the SLOT intent
+("whoever is standing at cone 1"), not to throw the information away and re-guess
+it from pixels.
+
+Recommended migration (incremental, no rewrite):
+1. At draw time, persist a resolved `actorRef` per stroke: `{slot:[x,y]}` for a
+   circuit leg, `{piece:id}` for a one-off, `{ball:id}` for a pass.
+2. Persist explicit `after:[strokeIndex...]` when the coach draws a line whose end
+   depends on another, instead of rediscovering it with rules 3a-3c.
+3. Playback then reads the graph and only INTERPOLATES. Tolerances shrink to one
+   snap radius used at draw time.
+4. Keep the inference path as a legacy fallback for drills saved before the
+   migration (`tidyDrillData` already retro-fits geometry).
+Payoff: deterministic playback, an editable step list, per-step timing, and no
+class of bug where redrawing a line 10px away changes what the drill does.
+
+Alternatives considered and rejected: pure keyframe/scene storage (authoring too
+laborious, rotation needs re-authoring per lap); agent simulation with per-player
+behaviours (non-deterministic, hard to author); templates only (fast but cannot
+express complex3). The notation + builder IS the template layer, and it now sits
+on top of the same engine rather than beside it.
+
 ## Testing without a browser
 
 Tests live IN THE REPO as `_*.mjs` (they used to live in /tmp and were lost when
 the scratch dir was cleared, taking the rotation guards with them). `_harness.mjs`
 does the jsdom boot: stubs canvas getContext, pointer capture and
 getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
-anime with a timeline that buffers every `add` and can `settle()` them.
+the timeline with one that buffers every `.to()` and can `settle()` them.
 `node --check js/*.js` first, always. Run: `for t in _laps _shuttle _align _c3
-_copybtn _fixes128 _seq129; do node $t.mjs; done`.
+_copybtn _fixes128 _seq129 _speed _tidy _notation _builder _landing; do node $t.mjs; done`
+(`_landing.mjs` covers the marketing page's hero drill demos, which are a
+separate hand-rolled animation in index.html, not the app engine).
 
 **Two traps that cost a session each:**
 
-- **The stub must respect the scheduling OFFSET.** Legs are added in draw order
+- **The stub must respect the scheduling OFFSET** (GSAP's third `.to()` argument).
+  Legs are added in draw order
   but run at computed times, and the rotation re-lay is added last yet can
   finish first. "Last added wins" stacked five players on one cone.
 - **Read a lap from the LEGS THE ENGINE EMITS, not from the DOM.** A player who

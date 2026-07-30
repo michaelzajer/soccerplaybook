@@ -1,0 +1,35 @@
+DRILL Passing square
+
+# Four cones in a square with players 1-4 on them, 5-8 queued behind cone 1,
+# and the ball starting at cone 1. Follow your pass.
+#
+# GRID symbols
+#   .        an empty square
+#   o        cone            o!   the cone the queue feeds into (the entry)
+#   d        disc            *    ball
+#   1..99    your players    r1..r99  opposition
+#   p pole   G goal          g    mini goal
+#   o+1      two things on the SAME square (a cone with player 1 on it)
+#
+# Cones are labelled o1, o2, o3... in reading order (left to right, top down),
+# so you can point lines at them. Players are just their number.
+
+GRID
+.    .  .  .    .  .  .  .  .    .  .  .
+.    .  o+2 .   .  .  .  .  o+3  .  .  .
+.    .  .  .    .  .  .  .  .    .  .  .
+.    .  .  .    .  .  .  .  .    .  .  .
+.    .  o!+1 .  .  .  .  .  o+4  .  .  .
+.    .  *  .    .  .  .  .  .    .  .  .
+.    .  5  .    .  .  .  .  .    .  .  .
+.    .  6  .    .  .  .  .  .    .  .  .
+.    .  7  .    .  .  .  .  .    .  .  .
+.    .  8  .    .  .  .  .  .    .  .  .
+
+# LINES, in the order you would draw them. Draw order matters: the engine reads
+# backwards through it to work out what waits for what.
+LINES
+1. passrun o1 -> o3
+2. passrun o3 -> o4
+3. passrun o4 -> o2
+4. passrun o2 -> o1

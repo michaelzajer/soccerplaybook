@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import fs from "fs";
-const R="/sessions/exciting-relaxed-meitner/mnt/soccerboard/";
+const R="./";
 const dom=new JSDOM(fs.readFileSync(R+"app.html","utf8"),{runScripts:"outside-only",pretendToBeVisual:true});
 const {window}=dom;
 global.window=window; global.document=window.document;
@@ -11,7 +11,7 @@ window.HTMLElement.prototype.setPointerCapture=()=>{}; window.HTMLElement.protot
 window.Element.prototype.getBoundingClientRect=()=>({left:0,top:0,right:340,bottom:525,width:340,height:525});
 // capture what gets scheduled, and when
 const sched=[];
-global.anime=window.anime=Object.assign(()=>({}),{ timeline:(cfg)=>{ const tl={ add(a,off){ sched.push({el:a.targets,dur:a.duration,at:off}); return tl; }, play(){}, pause(){}, restart(){}, seek(){}, finished:Promise.resolve() }; tl._cfg=cfg; return tl; }, remove(){}, set(){} });
+global.gsap=window.gsap=Object.assign(()=>({}),{ timeline:(cfg)=>{ const tl={ to(t,v,off){ sched.push({el:t,dur:(v.duration||0)*1000,at:(off||0)*1000}); return tl; }, play(){}, pause(){}, restart(){}, seek(){}, finished:Promise.resolve() }; tl._cfg=cfg; return tl; }, set(){} });
 eval(fs.readFileSync(R+"js/drills.js","utf8"));
 const store={data:{teamName:"P",roster:[],nextId:1,colors:{team:"#2563eb",opp:"#ff453a"},
  board:{squad:"11",formation:"4-3-3",showOpp:false,placed:{}},drills:[],games:[]},
@@ -57,11 +57,23 @@ console.log("legs scheduled:", sched.length);
 const t=sched.map(s=>({at:s.at,dur:s.dur,end:s.at+s.dur}));
 t.forEach((x,i)=>console.log(`  leg ${i}: start ${Math.round(x.at)}  dur ${Math.round(x.dur)}  end ${Math.round(x.end)}`));
 const ok=(c,m)=>console.log((c?"PASS":"FAIL")+" - "+m);
-if(t.length>=4){
-  // stroke 0 (pass) schedules ball; stroke 1 (run) schedules P2 -> must ARRIVE together
-  const pass0=t[0], run1=t[1];
-  ok(Math.abs(pass0.end-run1.end)<60, `P2 arrives with the ball (pass ends ${Math.round(pass0.end)}, run ends ${Math.round(run1.end)})`);
-  ok(run1.at>=0, "the receiving run never starts before zero");
+if(t.length>=7){
+  const pass1=t[0], run1=t[1], run2=t[2], pass2=t[3], pass3=t[5], run4=t[6];
+  const R=x=>Math.round(x);
+  // "player 1 passes half way, player 2 runs and gets the ball" - the ball lands
+  // in the space and waits to be collected; it must not trail the runner
+  ok(pass1.end <= run1.end,
+     `pass into space lands (${R(pass1.end)}) before the receiver arrives (${R(run1.end)})`);
+  ok(run1.at >= 0, "the receiving run never starts before zero");
+  // "player 2 passes to wherever player 1 is" - waits for player 1 to get there
+  ok(pass2.at >= run2.end,
+     `pass to a moving target waits for him (${R(run2.end)} -> struck ${R(pass2.at)})`);
+  // "player 1 passes through the cones, THEN runs to the back of the queue"
+  ok(Math.abs(run4.at - pass3.at) < 60, "the passer leaves as the ball is struck, not before");
+  ok(pass3.at >= pass2.end, `and only once the ball reached him (${R(pass2.end)} -> ${R(pass3.at)})`);
+  // Michael's rule, across the whole drill: a pass is quicker than a run
+  ok(Math.max(pass1.dur,pass2.dur,pass3.dur) < Math.max(run1.dur,run2.dur,run4.dur),
+     "passes travel quicker than runs throughout");
 }
 console.log("\\n(raw schedule above: each 'end' should gate the next dependent leg)");
 process.exit(0);

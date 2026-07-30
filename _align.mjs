@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import fs from "fs";
-const R="/sessions/exciting-relaxed-meitner/mnt/soccerboard/";
+const R="./";
 const dom=new JSDOM(fs.readFileSync(R+"app.html","utf8"),{runScripts:"outside-only",pretendToBeVisual:true});
 const {window}=dom;
 global.window=window; global.document=window.document;
@@ -12,7 +12,7 @@ const W=360,H=556;  // a phone: 68:105 board
 window.Element.prototype.getBoundingClientRect=function(){
   return this.id==="board"?{left:0,top:0,right:W,bottom:H,width:W,height:H}
                           :{left:0,top:0,right:W,bottom:H,width:W,height:H}; };
-global.anime=window.anime=Object.assign(()=>({}),{timeline:()=>{const t={add(){return t},play(){},pause(){},restart(){},seek(){},finished:Promise.resolve()};return t;},remove(){},set(){}});
+global.gsap=window.gsap=Object.assign(()=>({}),{timeline:()=>{const t={to(){return t},play(){},pause(){},restart(){},seek(){},finished:Promise.resolve()};return t;},set(){}});
 eval(fs.readFileSync(R+"js/drills.js","utf8"));
 const store={data:{teamName:"P",roster:[],nextId:1,colors:{team:"#2563eb",opp:"#ff453a"},
  board:{squad:"11",formation:"4-3-3",showOpp:false,placed:{}},drills:[],games:[]},

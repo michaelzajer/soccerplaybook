@@ -13,6 +13,13 @@ export async function boot({ W = 360, H = 556, drill } = {}) {
   Object.defineProperty(global, "navigator",
     { value: window.navigator, writable: true, configurable: true });
   global.Event = window.Event;
+  // jsdom's own localStorage throws on an opaque origin, so use a plain stub
+  const _mem = {};
+  global.localStorage = {
+    getItem: k => (k in _mem ? _mem[k] : null),
+    setItem: (k, v) => { _mem[k] = String(v); },
+    removeItem: k => { delete _mem[k]; }, clear: () => { for (const k in _mem) delete _mem[k]; }
+  };
   global.requestAnimationFrame = fn => setTimeout(() => fn(Date.now()), 0);
   window.HTMLCanvasElement.prototype.getContext =
     () => new Proxy({}, { get: () => () => ({ width: 10 }), set: () => true });
@@ -34,22 +41,22 @@ export async function boot({ W = 360, H = 556, drill } = {}) {
     state.legs.length = 0;
   };
   state.settle = settle;
-  global.anime = window.anime = Object.assign(() => ({}), {
+  global.gsap = window.gsap = Object.assign(() => ({}), {
     timeline: cfg => {
-      state.complete = cfg && cfg.complete; state.added = 0; state.legs.length = 0;
+      state.complete = cfg && cfg.onComplete; state.added = 0; state.legs.length = 0;
       const tl = {
-        add(a, off) {
+        to(target, vars, position) {
           state.added++;
-          const k = a.keyframes && a.keyframes[a.keyframes.length - 1];
-          const els = Array.isArray(a.targets) ? a.targets : [a.targets];
-          els.forEach(el => state.legs.push({ el, k, at: off || 0, dur: a.duration || 0 }));
+          const k = vars.keyframes && vars.keyframes[vars.keyframes.length - 1];
+          const els = Array.isArray(target) ? target : [target];
+          els.forEach(el => state.legs.push({ el, k, at: (position || 0)*1000, dur: (vars.duration || 0)*1000 }));
           return tl;
         },
         play() {}, pause() {}, restart() {}, seek() {}, finished: Promise.resolve()
       };
       return tl;
     },
-    remove() {}, set() {}
+    set() {}
   });
   eval(fs.readFileSync(R + "js/drills.js", "utf8"));
   if (drill) window.PRESET_DRILLS = [drill];

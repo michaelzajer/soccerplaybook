@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import fs from "fs";
-const R="/sessions/exciting-relaxed-meitner/mnt/soccerboard/";
+const R="./";
 const dom=new JSDOM(fs.readFileSync(R+"app.html","utf8"),{runScripts:"outside-only",pretendToBeVisual:true});
 const {window}=dom;
 global.window=window; global.document=window.document;
@@ -10,7 +10,7 @@ window.HTMLCanvasElement.prototype.getContext=()=>new Proxy({},{get:()=>()=>({wi
 window.HTMLElement.prototype.setPointerCapture=()=>{}; window.HTMLElement.prototype.releasePointerCapture=()=>{};
 window.Element.prototype.getBoundingClientRect=()=>({left:0,top:0,right:340,bottom:525,width:340,height:525});
 const sched=[];
-global.anime=window.anime=Object.assign(()=>({}),{timeline:()=>{const tl={add(a,off){sched.push({el:a.targets,kf:a.keyframes,dur:a.duration,at:off});return tl;},play(){},pause(){},restart(){},seek(){},finished:Promise.resolve()};return tl;},remove(){},set(){}});
+global.gsap=window.gsap=Object.assign(()=>({}),{timeline:()=>{const tl={to(t,v,off){sched.push({el:t,kf:v.keyframes,dur:(v.duration||0)*1000,at:(off||0)*1000});return tl;},play(){},pause(){},restart(){},seek(){},finished:Promise.resolve()};return tl;},set(){}});
 eval(fs.readFileSync(R+"js/drills.js","utf8"));
 
 // Michael's complex3: true endpoints from the exported drill.

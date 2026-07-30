@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import fs from "fs";
-const R="/sessions/exciting-relaxed-meitner/mnt/soccerboard/";
+const R="./";
 const dom=new JSDOM(fs.readFileSync(R+"app.html","utf8"),{runScripts:"outside-only",pretendToBeVisual:true});
 const {window}=dom;
 global.window=window; global.document=window.document;
