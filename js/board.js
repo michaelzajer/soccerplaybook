@@ -2165,18 +2165,16 @@ export function initBoard(store) {
     }
   }
   function makeShareCanvas(title, subtitle, footerHeight = 0) {
-    const W = 1080, HEAD = 180, H = Math.round(W * 105 / 68);
+    const W = 1080, HEAD = 120, H = Math.round(W * 105 / 68);
+    const cvHeight = HEAD + H + footerHeight;
     const cv = document.createElement("canvas");
-    cv.width = W; cv.height = H + HEAD + footerHeight;
+    cv.width = W; cv.height = cvHeight;
     const c = cv.getContext("2d");
     c.fillStyle = "#101411"; c.fillRect(0, 0, W, cv.height);
-    c.fillStyle = "#ffd60a"; c.textAlign = "left"; c.textBaseline = "middle";
-    c.font = "700 68px 'Barlow Condensed',sans-serif";
-    c.fillText(title.toUpperCase(), 40, HEAD / 2 - (subtitle ? 24 : 0));
-    if (subtitle) {
-      c.fillStyle = "#95a09a"; c.font = "600 36px 'Barlow Condensed',sans-serif";
-      c.fillText(subtitle, 40, HEAD / 2 + 36);
-    }
+    c.fillStyle = "#ffd60a"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.font = "700 50px 'Barlow Condensed',sans-serif";
+    const fullText = subtitle ? `${title.toUpperCase()}  ·  ${subtitle}` : title.toUpperCase();
+    c.fillText(fullText, W / 2, HEAD / 2, W - 80);
     c.translate(0, HEAD);
     return { cv, c, W, H };
   }
@@ -2198,6 +2196,23 @@ export function initBoard(store) {
     alert("Sharing needs a free account. Create one to share team sheets and drills.");
     return true;
   }
+  async function shareCanvases(canvases, baseFilename, title) {
+    const promises = canvases.map(cv => new Promise(res => cv.toBlob(res, "image/png")));
+    const blobs = await Promise.all(promises);
+    const files = blobs.map((blob, i) => new File([blob], baseFilename.replace(".png", `-${i+1}.png`), { type: "image/png" }));
+    if (navigator.canShare && navigator.canShare({ files })) {
+      try { await navigator.share({ files, title }); return; } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
+    for (let i = 0; i < blobs.length; i++) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blobs[i]); a.download = files[i].name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+
   async function shareTeamSheet() {
     if (guestShareBlocked()) return;
     const b = bstate();
@@ -2229,29 +2244,9 @@ export function initBoard(store) {
       else posGroups["OTHER"].push(p);
     });
 
-    let footerHeight = 0;
-    let hasStarting = false;
-    
-    for (const [title, list] of Object.entries(posGroups)) {
-      if (list.length > 0) {
-        if (!hasStarting) { footerHeight += 70; hasStarting = true; }
-        footerHeight += 65 + Math.ceil(list.length / 2) * 50 + 40;
-      }
-    }
-
-    if (benchList.length > 0) {
-      if (hasStarting) footerHeight += 70; // For "SUBSTITUTES" heading
-      else if (footerHeight === 0) footerHeight += 70; // Or if it's the first thing
-      footerHeight += 65 + Math.ceil(benchList.length / 2) * 50 + 40;
-    }
-    if (outList.length > 0) {
-      if (footerHeight === 0) footerHeight += 70;
-      footerHeight += 65 + Math.ceil(outList.length / 2) * 50 + 40;
-    }
-    if (footerHeight > 0) footerHeight += 20;
-
     const teamName = store.data.teamName || "My team";
     const g = (store.data && store.data.gameday) || {};
+    
     let sub = b.formation + "  ·  " + b.squad + " v " + b.squad;
     if (g.opp) sub += "  ·  vs " + g.opp;
     if (g.date) {
@@ -2259,61 +2254,98 @@ export function initBoard(store) {
       if (!isNaN(d)) sub += "  ·  " + d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) +
         (g.time ? " " + g.time : "");
     }
-    const { cv, c, W, H } = makeShareCanvas(teamName, sub, footerHeight);
-    drawPitchPNG(c, W, H);
+    
+    const canvases = [];
+    let currentC = null;
+    let currentY = 0;
+    const W = 1080;
+    const PAGE_HEIGHT = 1920;
+    const HEAD = 120;
+    const leftX = 60;
+    const rightX = W / 2 + 30;
+    
+    function newPage() {
+      const cv = document.createElement("canvas");
+      cv.width = W; cv.height = PAGE_HEIGHT;
+      const c = cv.getContext("2d");
+      c.fillStyle = "#101411"; c.fillRect(0, 0, W, PAGE_HEIGHT);
+      c.fillStyle = "#ffd60a"; c.textAlign = "center"; c.textBaseline = "middle";
+      c.font = "700 50px 'Barlow Condensed',sans-serif";
+      const fullText = sub ? `${teamName.toUpperCase()}  ·  ${sub}` : teamName.toUpperCase();
+      c.fillText(fullText, W / 2, HEAD / 2, W - 80);
+      
+      canvases.push(cv);
+      currentC = c;
+      currentY = HEAD + 40; // Start content below the header
+    }
+
+    function checkPageFit(neededHeight) {
+      if (currentY + neededHeight > PAGE_HEIGHT - 40) {
+        newPage();
+      }
+    }
+
+    // Page 1: Pitch
+    newPage();
+    const pitchH = Math.round(W * 105 / 68);
+    currentC.save();
+    currentC.translate(0, HEAD);
+    drawPitchPNG(currentC, W, pitchH);
     const cur = (currentView === "team" || currentView === "game") ? strokes : strokeBufs.team;
-    cur.forEach(s => drawStrokePNG(c, W, H, s));
+    cur.forEach(s => drawStrokePNG(currentC, W, pitchH, s));
     const r = W * 0.032;
     const showNames = b.showNames !== false;
     const col = colors();
     if (b.showOpp) {
       oppTokens.forEach(el => {
         const x = parseFloat(el.style.left) / 100 * W;
-        const y = parseFloat(el.style.top) / 100 * H;
-        tokenPNG(c, W, x, y, r, col.opp, inkFor(col.opp), el.childNodes[0].textContent || "");
+        const y = parseFloat(el.style.top) / 100 * pitchH;
+        tokenPNG(currentC, W, x, y, r, col.opp, inkFor(col.opp), el.childNodes[0].textContent || "");
       });
     }
     for (const p of roster()) {
       const pos = b.placed[p.id]; if (!pos) continue;
-      tokenPNG(c, W, pos.x * W, pos.y * H, r, col.team, inkFor(col.team), p.pos,
+      tokenPNG(currentC, W, pos.x * W, pos.y * pitchH, r, col.team, inkFor(col.team), p.pos,
         showNames ? firstName(p.name) : null);
     }
     if (ballToken) {
       const x = parseFloat(ballToken.style.left) / 100 * W;
-      const y = parseFloat(ballToken.style.top) / 100 * H;
-      c.beginPath(); c.arc(x, y, r * 0.55, 0, 7); c.fillStyle = "#fff"; c.fill();
+      const y = parseFloat(ballToken.style.top) / 100 * pitchH;
+      currentC.beginPath(); currentC.arc(x, y, r * 0.55, 0, 7); currentC.fillStyle = "#fff"; currentC.fill();
     }
+    currentC.restore();
     
-    // Draw Substitutes in the footer
+    // Page 2 (and beyond): Team List & Notes
+    const hasLists = Object.values(posGroups).some(l => l.length > 0) || benchList.length > 0 || outList.length > 0;
+    let notesText = (g.notes || "").trim();
     
-    c.translate(0, H); // move down into the footer area
-    
-    let currentY = 70;
-    const leftX = 60;
-    const rightX = W / 2 + 30;
-    
-    c.textAlign = "left";
-    c.textBaseline = "top";
+    if (hasLists || notesText) {
+      newPage(); // Always start a fresh page for the list so it doesn't overlap the pitch
+      currentC.textAlign = "left";
+      currentC.textBaseline = "top";
+    }
     
     function drawSection(title, list) {
       if (list.length === 0) return;
-      c.fillStyle = "#ffd60a";
-      c.font = "700 40px 'Barlow Condensed',sans-serif";
-      c.fillText(title, leftX, currentY);
-      
+      checkPageFit(70 + 65);
+      currentC.textAlign = "left"; currentC.textBaseline = "top";
+      currentC.fillStyle = "#ffd60a";
+      currentC.font = "700 40px 'Barlow Condensed',sans-serif";
+      currentC.fillText(title, leftX, currentY);
       currentY += 65;
       
       for (let i = 0; i < list.length; i++) {
+        if (i % 2 === 0) checkPageFit(50);
         const p = list[i];
         const colX = (i % 2 === 0) ? leftX : rightX;
         
-        c.fillStyle = "#95a09a";
-        c.font = "700 35px 'Barlow Condensed',sans-serif";
-        c.fillText(p.pos, colX, currentY);
+        currentC.fillStyle = "#95a09a";
+        currentC.font = "700 35px 'Barlow Condensed',sans-serif";
+        currentC.fillText(p.pos, colX, currentY);
         
-        c.fillStyle = "#ffffff";
-        c.font = "600 35px 'Barlow Condensed',sans-serif";
-        c.fillText(p.name, colX + 80, currentY);
+        currentC.fillStyle = "#ffffff";
+        currentC.font = "600 35px 'Barlow Condensed',sans-serif";
+        currentC.fillText(p.name, colX + 80, currentY);
         
         if (i % 2 !== 0 || i === list.length - 1) currentY += 50;
       }
@@ -2325,9 +2357,11 @@ export function initBoard(store) {
     for (const [title, list] of Object.entries(posGroups)) {
       if (list.length > 0) {
         if (!drewStartingHeading) {
-          c.fillStyle = "#ffd60a";
-          c.font = "800 46px 'Barlow Condensed',sans-serif";
-          c.fillText("STARTING XI", leftX, currentY);
+          checkPageFit(70 + 65);
+          currentC.textAlign = "left"; currentC.textBaseline = "top";
+          currentC.fillStyle = "#ffd60a";
+          currentC.font = "800 46px 'Barlow Condensed',sans-serif";
+          currentC.fillText("STARTING XI", leftX, currentY);
           currentY += 70;
           drewStartingHeading = true;
         }
@@ -2337,9 +2371,11 @@ export function initBoard(store) {
     
     if (benchList.length > 0) {
       if (drewStartingHeading) {
-        c.fillStyle = "#ffd60a";
-        c.font = "800 46px 'Barlow Condensed',sans-serif";
-        c.fillText("SUBSTITUTES", leftX, currentY);
+        checkPageFit(70 + 65);
+        currentC.textAlign = "left"; currentC.textBaseline = "top";
+        currentC.fillStyle = "#ffd60a";
+        currentC.font = "800 46px 'Barlow Condensed',sans-serif";
+        currentC.fillText("SUBSTITUTES", leftX, currentY);
         currentY += 70;
       }
       drawSection("BENCH", benchList);
@@ -2349,7 +2385,43 @@ export function initBoard(store) {
       drawSection("OUT", outList);
     }
     
-    await shareCanvas(cv, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
+    if (notesText) {
+      checkPageFit(70 + 45);
+      currentC.textAlign = "left"; currentC.textBaseline = "top";
+      currentC.fillStyle = "#ffd60a";
+      currentC.font = "800 46px 'Barlow Condensed',sans-serif";
+      currentC.fillText("NOTES", leftX, currentY);
+      currentY += 70;
+      
+      currentC.fillStyle = "#ffffff";
+      currentC.font = "600 35px 'Barlow Condensed',sans-serif";
+      for (const p of notesText.split('\n')) {
+        if (!p.trim()) { 
+          checkPageFit(45);
+          currentY += 45; 
+          continue; 
+        }
+        const words = p.split(' ');
+        let line = '';
+        for (let n = 0; n < words.length; n++) {
+          let testLine = line + words[n] + ' ';
+          if (currentC.measureText(testLine).width > (W - 120) && n > 0) {
+            checkPageFit(45);
+            currentC.fillText(line, leftX, currentY);
+            currentY += 45;
+            line = words[n] + ' ';
+          } else {
+            line = testLine;
+          }
+        }
+        checkPageFit(45);
+        currentC.fillText(line, leftX, currentY);
+        currentY += 45;
+      }
+      currentY += 40;
+    }
+    
+    await shareCanvases(canvases, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
   }
   function drillPiecePNG(c, W, kind, x, y, color, num, dir) {
     const u = W * 0.016; // base unit
