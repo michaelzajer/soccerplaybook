@@ -89,11 +89,6 @@ window.addEventListener("unhandledrejection", function(event) {
 
 <!-- ============ BOARD VIEW ============ -->
 <section id="boardView" class="view md:max-w-[430px] md:mx-auto md:border-x md:border-white/10 md:shadow-2xl relative">
-  <header>
-    <h1 id="hdrTeam">Soccer Play Book</h1>
-    <div class="spacer"></div>
-    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
-  </header>
   <div id="controls">
     <div class="seg" id="viewSeg">
       <button class="on" data-view="team">Team <span class="chev">☰</span></button>
@@ -101,13 +96,19 @@ window.addEventListener("unhandledrejection", function(event) {
       <button data-view="drills">Drills <span class="chev">☰</span></button>
     </div>
   </div>
+  <header>
+    <h1 id="hdrTeam">Soccer Play Book</h1>
+    
+    <div id="matchBar">
+      <button id="gameChip">Game</button>
+      <button id="timerChip" hidden>00:00</button>
+      <button id="subsChip" hidden>Subs 10:00</button>
+      <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
+    </div>
 
-  <div id="matchBar">
-    <button id="gameChip">Game</button>
-    <button id="timerChip" hidden>00:00</button>
-    <button id="subsChip" hidden>Subs 10:00</button>
-    <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
-  </div>
+    <div class="spacer"></div>
+    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
+  </header>
 
   <div id="scoreBar">
     <div class="scoreSide">
@@ -410,7 +411,7 @@ window.addEventListener("unhandledrejection", function(event) {
     <div class="sheet">
       <h2 id="ctlMenuTitle">Team options</h2>
       <div class="menuSheet">
-        <button class="primary" id="createGameDayBtn">Start Game Day</button>
+        <button class="primary" id="createGameDayBtn">Set Game Day</button>
         <button id="squadBtn">My squad…</button>
         <button id="namesToggle">Player names</button>
         <button id="oppToggle">Opposition</button>
@@ -591,10 +592,10 @@ window.addEventListener("unhandledrejection", function(event) {
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<link rel="stylesheet" href="styles.css?v=165" />
+<link rel="stylesheet" href="styles.css?v=168" />
 <script src="js/drills.js?v=147"></script>
 <script src="js/drill-text.js?v=162"></script>
-<script type="module" src="js/app.js?v=163"></script>
+<script type="module" src="js/app.js?v=164"></script>
 
 </body>
 </html>
