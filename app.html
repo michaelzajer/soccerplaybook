@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- maximum-scale/user-scalable=no were blocking pinch-zoom outright, which is an
+     accessibility failure and was compounding the small type. Zoom is allowed;
+     accidental double-tap zoom is already suppressed by touch-action on the
+     board and -webkit-tap-highlight-color in styles.css. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#181d1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,18 +24,26 @@
 <meta name="twitter:card" content="summary">
 
 <script>
-window.onerror = function(msg, url, line, col, error) {
-  var div = document.createElement('div');
-  div.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;z-index:99999;padding:20px;font-family:sans-serif;word-break:break-all;';
-  div.innerHTML = '<b>ERROR:</b> ' + msg + '<br><b>Line:</b> ' + line + '<br><b>URL:</b> ' + url;
-  document.body ? document.body.appendChild(div) : window.addEventListener('DOMContentLoaded', () => document.body.appendChild(div));
-};
-window.addEventListener("unhandledrejection", function(event) {
-  var div = document.createElement('div');
-  div.style.cssText = 'position:fixed;top:50%;left:0;width:100%;background:orange;color:black;z-index:99999;padding:20px;font-family:sans-serif;word-break:break-all;';
-  div.innerHTML = '<b>PROMISE REJECTION:</b> ' + (event.reason && event.reason.message ? event.reason.message : event.reason);
-  document.body ? document.body.appendChild(div) : window.addEventListener('DOMContentLoaded', () => document.body.appendChild(div));
-});
+/* Error reporting. The red/orange full-screen banners this replaced were a
+   debugging aid that shipped to coaches: any stray error painted a wall of
+   stack text over the pitch mid-game. Errors now go to the console, and the
+   banner is opt-in with ?debug=1 for reproducing a problem on a real phone. */
+if (new URLSearchParams(location.search).has("debug")) {
+  var showFault = function (label, detail, tone) {
+    var div = document.createElement("div");
+    div.style.cssText = "position:fixed;left:0;width:100%;z-index:99999;padding:16px;" +
+      "font:14px/1.4 system-ui,sans-serif;word-break:break-all;background:" + tone;
+    div.textContent = label + ": " + detail;
+    var add = function () { document.body.appendChild(div); };
+    document.body ? add() : window.addEventListener("DOMContentLoaded", add);
+  };
+  window.addEventListener("error", function (e) {
+    showFault("ERROR", e.message + " @" + e.filename + ":" + e.lineno, "#b00020;color:#fff;top:0");
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    showFault("PROMISE", (e.reason && e.reason.message) || e.reason, "#b45309;color:#fff;top:50%");
+  });
+}
 </script>
 <meta name="twitter:title" content="My Soccer Coach — coaching app for squads, formations, drills and game day">
 <meta name="twitter:description" content="Build your squad, set formations, plan drills, and run game day with line-ups and timers. Free, mobile, works offline.">
@@ -40,8 +52,8 @@ window.addEventListener("unhandledrejection", function(event) {
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tailwind.css?v=148">
-<link rel="stylesheet" href="styles.css?v=146">
+<link rel="stylesheet" href="tailwind.css?v=147">
+<link rel="stylesheet" href="styles.css?v=147">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body>
@@ -89,48 +101,57 @@ window.addEventListener("unhandledrejection", function(event) {
 
 <!-- ============ BOARD VIEW ============ -->
 <section id="boardView" class="view md:max-w-[430px] md:mx-auto md:border-x md:border-white/10 md:shadow-2xl relative">
-  <div id="controls" class="w-full flex items-center gap-1 sm:gap-2 px-1 sm:px-4 pb-1 pt-[calc(12px+env(safe-area-inset-top))] shrink-0">
-    <div class="seg !flex-1 flex" id="viewSeg">
-      <button class="on flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3 whitespace-nowrap" data-view="team">Team <span class="chev">☰</span></button>
-      <button class="flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3 whitespace-nowrap" data-view="game">Game day <span class="chev">☰</span></button>
-      <button class="flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3 whitespace-nowrap" data-view="drills">Drills <span class="chev">☰</span></button>
+  <!-- Row 1: navigation. Sizing lives in styles.css on the clamp() token scale,
+       which is mobile-first and grows upward. Do not reintroduce `sm:` classes
+       here: the 640px breakpoint never fires on a phone, so any `base/sm:` pair
+       hands the PHONE the small value. That is how these rows became unreadable. -->
+  <div id="controls">
+    <div class="seg" id="viewSeg">
+      <button class="on" data-view="team">Team <span class="chev">☰</span></button>
+      <button data-view="game">Game day <span class="chev">☰</span></button>
+      <button data-view="drills">Drills <span class="chev">☰</span></button>
     </div>
-    <button class="chip iconChip shrink-0 px-2 sm:px-4 text-[10px] sm:text-sm" id="menuBtn" aria-label="Menu">⋯</button>
+    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
   </div>
-  <header class="flex items-center gap-1 sm:gap-2 px-1 sm:px-2 py-0.5 shrink-0 w-full max-w-full">
-    <h1 id="hdrTeam" class="text-[var(--ink)] text-[11px] sm:text-[13px] font-bold tracking-wide uppercase whitespace-nowrap shrink min-w-0 overflow-hidden text-ellipsis">Soccer Play Book</h1>
-    
-    <div id="matchBar" class="flex-1 shrink min-w-0 items-center gap-1 px-1 py-0.5 bg-[var(--surface)] border border-[var(--line)] rounded-md">
-      <button id="gameChip" class="flex-1 text-left min-w-0 overflow-hidden text-ellipsis text-[11px] sm:text-[13px] font-bold tracking-wide uppercase px-1 py-0.5 text-[var(--ink-dim)]">Game</button>
-      <button id="gameCfgChip" class="px-1 py-0.5 text-[var(--ink-dim)] hover:text-[var(--ink)] text-[11px] sm:text-[13px]" hidden aria-label="Game configuration">…</button>
+
+  <!-- Row 2: team name + game chip. Hidden in the game view, where the score bar
+       already names both sides — it was pure duplication costing a whole row. -->
+  <header>
+    <h1 id="hdrTeam">Soccer Play Book</h1>
+    <div id="matchBar">
+      <button id="gameChip">Game</button>
     </div>
   </header>
 
-  <div id="scoreBar" class="w-full mt-1 px-1 sm:px-3 py-1 bg-surface border-y sm:border border-line sm:rounded-md flex items-center justify-center gap-2 sm:gap-6">
-    <div id="scoreWrapper" class="flex items-center justify-center gap-1 sm:gap-3 shrink min-w-0">
-      <div class="scoreSide flex flex-col items-center gap-0 sm:gap-1 min-w-0">
-        <div class="scoreName max-w-[20vw] sm:max-w-[30vw] text-[9px] sm:text-[11px] font-bold tracking-wider text-ink-dim uppercase truncate" id="scoreUsName">Us</div>
-        <div class="scoreBtns flex items-center gap-1 sm:gap-2">
-          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="us" data-d="-1" aria-label="Us minus one">−</button>
-          <div class="scoreNum min-w-5 sm:min-w-10 text-base sm:text-[26px] text-center font-bold leading-none tabular-nums" style="color:#7CFC7A; font-family:'Barlow Condensed',monospace; letter-spacing:.02em; text-shadow:0 0 10px rgba(124,252,122,.35);" id="scoreUs">0</div>
-          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="us" data-d="1" aria-label="Us plus one">+</button>
+  <!-- Row 3: scoreboard (game view only). -->
+  <div id="scoreBar">
+    <div id="scoreWrapper">
+      <div class="scoreSide">
+        <div class="scoreName" id="scoreUsName">Us</div>
+        <div class="scoreBtns">
+          <button data-team="us" data-d="-1" aria-label="Us minus one">−</button>
+          <div class="scoreNum" id="scoreUs">0</div>
+          <button data-team="us" data-d="1" aria-label="Us plus one">+</button>
         </div>
       </div>
-      <div class="scoreColon text-xs sm:text-[26px] font-bold text-ink-faint self-end pb-1 sm:pb-1 shrink-0">:</div>
-      <div class="scoreSide flex flex-col items-center gap-0 sm:gap-1 min-w-0">
-        <div class="scoreName max-w-[20vw] sm:max-w-[30vw] text-[9px] sm:text-[11px] font-bold tracking-wider text-ink-dim uppercase truncate" id="scoreThemName">Opp</div>
-        <div class="scoreBtns flex items-center gap-1 sm:gap-2">
-          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
-          <div class="scoreNum min-w-5 sm:min-w-10 text-base sm:text-[26px] text-center font-bold leading-none tabular-nums" style="color:#7CFC7A; font-family:'Barlow Condensed',monospace; letter-spacing:.02em; text-shadow:0 0 10px rgba(124,252,122,.35);" id="scoreThem">0</div>
-          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
+      <div class="scoreColon">:</div>
+      <div class="scoreSide">
+        <div class="scoreName" id="scoreThemName">Opp</div>
+        <div class="scoreBtns">
+          <button data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
+          <div class="scoreNum" id="scoreThem">0</div>
+          <button data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
         </div>
       </div>
     </div>
-    
-    <div id="scoreTimers" class="flex items-center gap-1 shrink-0">
-      <button id="timerChip" class="px-1 py-1 sm:px-2 sm:py-2 text-[9px] sm:text-sm bg-bg border border-line rounded-md text-ink font-semibold tabular-nums whitespace-nowrap" hidden>00:00</button>
-      <button id="subsChip" class="px-1 py-1 sm:px-2 sm:py-2 text-[9px] sm:text-sm bg-bg border border-line rounded-md text-ink font-semibold tabular-nums whitespace-nowrap" hidden>Subs 10:00</button>
-    </div>
+    <button id="gameCfgChip" hidden aria-label="Game settings">⋯</button>
+  </div>
+
+  <!-- Row 4: the two match clocks. These are the most-tapped controls during a
+       game, so they get a full-width row of their own at a real touch size. -->
+  <div id="timerRow">
+    <button id="timerChip" hidden>00:00</button>
+    <button id="subsChip" hidden>Subs 10:00</button>
   </div>
 
   <main class="flex-1 w-full relative h-full m-0 p-0 overflow-hidden flex flex-col items-center justify-center bg-black">
@@ -594,10 +615,13 @@ window.addEventListener("unhandledrejection", function(event) {
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<link rel="stylesheet" href="styles.css?v=173" />
+<!-- Asset versions are bumped TOGETHER (see the release ritual in CLAUDE.md).
+     styles.css is linked once, in <head>. It used to be linked here as well at a
+     different ?v=, which cost a second download and parse of a 50KB stylesheet
+     plus a late reflow on every load. -->
 <script src="js/drills.js?v=147"></script>
-<script src="js/drill-text.js?v=162"></script>
-<script type="module" src="js/app.js?v=172"></script>
+<script src="js/drill-text.js?v=147"></script>
+<script type="module" src="js/app.js?v=147"></script>
 
 </body>
 </html>

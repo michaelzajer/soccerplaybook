@@ -25,7 +25,13 @@
      desktop at the same proportions as a phone instead of ballooning.
      Prefer these over hardcoded px so a size change lands everywhere. */
   --app-max:520px;                    /* the app column width cap */
-  --sz-ctl:clamp(28px,7.6vw,34px);    /* chip / select / segmented height */
+  --sz-tap:44px;                      /* the floor for anything tapped pitch-side */
+  --sz-ctl:clamp(34px,9vw,40px);      /* generic chip / select height */
+  --sz-nav:clamp(42px,11vw,48px);     /* the top segmented nav + its ⋯ chip */
+  --sz-score:clamp(36px,9.5vw,44px);  /* score +/- button, a real touch target */
+  --fs-score:clamp(28px,8.5vw,36px);  /* the score numerals */
+  --fs-timer:clamp(15px,4.2vw,18px);  /* match + subs clocks */
+  --h-timer:clamp(46px,12vw,54px);    /* timer row height */
   --sz-disc:clamp(25px,7.6vw,34.5px);   /* bench player disc (increased 15%) */
   --sz-kit:clamp(30px,8.2vw,38px);    /* kit tray icon box */
   --sz-tool:clamp(38px,10.2vw,44px);  /* toolbar button */
@@ -119,28 +125,61 @@ button.primary:disabled{opacity:.5}
 .introHint{text-align:center;margin-top:2px}
 .err:empty{display:none}
 
-/* ---------- match bar (game view only) ---------- */
-#matchBar{display:none;}
-body.gameView #matchBar{display:flex}
-#matchBar button{
-  background:none;border:none;color:var(--ink);font-family:inherit;
-  font-weight:600;border-radius:8px;
-  font-variant-numeric:tabular-nums;white-space:nowrap;
+/* ---------- match bar (team view header, hidden in game view) ---------- */
+#matchBar{
+  display:none;flex:1 1 auto;min-width:0;align-items:center;gap:4px;
+  padding:2px 6px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-md);
 }
-#matchBar [hidden], #scoreTimers [hidden]{display:none}
+body.gameView #matchBar{display:flex}
+#matchBar [hidden], #timerRow [hidden], #scoreBar [hidden]{display:none}
 #gameChip{
   flex:1;text-align:left;min-width:0;
-  overflow:hidden;text-overflow:ellipsis;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:none;border:none;color:var(--ink-dim);font-family:inherit;
+  font-size:var(--fs-md);font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  padding:6px 4px;
 }
-#timerChip,#subsChip{background:var(--bg);border:1px solid var(--line)}
-#scoreTimers button{
-  background:var(--bg);border:1px solid var(--line);
-  color:var(--ink);font-family:inherit;font-weight:600;
-  border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap;
+
+/* ---------- the two match clocks: their own full-width row ---------- */
+#timerRow{display:none;width:100%;gap:8px;margin-top:6px;flex:0 0 auto}
+body.gameView #timerRow{display:flex}
+#timerRow button{
+  flex:1 1 0;min-width:0;height:var(--h-timer);
+  background:var(--bg);border:1px solid var(--line-strong);border-radius:var(--r-md);
+  color:var(--ink);font-family:inherit;font-size:var(--fs-timer);font-weight:700;
+  letter-spacing:.03em;font-variant-numeric:tabular-nums;white-space:nowrap;
+  display:flex;align-items:center;justify-content:center;gap:6px;
 }
-#scoreTimers button.live{border-color:var(--accent);color:var(--accent)}
-#scoreTimers button.subsDue{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-#gameCfgChip{color:var(--ink-dim);padding:8px 12px}
+#timerRow button.live{
+  border-color:var(--accent);color:var(--accent);
+  background:rgba(59,130,246,.10);
+}
+/* A running clock gets a pulsing dot, so "is it counting?" is answerable at a
+   glance from a metre away rather than by reading the digits. */
+#timerRow button.live::before{
+  content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);
+  flex:0 0 auto;animation:tick 1s ease-in-out infinite;
+}
+@keyframes tick{0%,100%{opacity:1}50%{opacity:.25}}
+/* Press-and-hold feedback: the bar fills over the hold window so the coach can
+   see the pause landing rather than wondering whether the tap registered. */
+#timerRow button.holding{background:rgba(255,255,255,.06)}
+#timerRow button.holding::after{
+  content:"";position:absolute;left:0;bottom:0;height:3px;
+  background:var(--accent);animation:holdFill .6s linear forwards;
+}
+#timerRow button{position:relative;overflow:hidden}
+@keyframes holdFill{from{width:0}to{width:100%}}
+#timerRow button.subsDue{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#timerRow button.subsDue::before{background:var(--accent-ink)}
+
+#gameCfgChip{
+  flex:0 0 auto;width:var(--sz-ctl);height:var(--sz-ctl);
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-pill);
+  color:var(--ink-dim);font-family:inherit;font-size:var(--fs-md);line-height:1;padding:0;
+}
 #gameCfgChip:hover{color:var(--ink)}
 
 /* ---------- floating pitch tools ---------- */
@@ -323,6 +362,35 @@ select:focus{outline:none;border-color:var(--line-strong)}
 .chip:hover{border-color:var(--line-strong)}
 .chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .iconChip{width:var(--sz-ctl);padding:0;text-align:center;font-size:var(--fs-sm)}
+
+/* ============================================================
+   TOP CHROME — nav row, team row, scoreboard, timers.
+   The pitch is WIDTH-bound on a phone (#board is aspect 68/105 with
+   max-w-full), so its height is fixed by the viewport width and there is
+   vertical slack above and below it. Chrome height inside that slack is
+   free. Only if a row pushes total chrome past the slack does the pitch
+   start shrinking — so grow these rows, but check on a phone.
+   ============================================================ */
+#controls{
+  width:100%;display:flex;align-items:center;gap:8px;flex:0 0 auto;
+  padding-bottom:6px;padding-top:calc(10px + env(safe-area-inset-top));
+}
+#controls .seg{flex:1 1 auto;height:var(--sz-nav)}
+#controls .seg button{flex:1;text-align:center;white-space:nowrap;padding:0 6px;font-size:var(--fs-md)}
+#controls .iconChip{flex:0 0 auto;width:var(--sz-nav);height:var(--sz-nav);font-size:var(--fs-md)}
+
+header{
+  display:flex;align-items:center;gap:8px;flex:0 0 auto;
+  width:100%;max-width:100%;padding-top:2px;padding-bottom:2px;
+}
+#hdrTeam{
+  color:var(--ink);font-size:var(--fs-md);font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;
+}
+/* In the game view the score bar already names both sides, so this row is
+   duplication. Removing it pays for the taller scoreboard and timer row. */
+body.gameView header{display:none}
 
 /* ---------- board options sheet ---------- */
 .menuSheet{display:flex;flex-direction:column;gap:6px}
@@ -678,9 +746,18 @@ body.drawing .ditem{pointer-events:none}
    text-xs...). styles.css is unlayered so it wins — map them onto the shared
    scale here so everything shrinks together on a small phone and stops
    growing on tablet/desktop. Add new components to the scale, not to px. */
-header,#controls{padding-left:var(--gap-edge);padding-right:var(--gap-edge)}
-#matchBar{margin-left:var(--gap-edge);margin-right:var(--gap-edge)}
-#matchBar button{font-size:var(--fs-sm)}
+header,#controls,#scoreBar,#timerRow{
+  padding-left:var(--gap-edge);padding-right:var(--gap-edge);
+}
+/* #scoreBar and #timerRow are edge-to-edge cards, so the gutter has to be a
+   margin on the box, not padding inside it, or the border sits on the screen
+   edge. #scoreBar keeps its own vertical padding from the block above. */
+#scoreBar,#timerRow{
+  padding-left:0;padding-right:0;
+  width:calc(100% - (var(--gap-edge) * 2));
+  margin-inline:var(--gap-edge);
+}
+#scoreBar{padding-left:10px;padding-right:10px}
 footer{padding:4px var(--gap-edge)}
 /* Line tools are icon + label stacked, so each stroke type is named rather
    than left as an unexplained glyph. Buttons size to their label. */
@@ -910,30 +987,53 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 .subWho{font-size:var(--t-md);font-weight:600;color:var(--ink)}
 #subPos{width:90px;text-transform:uppercase;text-align:center}
 
-/* game scoreboard */
+/* ---------- game scoreboard ---------- */
 #scoreBar{
-  display:none;flex:0 0 auto;align-items:center;
+  display:none;width:100%;flex:0 0 auto;align-items:center;gap:8px;
+  margin-top:6px;padding:6px 10px;
   background:#0c0f0d;border:1px solid var(--line);border-radius:var(--r-md);
 }
 body.gameView #scoreBar{display:flex}
-.scoreSide{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
-.scoreName{font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.scoreBtns{display:flex;align-items:center;}
+/* On a short phone in landscape (or a small handset) the taller chrome would
+   start eating the pitch, which is the one thing it must not do. Below 700px of
+   height the scoreboard tightens and the clocks share the scoreboard's row
+   again — smaller, but still above the 44px target. */
+@media (max-height:700px){
+  :root{--sz-score:36px;--fs-score:26px;--h-timer:44px}
+  #scoreBar{padding:4px 8px;margin-top:4px}
+  #timerRow{margin-top:4px}
+  .scoreName{font-size:var(--fs-xs)}
+}
+#scoreWrapper{
+  flex:1 1 auto;min-width:0;
+  display:flex;align-items:center;justify-content:center;gap:clamp(6px,2.5vw,16px);
+}
+.scoreSide{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.scoreName{
+  font-size:var(--fs-sm);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-dim);max-width:26vw;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.scoreBtns{display:flex;align-items:center;gap:clamp(4px,1.5vw,10px)}
+/* 20px squares were unusable with a thumb in the rain. --sz-score is the
+   floor-checked touch target; keep it at or above 36px. */
 .scoreBtns button{
-  border-radius:50%;flex:0 0 auto;
+  width:var(--sz-score);height:var(--sz-score);flex:0 0 auto;
+  border-radius:50%;
   background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);
-  font-weight:700;line-height:1;padding:0;
+  font-size:calc(var(--sz-score) * .55);font-weight:700;line-height:1;padding:0;
   display:flex;align-items:center;justify-content:center;
 }
 .scoreNum{
-  text-align:center;font-weight:700;line-height:1;
+  min-width:calc(var(--fs-score) * .9);
+  text-align:center;font-size:var(--fs-score);font-weight:700;line-height:1;
   font-variant-numeric:tabular-nums;
   color:#7CFC7A;
   font-family:'Barlow Condensed',monospace;letter-spacing:.02em;
   text-shadow:0 0 10px rgba(124,252,122,.35);
 }
-.scoreColon{font-size:26px;font-weight:700;color:var(--ink-faint);align-self:flex-end;padding-bottom:4px}
+.scoreColon{font-size:var(--fs-score);font-weight:700;color:var(--ink-faint);
+  align-self:flex-end;padding-bottom:2px;flex:0 0 auto}
 
 /* per-drill row actions */
 .rrow .shr{background:none;border:none;color:var(--ink-dim);font-size:15px;padding:2px 6px;flex:0 0 auto}

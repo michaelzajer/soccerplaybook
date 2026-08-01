@@ -2705,6 +2705,28 @@ export function initBoard(store) {
   const cfgPeriods = document.getElementById("cfgPeriods");
   const cfgMinutes = document.getElementById("cfgMinutes");
 
+  /* The clock chips sit under the coach's hand for the whole match, so a brush
+     of the thumb must not stop the game clock. STARTING is a plain tap;
+     PAUSING a running clock needs a 600ms press, and `.holding` shows the
+     press has registered so the hold does not feel like a dead control. */
+  const HOLD_MS = 600;
+  function guardedToggle(el, toggle, isRunning) {
+    let timer = null, fired = false;
+    const cancel = () => { clearTimeout(timer); timer = null; el.classList.remove("holding"); };
+    el.addEventListener("pointerdown", () => {
+      if (!isRunning()) return;                 // stopped: a tap starts it
+      fired = false;
+      el.classList.add("holding");
+      timer = setTimeout(() => { fired = true; cancel(); toggle(); }, HOLD_MS);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(ev => el.addEventListener(ev, cancel));
+    el.addEventListener("click", () => {
+      if (fired) { fired = false; return; }     // the hold already paused it
+      if (isRunning()) return;                  // pausing is press-and-hold only
+      toggle();
+    });
+  }
+
   function gtSave() { lsSet(TKEY, JSON.stringify(gt)); }
   function gtElapsed() { return (gt.base[gt.period] || 0) + (gt.running ? Date.now() - gt.startAt : 0); }
   function fmt(ms) {
@@ -2757,7 +2779,10 @@ export function initBoard(store) {
       : `${plabel()}${gt.period} · ${fmt(el)} of ${gt.cfg.mins}:00`;
     timerStartBtn.textContent = gt.running ? "Pause" : (el > 0 && !ended ? "Resume" : "Start");
     timerChip.hidden = false;
-    timerChip.textContent = `${gt.running ? "⏸" : "▶"} ${plabel()}${gt.period} ${fmt(el)}`;
+    /* Running state is carried by the pulsing dot in `.live`, so the glyph is
+       only needed to say "tap to start". A ⏸ here would promise tap-to-pause,
+       which is now a press-and-hold. */
+    timerChip.textContent = `${gt.running ? "" : "▶ "}${plabel()}${gt.period} ${fmt(el)}`;
     timerChip.classList.toggle("live", gt.running);
   }
   function gtToggle() {
@@ -2783,7 +2808,7 @@ export function initBoard(store) {
   });
   cfgPeriods.value = String(gt.cfg.periods);
   cfgMinutes.value = String(gt.cfg.mins);
-  timerChip.addEventListener("click", gtToggle);
+  guardedToggle(timerChip, gtToggle, () => gt.running);
 
   /* ---------------- subs timer (independent) ---------------- */
   const SKEY = "spbSubsTimer";
@@ -2815,7 +2840,7 @@ export function initBoard(store) {
     subsDisplay.textContent = fmt(rem);
     subsStartBtn.textContent = st.running ? "Pause" : (st.base > 0 ? "Resume" : "Start");
     subsChip.hidden = false;
-    subsChip.textContent = `${st.running ? "⏸" : "▶"} Subs ${fmt(rem)}`;
+    subsChip.textContent = `${st.running ? "" : "▶ "}Subs ${fmt(rem)}`;
     subsChip.classList.toggle("live", st.running);
   }
   function stToggle() {
@@ -2837,7 +2862,7 @@ export function initBoard(store) {
     st.base = 0; stSave(); stTick();
   });
   cfgSubInt.value = String(st.int);
-  subsChip.addEventListener("click", stToggle);
+  guardedToggle(subsChip, stToggle, () => st.running);
 
   setInterval(() => { gtTick(); stTick(); }, 500);
   renderPeriodSeg();

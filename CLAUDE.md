@@ -9,15 +9,40 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 ## Stack — deliberate choices, do not "upgrade" without asking
 
-- Vanilla JS, no framework, no build step. React/Tailwind were considered and rejected
-  (pointer/canvas code gains nothing; build step unwanted; load speed matters pitch-side).
+- Vanilla JS, no framework. React was considered and rejected (pointer/canvas code
+  gains nothing from it).
+- **Tailwind v4 was added later** (`npm run build:css`, `src/tailwind.css` → `tailwind.css`)
+  and now sits alongside the hand-rolled `styles.css`. This is a genuine tension:
+  `styles.css` is unlayered so it wins over Tailwind's `@layer utilities`, but
+  INLINE arbitrary values in the markup still beat both. Two sizing systems,
+  and the wrong one kept winning — see the warning below.
 - Firebase: Auth (email/password), Firestore (offline persistence enabled), Hosting.
 - PWA: manifest.json + sw.js, installable, works offline.
-- Future path if native features needed (background timer alerts, store presence): Capacitor wrap. Not before.
+- Capacitor wrap exists (`ios/`, `android/`) for native timer alerts.
+
+### NEVER SIZE THE APP WITH `sm:` (v147 — this cost real usability)
+
+Tailwind's `sm:` is **640px**. A phone is 390-430px, so it NEVER fires. Every
+`class="text-[10px] sm:text-sm"` pair therefore hands the PHONE the small value
+and the DESKTOP the large one — the exact inverse of mobile-first, in an app
+used pitch-side in the rain. It read fine in a desktop browser and was unusable
+on the device.
+
+The damage at v146: nav tabs at 10px, team row at 11px, the two match clocks at
+9px, and the score `+`/`−` buttons at **20px squares** — under half the 44px
+minimum touch target. Those inline classes also overrode `--fs-sm`/`--sz-ctl`,
+the clamp() scale in `styles.css` that was already correct.
+
+The rule: **the chrome rows carry NO sizing classes in the markup.** Sizing lives
+in `styles.css` on the clamp() tokens, where the base value is the phone value
+and the clamp grows it upward. `_chrome.mjs` fails the build if `sm:` or
+sub-12px type reappears in those rows.
 
 ## Files
 
-- `index.html` — single page, all views/sheets. Versioned asset URLs (`?v=NN`).
+- `app.html` — THE APP. Single page, all views/sheets. Versioned asset URLs (`?v=NN`).
+- `index.html` — the marketing landing page, NOT the app. Has its own hand-rolled
+  hero drill animation (covered by `_landing.mjs`).
 - `styles.css` — hand-rolled theme, CSS variables in `:root`.
 - `js/app.js` — Firebase init, auth flow, store (sync engine), guest mode, SW registration.
 - `js/board.js` — everything else: board, drills, game day, timers, sharing. One big
@@ -30,10 +55,18 @@ Local dev: `python3 -m http.server 8000` in this folder. GitHub repo: soccerboar
 
 ## RELEASE RITUAL (every change)
 
-1. Bump version in FOUR places: `styles.css?v=NN` and `js/app.js?v=NN` in index.html,
-   both imports inside app.js (`firebase-config.js?v=NN`, `board.js?v=NN`),
-   and `CACHE = "spb-vNN"` in sw.js. Currently at **v146**.
-2. `node --check js/*.js` before declaring done.
+The app is **`app.html`**, not index.html (index.html is the marketing landing page).
+Bump ALL of these to the SAME number, every time — they had drifted to six
+different values (sw 146, tailwind 148, styles 146 *and* 173, drills 147,
+drill-text 162, app 172), which makes a deploy non-deterministic:
+
+1. In `app.html`: `tailwind.css?v=NN`, `styles.css?v=NN` (in `<head>` — it must be
+   linked ONCE; a second link at the bottom of `<body>` cost a whole extra 50KB
+   download and parse), `js/drills.js?v=NN`, `js/drill-text.js?v=NN`,
+   `js/app.js?v=NN`.
+2. In `js/app.js`: `firebase-config.js?v=NN`, `board.js?v=NN`.
+3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v147**.
+4. `node --check js/*.js sw.js` before declaring done, then the `_*.mjs` suite.
 3. Always give Michael this block at the end (his standing request):
 
 ```bash
@@ -535,10 +568,18 @@ the scratch dir was cleared, taking the rotation guards with them). `_harness.mj
 does the jsdom boot: stubs canvas getContext, pointer capture and
 getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
 the timeline with one that buffers every `.to()` and can `settle()` them.
-`node --check js/*.js` first, always. Run: `for t in _laps _shuttle _align _c3
-_copybtn _fixes128 _seq129 _speed _tidy _notation _builder _landing; do node $t.mjs; done`
+`node --check js/*.js sw.js` first, always. Run: `for t in _laps _shuttle _align
+_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome
+_smoke _smoke_app; do node $t.mjs; done`
 (`_landing.mjs` covers the marketing page's hero drill demos, which are a
-separate hand-rolled animation in index.html, not the app engine).
+separate hand-rolled animation in index.html, not the app engine.)
+
+**`_builder.mjs` is currently FAILING and is not in that list.** It asserts on
+`#builderPanel` / "Build from a shape…", and neither exists anywhere in the
+codebase — the drill builder (v140) was lost in the migration from index.html to
+app.html and nobody noticed, because the test was never run again after the
+migration. Either restore the builder UI in app.html or delete the test; do not
+leave it as a permanently red check that trains everyone to ignore the suite.
 
 **Two traps that cost a session each:**
 

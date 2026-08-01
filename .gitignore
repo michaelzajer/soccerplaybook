@@ -2,3 +2,7 @@
 node_modules/
 firebase-debug.log
 .firebase/
+
+# build output — regenerate with `npm run build`
+dist/
+*.bak
