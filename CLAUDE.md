@@ -65,7 +65,7 @@ drill-text 162, app 172), which makes a deploy non-deterministic:
    download and parse), `js/drills.js?v=NN`, `js/drill-text.js?v=NN`,
    `js/app.js?v=NN`.
 2. In `js/app.js`: `firebase-config.js?v=NN`, `board.js?v=NN`.
-3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v149**.
+3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v150**.
 4. `node --check js/*.js sw.js` before declaring done, then the `_*.mjs` suite.
 3. Always give Michael this block at the end (his standing request):
 
@@ -89,8 +89,10 @@ controllerchange → reload).
   unavailable:[id...],                     // injured/unavailable roster ids (team-wide, ongoing)
   board:{squad:"11"|"9", formation, showOpp, showNames, placed:{id:{x,y}}},
   gameday:{id?, date, time, opp, notes, score:{us,them}, lineup:{formation,squad,placed,at}|null,
-           subs:[{inId,outId,min,period,batch}]}, // the game's substitution record; `batch`
-                                          // groups one confirm so Undo takes it all back
+           subs:[{inId,outId,min,period,batch}],  // `batch` groups one confirm so Undo
+                                          //         takes the whole change back
+           completed?, finishedAt?, minutes?:{id:mins}},  // set by Finish game;
+                                          // minutes are FROZEN there, see below
   games:[gameday...],                      // saved games library
   drills:[{id,name,items:[{kind,x,y,color?}], strokes:[{mode,pts:FLAT,color?}]}],
                                      // color (hex) optional: cones/markers/players + lines
@@ -438,18 +440,26 @@ loaded, and it reports the point count before/after.
 Game day → **⇄ Subs** on the bench bar (or tap the "Subs" label). Broadcast
 language throughout — red down-arrow off, green up-arrow on.
 
-**One pair at a time, and the pair locks in on the second tap (v148).** Tap who
-is coming off, the list switches to the bench, tap their replacement, and that
-change is added to the list. Repeat for a double or triple change, then one
-confirm applies them all at the same match minute.
+**TICK EVERYONE COMING OFF, THEN ASSIGN THEM ONE AT A TIME (v150).** Tapping a
+player on the pitch list TICKS them; several can be ticked, because a coach calls
+"Cooper, Jaylan and Tom off" in one breath. "Choose 3 replacements" then walks
+through them one at a time — "who comes on for Cooper?" — and each pair locks as
+it is answered. One confirm applies them all at the same match minute.
 
-This replaced tap-order pairing (v143: two columns, nth-off matched with nth-on).
-That was fewer taps on paper and wrong in practice — it asked a coach to hold two
-parallel orders in their head *while a game was running*, and a mis-ordered tap
-could only be fixed by untapping and rebuilding the column. Pairing at the moment
-of the second tap costs nothing and cannot be got wrong. `_subs.mjs` covers the
-case that broke it: picking the second player off before the first one's
-replacement.
+Three models have been tried here; the constraints are worth keeping straight.
+- v143 paired by TAP ORDER, nth-off with nth-on across two columns. Fewest taps,
+  and wrong: it asked a coach to hold two parallel orders in their head *while a
+  game was running*, and a mis-ordered tap could only be fixed by rebuilding the
+  column.
+- v148 locked a pair on the second tap. Unmistakable, but only one player could
+  be picked at a time, so it READ as "you can only sub one player" — which is
+  exactly what Michael reported.
+- v150 keeps the v148 guarantee (every replacement is chosen against a NAMED
+  player, so nothing can be mismatched) and multi-selects the way off.
+
+`picking` is `"off"` or `"on"`; `subsOff` is the tick list, `assignIdx` walks it,
+`subsPending` is the completed pairs. **Back from the bench list keeps the ticks**
+— losing three names the coach just chose is the thing that made v143 painful.
 
 **ONE full-width list, not two columns.** On a 430px phone each column was ~195px
 and had to carry a position disc, a name, an order badge and an editable
@@ -489,6 +499,35 @@ reaching the confirm button never means scrolling inside a box first.
 - The sheet **closes and returns to the pitch** after a change (v145) — several
   changes can be queued in one visit, and the new shape is what the coach wants
   to see next.
+
+## Match notes and Finish game (v150)
+
+- **Notes pill, top LEFT of the pitch, game view only.** Deliberately the
+  opposite corner from the formation controls, and reachable with a left thumb
+  while the right hand holds the phone. It writes `gameday.notes` — the field the
+  data model already had — so the note taken at 20', the one in the game-details
+  sheet and the one at full time are all the SAME text. A dot on the pill shows
+  there is something written.
+- Saving happens **on every keystroke** through the store's debounce, not on
+  close. A coach who locks the phone mid-note must not lose it; `store.flush()`
+  on pagehide already covers backgrounding.
+- `⏱ 34'` inserts the match minute at the cursor on a new line. The box stays
+  free-form — coaches write in their own shorthand — but the timeline is
+  recoverable afterwards, which is most of the value of notes taken live.
+- **Finish game is a REVIEW step, not a save button.** Game day → Finish this
+  game shows the score, every substitution with its minute, minutes played
+  (most first — the question at full time is who got short-changed) and the
+  notes. Nothing is written until Save, so backing out leaves the game untouched.
+  `_gameday.mjs` asserts that explicitly.
+- **Minutes are FROZEN onto a completed game** (`g.minutes`). They are
+  reconstructed from the log everywhere else, but the log cannot know when the
+  game ENDED — without freezing, a finished game's minutes would keep counting up
+  with the clock.
+- The games list splits **In progress / Completed**. A finished row is labelled
+  with the result rather than the fixture, because that is what you scan for
+  afterwards, and carries a ↗ that shares a full-time PNG (score, subs, minutes,
+  notes) through the existing `shareCanvas`. An image, not text: it goes to a
+  team WhatsApp group.
 - `_subs.mjs` must reset the roster from a PRISTINE deep copy between sections —
   `applySubs` mutates player objects in place, so re-copying the live array
   carries the drift forward and makes correct behaviour look broken.
@@ -640,7 +679,7 @@ does the jsdom boot: stubs canvas getContext, pointer capture and
 getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
 the timeline with one that buffers every `.to()` and can `settle()` them.
 `node --check js/*.js sw.js` first, always. Run: `for t in _laps _shuttle _align
-_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome _drilltext
+_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome _drilltext _gameday
 _smoke _smoke_app; do node $t.mjs; done`
 (`_landing.mjs` covers the marketing page's hero drill demos, which are a
 separate hand-rolled animation in index.html, not the app engine.)

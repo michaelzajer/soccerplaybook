@@ -187,6 +187,113 @@ body.gameView #timerRow{display:flex}
   position:absolute;top:8px;right:8px;z-index:5;
   display:flex;gap:6px;
 }
+
+/* ---------- match notes (game view, over the pitch) ---------- */
+#notesPill{
+  position:absolute;top:8px;left:8px;z-index:6;
+  display:none;align-items:center;gap:6px;
+  height:var(--sz-ctl);padding:0 12px;border-radius:var(--r-pill);
+  background:rgba(16,20,17,.72);border:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  color:#fff;font-family:inherit;font-size:var(--fs-sm);font-weight:700;
+  letter-spacing:.04em;
+}
+body.gameView #notesPill{display:flex}
+body.gameView #notesPill[hidden]{display:none}
+#notesPill .npIcon{font-size:14px;line-height:1}
+#notesPill .npDot{
+  width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto;
+}
+#notesPill .npDot[hidden]{display:none}
+
+/* The pane is INSIDE the board, so it cannot be scrolled away from and never
+   covers the bench bar or the clocks. It stops short of the bottom third so the
+   coach can still see the shape while typing. */
+#notesPane{
+  position:absolute;top:8px;left:8px;right:8px;z-index:140;
+  display:flex;flex-direction:column;gap:8px;
+  background:rgba(12,15,13,.96);border:1px solid var(--line-strong);
+  border-radius:var(--r-md);padding:10px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:0 16px 40px rgba(0,0,0,.6);
+}
+#notesPane[hidden]{display:none}
+.npHead{display:flex;align-items:center;gap:8px}
+.npTitle{
+  flex:1;min-width:0;font-size:var(--t-xs);font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);
+}
+#npStamp{
+  flex:0 0 auto;height:36px;padding:0 12px;border-radius:var(--r-pill);
+  background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);
+  font-family:inherit;font-size:var(--t-sm);font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+#npStamp:hover{border-color:var(--accent);color:var(--accent)}
+#npClose{
+  flex:0 0 auto;width:36px;height:36px;border-radius:50%;
+  background:none;border:1px solid var(--line-strong);color:var(--ink-dim);
+  font-size:20px;line-height:1;padding:0;
+  display:flex;align-items:center;justify-content:center;
+}
+#npClose:hover{color:var(--ink);border-color:var(--ink-dim)}
+#npText{
+  width:100%;min-height:34dvh;resize:none;
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);
+  color:var(--ink);font-family:inherit;font-size:var(--t-md);line-height:1.5;
+  padding:10px;
+}
+#npText:focus{outline:none;border-color:var(--accent)}
+
+/* ---------- full-time summary ---------- */
+.ftScore{
+  display:flex;align-items:baseline;justify-content:center;gap:10px;
+  background:#0c0f0d;border:1px solid var(--line);border-radius:var(--r-md);
+  padding:12px;font-variant-numeric:tabular-nums;
+}
+.ftScore .ftTeam{
+  flex:1;min-width:0;font-size:var(--t-sm);font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-dim);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+}
+.ftScore .ftTeam.r{text-align:right}
+.ftScore .ftNum{
+  flex:0 0 auto;font-size:34px;font-weight:700;line-height:1;color:#7CFC7A;
+  font-family:'Barlow Condensed',monospace;
+  text-shadow:0 0 10px rgba(124,252,122,.35);
+}
+.ftLabel{
+  font-size:var(--t-xs);font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-dim);margin-top:4px;
+}
+.ftSubs,.ftMins{display:flex;flex-direction:column;gap:4px}
+.ftSubs:empty::after,.ftMins:empty::after{
+  content:"None";font-size:var(--t-sm);color:var(--ink-faint);
+}
+.ftRow{
+  display:flex;align-items:center;gap:8px;
+  font-size:var(--t-sm);color:var(--ink-dim);font-variant-numeric:tabular-nums;
+}
+.ftRow .min{width:36px;flex:0 0 auto;font-weight:700;color:var(--ink-faint)}
+.ftRow .o{color:#ff8f84}
+.ftRow .i{color:#7ee2ab}
+.ftRow .who{flex:1;min-width:0;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ftRow .amt{flex:0 0 auto;font-weight:700}
+#ftNotes{
+  width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);
+  color:var(--ink);font-family:inherit;font-size:var(--t-md);line-height:1.5;
+  padding:10px;resize:vertical;
+}
+#ftNotes:focus{outline:none;border-color:var(--accent)}
+/* a completed game reads as settled, not as another fixture to prepare */
+.rrow.done .rname{color:var(--ink-dim)}
+.rrow .ftScoreTag{
+  flex:0 0 auto;font-size:var(--t-sm);font-weight:800;color:#7CFC7A;
+  font-variant-numeric:tabular-nums;padding:0 8px;
+}
+.rrow .shareGame{background:none;border:none;color:var(--ink-dim);font-size:16px;padding:2px 6px;flex:0 0 auto}
+.rrow .shareGame:hover{color:var(--accent)}
 #pitchTools select,#pitchTools .chip{
   background:rgba(16,20,17,.72);border-color:rgba(255,255,255,.16);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
@@ -236,6 +343,14 @@ body.paneOpen #drillColors{bottom:calc(var(--dock-h) + 92px + env(safe-area-inse
   padding:7px 8px;
 }
 .subsPairRow.part{border-style:dashed;background:transparent}
+.subsPairRow.part.now{border-color:var(--accent);border-style:solid}
+/* a ticked player on the pitch list — several can be ticked at once */
+.subsRow.ticked{border-color:#ff5c4d;background:rgba(255,92,77,.15)}
+.subsRow.ticked .num{background:#ff5c4d;color:#fff}
+.subsRow.ticked::after{
+  content:"\2713";flex:0 0 auto;color:#ff5c4d;font-size:18px;font-weight:800;
+}
+#subsGoBtn[hidden],#subsNextBtn[hidden]{display:none}
 .subsPairRow input.pp{
   width:58px;flex:0 0 auto;height:38px;padding:0 5px;text-align:center;text-transform:uppercase;
   font-family:inherit;font-size:var(--t-sm);font-weight:700;

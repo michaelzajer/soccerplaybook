@@ -1,11 +1,14 @@
-/* Game-day substitutions (v148): ONE full-width list that switches, and a pair
-   locks in the moment both ends are tapped.
+/* Game-day substitutions (v150): MULTI-SELECT who is coming off, then the sheet
+   walks through them one at a time asking who replaces each.
 
-   The model this replaced paired by tap order — nth off with nth on across two
-   columns. These tests deliberately cover the case that broke it: picking the
-   second player off BEFORE the first one's replacement. Under tap-order pairing
-   that silently mismatched the pairs; here it cannot arise, because a pair is
-   complete before the next one starts. */
+   Two earlier models are being guarded against here.
+   v143 paired by tap order — nth off with nth on across two columns — which
+   asked the coach to hold two parallel orders in their head mid-game.
+   v148 fixed that by locking a pair on the second tap, but only let ONE player
+   be picked at a time, which read as "you can only sub one player".
+   v150 keeps the v148 guarantee (every replacement is chosen against a NAMED
+   player, so nothing can be mismatched) while letting the coach tick off the
+   three names they called in one breath. */
 import { boot } from "./_harness.mjs";
 
 const roster = [
@@ -44,6 +47,9 @@ const names     = () => rows().map(r => r.querySelector(".who").textContent);
 const pairRows  = () => [...document.querySelectorAll(".subsPairRow")];
 const partRows  = () => [...document.querySelectorAll(".subsPairRow.part")];
 const tap       = name => click(rows().find(r => r.querySelector(".who").textContent === name));
+const next      = () => click($("subsNextBtn"));
+/* the whole gesture for one change: tick, go, choose */
+const swap      = (off, on) => { tap(off); next(); tap(on); };
 const onPitch   = () => Object.keys(store.data.board.placed).map(Number).sort((a,b)=>a-b);
 const step      = () => $("subsStepLbl").textContent;
 const open      = () => click($("openSubsBtn"));
@@ -58,20 +64,27 @@ ok(names().length === 6, "the list shows the six players on the pitch");
 ok(!names().includes("Dan Ives"), "an unavailable player is never offered");
 ok($("subsGoBtn").disabled, "the confirm button starts disabled");
 
-/* --------------------------------------------------- 2. one pair, two taps */
+/* ----------------------------------------------------- 2. a single change */
 console.log("\n-- a single change --");
 tap("Ali Khan");
-ok(/comes on for Ali/i.test(step()), "tapping a player switches the list to the bench");
-ok(partRows().length === 1, "a half-made pair is shown, not hidden");
-ok($("subsGoBtn").disabled, "still disabled with only one end chosen");
+ok(rows().find(r => r.querySelector(".who").textContent === "Ali Khan")
+     .classList.contains("ticked"), "tapping a player TICKS them, it does not jump lists");
+ok(partRows().length === 1, "and shows a line waiting for a replacement");
+ok(names().includes("Jack Reed"), "the pitch list is still on screen so more can be ticked");
+ok($("subsGoBtn").hidden || $("subsGoBtn").disabled, "nothing can be confirmed yet");
+ok(!$("subsNextBtn").hidden, "'Choose a replacement' is the way on");
+
+next();
+ok(/comes on for Ali/i.test(step()), "which asks who comes on for the ticked player");
 ok(names().includes("Ben Wu") && !names().includes("Ali Khan"),
    "the bench list is the bench, and does not include the player coming off");
 ok(!names().includes("Dan Ives"), "the injured player is not offered as a sub either");
 
 tap("Ben Wu");
-ok(pairRows().length === 1 && partRows().length === 0, "the pair locked in on the second tap");
-ok(/coming off|Another change/i.test(step()), "the list went back to the pitch for the next change");
-ok(!$("subsGoBtn").disabled, "a complete pair enables the confirm button");
+ok(pairRows().length === 1 && partRows().length === 0, "the pair locked in");
+ok(/coming off|else coming off/i.test(step()), "the list went back to the pitch");
+ok(!$("subsGoBtn").disabled && !$("subsGoBtn").hidden,
+   "a complete pair enables the confirm button");
 
 const box = document.querySelector(".subsPairRow input.pp");
 ok(box.value === "CM", "the incoming player inherits the vacated position by default");
@@ -86,7 +99,7 @@ ok(store.data.gameday.subs.length === 1, "the change is on the game's record");
 console.log("\n-- overriding the position --");
 reset();
 open();
-tap("Ali Khan"); tap("Ben Wu");
+swap("Ali Khan", "Ben Wu");
 const box2 = document.querySelector(".subsPairRow input.pp");
 box2.value = "LW";
 box2.dispatchEvent(new window.Event("input", { bubbles: true }));
@@ -97,9 +110,20 @@ ok(store.data.roster.find(p => p.id === 7).pos === "LW", "a typed position wins 
 console.log("\n-- a triple change in one action --");
 reset();
 open();
-tap("Jack Reed");  tap("Ben Wu");
-tap("Ali Khan");   tap("Cal Ryan");
-tap("Leo Diaz");   tap("Kai Moss");
+/* THE POINT OF v150: three names ticked in one go, the way a coach calls them. */
+tap("Jack Reed"); tap("Ali Khan"); tap("Leo Diaz");
+ok(rows().filter(r => r.classList.contains("ticked")).length === 3,
+   "three players ticked at once — no confirming in between");
+ok(partRows().length === 3, "all three show as waiting for a replacement");
+ok(/Choose 3 replacements/.test($("subsNextBtn").textContent),
+   "the button says how many are still to assign");
+next();
+ok(/comes on for/i.test(step()) && /2 more after this/.test(step()),
+   "it walks them one at a time and says how many are left: " + step());
+tap("Ben Wu");
+ok(/comes on for/i.test(step()), "and moves straight on to the next: " + step());
+tap("Cal Ryan");
+tap("Kai Moss");
 ok(pairRows().length === 3, "three pairs lined up");
 ok(/Make 3 changes/.test($("subsGoBtn").textContent), "the button offers all three");
 const shown = pairRows().map(r => r.textContent.replace(/[×\s]+/g, " ").trim());
@@ -118,8 +142,8 @@ ok(new Set(store.data.gameday.subs.map(s => s.batch)).size === 1,
 console.log("\n-- changing your mind --");
 reset();
 open();
-tap("Jack Reed"); tap("Ben Wu");
-tap("Ali Khan");  tap("Cal Ryan");
+swap("Jack Reed", "Ben Wu");
+swap("Ali Khan", "Cal Ryan");
 ok(pairRows().length === 2, "two pairs lined up");
 click(document.querySelectorAll(".subsPairRow .subsDrop")[0]);
 ok(pairRows().length === 1, "tapping the × drops that pair");
@@ -133,19 +157,19 @@ ok(!onPitch().includes(4), "Ali still came off");
 console.log("\n-- backing out of a half-made pair --");
 reset();
 open();
-tap("Ali Khan");
+tap("Ali Khan"); tap("Leo Diaz"); next();
 ok(!$("subsBackBtn").hidden, "Back appears while choosing a replacement");
 click($("subsBackBtn"));
-ok(partRows().length === 0 && /coming off/i.test(step()), "Back returns to the pitch list");
-ok($("subsBackBtn").hidden, "and Back hides again");
-ok($("subsGoBtn").disabled, "nothing is queued");
+ok(/coming off/i.test(step()), "Back returns to the pitch list");
+ok(rows().filter(r => r.classList.contains("ticked")).length === 2,
+   "and the two ticks SURVIVE — the coach has not lost the names they just chose");
+ok($("subsGoBtn").disabled, "nothing is queued yet");
 
 /* ------------------------------------------------------ 7. keeper guard */
 console.log("\n-- the keeper guard --");
 reset();
 open();
-tap("Sam Diaz");          // the GK
-tap("Ben Wu");            // an ST
+swap("Sam Diaz", "Ben Wu");   // the GK off, an ST on
 ok(!$("subsWarn").hidden, "taking the keeper off with no keeper on warns the coach");
 ok(!$("subsGoBtn").disabled, "but it does not block the change — the coach decides");
 click(document.querySelector(".subsPairRow .subsDrop"));
@@ -169,7 +193,7 @@ const minOf = name => {
   return r ? parseInt(r.querySelector(".mins").textContent, 10) : null;
 };
 ok(minOf("Ali Khan") === 20, "Ali's closed 0'-20' spell counts (got " + minOf("Ali Khan") + ")");
-tap("Tom Blake");
+tap("Tom Blake"); next();
 ok(minOf("Ben Wu") === 15, "Ben's closed 20'-35' spell counts on the bench list (got " + minOf("Ben Wu") + ")");
 const benchOrder = names();
 ok(minOf(benchOrder[0]) === 0 && benchOrder[benchOrder.length - 1] === "Ben Wu",
@@ -179,8 +203,8 @@ ok(minOf(benchOrder[0]) === 0 && benchOrder[benchOrder.length - 1] === "Ben Wu",
 console.log("\n-- undo --");
 reset();
 open();
-tap("Jack Reed"); tap("Ben Wu");
-tap("Ali Khan");  tap("Cal Ryan");
+tap("Jack Reed"); tap("Ali Khan"); next();
+tap("Ben Wu"); tap("Cal Ryan");
 click($("subsGoBtn"));
 ok(onPitch().join() === "1,2,5,6,7,8", "the double change went on");
 open();

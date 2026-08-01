@@ -368,10 +368,19 @@ export function initBoard(store) {
      which buys 56px rows and readable names.
      ======================================================= */
   const subsModal = document.getElementById("subsModal");
-  /* Completed pairs, waiting to be applied together. `pendingOut` is the player
-     tapped off who has not been given a replacement yet — when it is set, the
-     list is showing the bench. */
-  let subsPending = [], pendingOut = null;
+  /* State machine, deliberately small:
+       picking = "off"  the list is the pitch, and tapping TICKS a player.
+                        Several can be ticked — a coach calls "Cooper, Jaylan
+                        and Tom off" in one breath, so the app should take it in
+                        one breath too.
+       picking = "on"   the list is the bench, and the sheet walks through the
+                        ticked players one at a time: "who comes on for Cooper?".
+                        Each replacement is therefore still bound to a NAMED
+                        player, which is the v148 lesson — the coach never has to
+                        hold two parallel orders in their head.
+     `subsOff` is the tick list, `assignIdx` is how far through it we are, and
+     `subsPending` is the completed pairs waiting for one confirm. */
+  let subsPending = [], subsOff = [], assignIdx = 0, picking = "off";
 
   const matchMinute = () => Math.floor(gtElapsed() / 60000)
     + (gt.period > 1 ? (gt.period - 1) * gt.cfg.mins : 0);
@@ -478,10 +487,12 @@ export function initBoard(store) {
   function renderSubsModal() {
     const b = bstate();
     const mins = minutesPlayed();
-    const taken = new Set(subsPending.map(pr => pr.outId));
+    const paired = new Set(subsPending.map(pr => pr.outId));
     const coming = new Set(subsPending.map(pr => pr.inId));
+    const choosingOn = picking === "on";
+    const target = choosingOn ? subsOff[assignIdx] : null;
 
-    /* ---- the pairs lined up so far, plus the half-made one ---- */
+    /* ---- the changes so far, plus the ones still waiting for a replacement ---- */
     const wrap = document.getElementById("subsPairs");
     wrap.innerHTML = "";
     subsPending.forEach((pr, i) => {
@@ -511,17 +522,19 @@ export function initBoard(store) {
       row.append(off, sw, on, pi, x);
       wrap.appendChild(row);
     });
-    if (pendingOut != null) {
+    /* Everyone ticked off who has not been given a replacement yet, so a triple
+       change shows all three lines from the moment they are ticked. */
+    subsOff.filter(id => !paired.has(id)).forEach(id => {
       const row = document.createElement("div");
-      row.className = "subsPairRow part";
+      row.className = "subsPairRow part" + (id === target ? " now" : "");
       row.innerHTML = '<span class="subsChip off set"><span class="subsArrow">&#9660;</span>' +
-        nameOf(pendingOut) + '</span><span class="subsSwap">&#8646;</span>' +
-        '<span class="subsChip on">choose a replacement</span>';
+        nameOf(id) + '</span><span class="subsSwap">&#8646;</span>' +
+        '<span class="subsChip on">' +
+        (id === target ? "choosing…" : "waiting for a replacement") + "</span>";
       wrap.appendChild(row);
-    }
+    });
 
     /* ---- the one list, showing whichever side is being chosen ---- */
-    const choosingOn = pendingOut != null;
     const list = document.getElementById("subsList");
     list.classList.toggle("pickingOn", choosingOn);
     let people;
@@ -533,7 +546,7 @@ export function initBoard(store) {
     } else {
       /* Most played first, for the mirror-image reason: the player most likely to
          be coming off is the one who has been out there longest. */
-      people = roster().filter(p => b.placed[p.id] && !taken.has(p.id))
+      people = roster().filter(p => b.placed[p.id] && !paired.has(p.id))
         .sort((x, y) => (mins.get(y.id) || 0) - (mins.get(x.id) || 0));
     }
     list.innerHTML = "";
@@ -543,25 +556,37 @@ export function initBoard(store) {
       d.textContent = choosingOn ? "No subs available." : "Nobody left on the pitch to bring off.";
       list.appendChild(d);
     } else {
-      people.forEach(p => list.appendChild(subsRow(p, mins.get(p.id) || 0)));
+      people.forEach(p => {
+        const row = subsRow(p, mins.get(p.id) || 0);
+        if (!choosingOn && subsOff.includes(p.id)) row.classList.add("ticked");
+        list.appendChild(row);
+      });
     }
 
+    const remaining = subsOff.filter(id => !paired.has(id)).length;
     document.getElementById("subsStepLbl").textContent = choosingOn
-      ? "Who comes on for " + nameOf(pendingOut) + "?"
-      : (subsPending.length ? "Another change?" : "Who is coming off?");
-    document.getElementById("subsBackBtn").hidden = !choosingOn;
+      ? "Who comes on for " + nameOf(target) + "?" +
+        (remaining > 1 ? "  (" + (remaining - 1) + " more after this)" : "")
+      : (subsPending.length ? "Anyone else coming off?" : "Who is coming off?");
+    document.getElementById("subsBackBtn").hidden = !choosingOn && !subsOff.length;
 
     document.getElementById("subsPickHint").textContent = choosingOn
-      ? "Fewest minutes first. Tap to complete the change."
-      : (subsPending.length
-          ? "Tap another player to add a change, or make them all at once below."
-          : "Most minutes first. Tap a player, then their replacement.");
+      ? "Fewest minutes first."
+      : "Most minutes first. Tap everyone coming off — you can pick several.";
+
+    /* "Choose replacements" only exists while players are ticked but unassigned;
+       once every one of them has a replacement the confirm button takes over. */
+    const next = document.getElementById("subsNextBtn");
+    next.hidden = choosingOn || remaining === 0;
+    next.textContent = remaining > 1
+      ? "Choose " + remaining + " replacements" : "Choose a replacement";
 
     const warn = document.getElementById("subsWarn");
     const msg = keeperWarning(subsPending);
     warn.hidden = !msg; warn.textContent = msg;
 
     const go = document.getElementById("subsGoBtn");
+    go.hidden = choosingOn || remaining > 0;
     go.disabled = !subsPending.length;
     go.textContent = subsPending.length > 1
       ? "Make " + subsPending.length + " changes" : "Make the swap";
@@ -585,7 +610,7 @@ export function initBoard(store) {
   }
 
   function openSubsModal() {
-    subsPending = []; pendingOut = null;
+    subsPending = []; subsOff = []; assignIdx = 0; picking = "off";
     renderSubsModal();
     subsModal?.classList.add("open");
   }
@@ -594,24 +619,43 @@ export function initBoard(store) {
     if (currentView === "game") openSubsModal();
   });
 
+  /* Move to the next ticked player who still needs a replacement, or back to
+     the pitch list when they all have one. */
+  function advanceAssign() {
+    const paired = new Set(subsPending.map(pr => pr.outId));
+    const i = subsOff.findIndex(id => !paired.has(id));
+    if (i === -1) { picking = "off"; subsOff = []; assignIdx = 0; }
+    else { picking = "on"; assignIdx = i; }
+  }
+
   document.getElementById("subsList")?.addEventListener("click", e => {
     const r = e.target.closest(".subsRow"); if (!r) return;
     const id = +r.dataset.id;
-    if (pendingOut == null) {
-      pendingOut = id;                                  // first tap: who is off
+    if (picking === "off") {
+      const i = subsOff.indexOf(id);
+      if (i > -1) subsOff.splice(i, 1); else subsOff.push(id);   // tap again to untick
     } else {
-      subsPending.push({ outId: pendingOut, inId: id, pos: posOf(pendingOut) });
-      pendingOut = null;                                // second tap: pair locked
+      subsPending.push({ outId: subsOff[assignIdx], inId: id, pos: posOf(subsOff[assignIdx]) });
+      advanceAssign();
     }
     renderSubsModal();
   });
+  document.getElementById("subsNextBtn")?.addEventListener("click", () => {
+    if (!subsOff.length) return;
+    advanceAssign();
+    renderSubsModal();
+  });
   document.getElementById("subsBackBtn")?.addEventListener("click", () => {
-    pendingOut = null; renderSubsModal();
+    /* From the bench list, Back returns to the ticking step with the ticks
+       intact — the coach has not lost the three names they just chose. */
+    picking = "off"; assignIdx = 0;
+    renderSubsModal();
   });
   document.getElementById("subsPairs")?.addEventListener("click", e => {
     const btn = e.target.closest(".subsDrop"); if (!btn) return;
     const row = btn.closest(".subsPairRow");
-    subsPending.splice(+row.dataset.i, 1);
+    const pr = subsPending.splice(+row.dataset.i, 1)[0];
+    if (pr) subsOff = subsOff.filter(id => id !== pr.outId);
     renderSubsModal();
   });
   document.getElementById("subsUndoBtn")?.addEventListener("click", () => {
@@ -620,9 +664,9 @@ export function initBoard(store) {
   document.getElementById("subsGoBtn")?.addEventListener("click", () => {
     if (!subsPending.length) return;
     applySubs(subsPending);               // one change, one minute, one save
-    subsPending = []; pendingOut = null;
+    subsPending = []; subsOff = []; assignIdx = 0; picking = "off";
     renderSubsModal();
-    /* Back to the pitch. Several changes can be queued in one visit, so there is
+    /* Back to the pitch. Several changes go on in one action, so there is
        nothing to stay open for — and the thing a coach wants to see straight
        after a change is the new shape. */
     subsModal.classList.remove("open");
@@ -2275,6 +2319,84 @@ export function initBoard(store) {
     c.translate(0, HEAD);
     return { cv, c, W, H };
   }
+  /* Full-time card. Deliberately a picture rather than text: it goes to a team
+     WhatsApp group, where an image is read and a wall of text is not. */
+  async function shareGameSummary(g) {
+    if (guestShareBlocked()) return;
+    g = g || gday();
+    const W = 1080, PAD = 70;
+    const subs = (g.subs || []).slice().sort((a, b) => a.min - b.min);
+    /* Minutes are frozen on a completed game; for one still running, work them
+       out now. Either way the card shows what was true when it was made. */
+    const mins = g.minutes
+      ? new Map(Object.keys(g.minutes).map(k => [+k, g.minutes[k]]))
+      : minutesPlayed();
+    const played = roster().filter(p => mins.has(p.id))
+      .sort((a, b) => (mins.get(b.id) || 0) - (mins.get(a.id) || 0));
+    const notes = (g.notes || "").trim().split(/\n+/).filter(Boolean);
+
+    const H = 460 + subs.length * 52 + (played.length ? 90 + played.length * 46 : 0) +
+              (notes.length ? 90 + notes.length * 46 : 0) + PAD;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#101411"; c.fillRect(0, 0, W, H);
+
+    const sc = g.score || { us: 0, them: 0 };
+    const us = (store.data.teamName || "Us").toUpperCase();
+    const them = (g.opp || "OPPONENT").toUpperCase();
+
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillStyle = "#95a09a"; c.font = "700 34px 'Barlow Condensed',sans-serif";
+    let d = "";
+    if (g.date) { const dt = new Date(g.date + "T00:00");
+      if (!isNaN(dt)) d = dt.toLocaleDateString(undefined,
+        { weekday:"short", day:"numeric", month:"long", year:"numeric" }); }
+    c.fillText("FULL TIME" + (d ? "  ·  " + d : ""), W / 2, 80);
+
+    c.fillStyle = "#eceee9"; c.font = "700 52px 'Barlow Condensed',sans-serif";
+    c.textAlign = "right"; c.fillText(us, W / 2 - 150, 210, W / 2 - 190);
+    c.textAlign = "left";  c.fillText(them, W / 2 + 150, 210, W / 2 - 190);
+    c.textAlign = "center";
+    c.fillStyle = "#7CFC7A"; c.font = "700 130px 'Barlow Condensed',monospace";
+    c.fillText(sc.us + " – " + sc.them, W / 2, 210);
+
+    let y = 330;
+    const heading = t => {
+      c.textAlign = "left"; c.fillStyle = "#3b82f6";
+      c.font = "800 30px 'Barlow Condensed',sans-serif";
+      c.fillText(t.toUpperCase(), PAD, y); y += 52;
+    };
+    heading("Substitutions");
+    c.font = "600 34px 'Barlow Condensed',sans-serif";
+    if (!subs.length) { c.fillStyle = "#5d675f"; c.fillText("None", PAD, y); y += 52; }
+    subs.forEach(sv => {
+      c.fillStyle = "#5d675f"; c.fillText(sv.min + "'", PAD, y);
+      c.fillStyle = "#ff8f84"; c.fillText("▼ " + nameOf(sv.outId), PAD + 90, y);
+      c.fillStyle = "#7ee2ab"; c.fillText("▲ " + nameOf(sv.inId), PAD + 480, y);
+      y += 52;
+    });
+
+    if (played.length) {
+      y += 38; heading("Minutes played");
+      c.font = "600 32px 'Barlow Condensed',sans-serif";
+      played.forEach(p => {
+        c.textAlign = "left";  c.fillStyle = "#eceee9"; c.fillText(p.name, PAD, y, W - PAD * 2 - 140);
+        c.textAlign = "right"; c.fillStyle = "#95a09a"; c.fillText((mins.get(p.id) || 0) + "'", W - PAD, y);
+        c.textAlign = "left";
+        y += 46;
+      });
+    }
+    if (notes.length) {
+      y += 38; heading("Notes");
+      c.font = "500 32px 'Barlow Condensed',sans-serif"; c.fillStyle = "#c9cec9";
+      notes.forEach(line => { c.fillText(line, PAD, y, W - PAD * 2); y += 46; });
+    }
+
+    await shareCanvas(cv, "full-time.png",
+      us + " " + sc.us + "-" + sc.them + " " + them);
+  }
+
   async function shareCanvas(cv, filename, title) {
     const blob = await new Promise(res => cv.toBlob(res, "image/png"));
     const file = new File([blob], filename, { type: "image/png" });
@@ -2644,7 +2766,63 @@ export function initBoard(store) {
     document.getElementById("gameCfgChip").hidden = false; // CSS limits the bar to the game view
     renderScore();
     renderGamePitch();
+    renderNotesPill();
   }
+
+  /* ---------------- match notes ----------------
+     A pill over the top-left of the pitch, game view only. Notes live in
+     `gameday.notes`, which the data model already carried, so a note written
+     during the game is the same note that shows up at full time and in the
+     saved game. */
+  const notesPill = document.getElementById("notesPill");
+  const notesPane = document.getElementById("notesPane");
+  const npText    = document.getElementById("npText");
+  function renderNotesPill() {
+    if (!notesPill) return;
+    const g = store.data.gameday;
+    notesPill.hidden = !g;
+    const has = !!(g && (g.notes || "").trim());
+    notesPill.querySelector(".npDot").hidden = !has;
+    notesPill.querySelector(".npLbl").textContent = has ? "Notes" : "Add note";
+  }
+  function openNotes() {
+    if (!store.data.gameday) return;
+    npText.value = store.data.gameday.notes || "";
+    document.getElementById("npMin").textContent = matchMinute() + "'";
+    notesPane.hidden = false;
+    npText.focus();
+  }
+  function closeNotes() {
+    notesPane.hidden = true;
+    renderNotesPill();
+  }
+  notesPill?.addEventListener("click", openNotes);
+  document.getElementById("npClose")?.addEventListener("click", closeNotes);
+  /* Save on every keystroke through the store's own debounce — a coach who
+     locks the phone mid-note must not lose it, and store.flush() on pagehide
+     already covers backgrounding. */
+  npText?.addEventListener("input", () => {
+    const g = store.data.gameday; if (!g) return;
+    g.notes = npText.value;
+    saveGday();
+    const gn = document.getElementById("gNotes");
+    if (gn && document.activeElement !== gn) gn.value = g.notes;
+  });
+  /* One tap drops "34' " at the cursor. Keeps the box free-form — a coach
+     writes in their own shorthand — while making the timeline recoverable
+     afterwards, which is the whole value of notes taken during a game. */
+  document.getElementById("npStamp")?.addEventListener("click", () => {
+    const stamp = matchMinute() + "' ";
+    const at = npText.selectionStart == null ? npText.value.length : npText.selectionStart;
+    const before = npText.value.slice(0, at);
+    const sep = (!before || /\n$/.test(before)) ? "" : "\n";
+    npText.value = before + sep + stamp + npText.value.slice(at);
+    const caret = (before + sep + stamp).length;
+    npText.setSelectionRange(caret, caret);
+    npText.focus();
+    npText.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
   const gamePanel = document.getElementById("gamePanel");
   function openGameCfg() {
     renderGameday();
@@ -2712,13 +2890,41 @@ export function initBoard(store) {
     store.save({ games: list });
   }
   function renderGamesList() {
-    const list = document.getElementById("gamesList");
-    list.innerHTML = "";
+    const live = document.getElementById("gamesList");
+    const done = document.getElementById("doneList");
+    live.innerHTML = ""; done.innerHTML = "";
+
+    const openRow = g => () => {
+      if (currentView === "game") syncBoardToLineup(); // keep edits to the game being left
+      upsertCurrentGame();   // archive it
+      store.data.gameday = JSON.parse(JSON.stringify(g));
+      saveGday();
+      renderGameday();
+      gamesPanel.classList.remove("open");
+      // straight to this game's pitch; details sit behind the … chip
+      if (currentView === "game") { applyGameLineup(); renderAll(); redraw(); }
+      else setView("game");
+    };
+
     for (const g of games()) {
       const row = document.createElement("div");
-      row.className = "rrow";
+      row.className = "rrow" + (g.completed ? " done" : "");
       const rn = document.createElement("div");
       rn.className = "rname"; rn.textContent = gameLabel(g);
+      row.appendChild(rn);
+      if (g.completed) {
+        /* The result IS the label for a finished game — that is what you are
+           scanning the list for afterwards. */
+        const tag = document.createElement("span");
+        tag.className = "ftScoreTag";
+        tag.textContent = (g.score ? g.score.us : 0) + "–" + (g.score ? g.score.them : 0);
+        row.appendChild(tag);
+        const sh = document.createElement("button");
+        sh.className = "shareGame"; sh.textContent = "↗";
+        sh.setAttribute("aria-label", "Share this result");
+        sh.addEventListener("click", ev => { ev.stopPropagation(); shareGameSummary(g); });
+        row.appendChild(sh);
+      }
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "✕";
       del.setAttribute("aria-label", "Delete game");
@@ -2728,27 +2934,114 @@ export function initBoard(store) {
         store.save({ games: store.data.games });
         renderGamesList();
       });
-      row.append(rn, del);
-      row.addEventListener("click", () => {
-        if (currentView === "game") syncBoardToLineup(); // keep edits to the game being left
-        upsertCurrentGame();   // archive it
-        store.data.gameday = JSON.parse(JSON.stringify(g));
-        saveGday();
-        renderGameday();
-        gamesPanel.classList.remove("open");
-        // straight to this game's pitch; details sit behind the … chip
-        if (currentView === "game") { applyGameLineup(); renderAll(); redraw(); }
-        else setView("game");
-      });
-      list.appendChild(row);
+      row.appendChild(del);
+      row.addEventListener("click", openRow(g));
+      (g.completed ? done : live).appendChild(row);
     }
-    if (!games().length) {
+
+    document.getElementById("doneLabel").hidden = !done.childElementCount;
+    if (!live.childElementCount) {
       const empty = document.createElement("div");
       empty.className = "hint";
-      empty.textContent = "No saved games yet.";
-      list.appendChild(empty);
+      empty.textContent = "No games set up yet.";
+      live.appendChild(empty);
     }
+    /* Only offer Finish while there is something to finish. */
+    const fin = document.getElementById("finishGameBtn");
+    const g = store.data.gameday;
+    if (fin) fin.hidden = !g || g.completed || (!g.opp && !g.date && !g.lineup);
   }
+
+  /* ================= FULL TIME =================
+     One screen with everything that happened: the score, every change made, how
+     long each player was on, and the notes taken during the game. It is a
+     REVIEW step, not a save button — the coach reads it, adds a last thought,
+     and only then is it filed. Nothing is written until Save is tapped, so
+     backing out leaves the game exactly as it was.
+     ============================================= */
+  const finishPanel = document.getElementById("finishPanel");
+  function renderFinish() {
+    const g = gday();
+    document.getElementById("ftTitle").textContent =
+      g.opp ? "Full time · " + g.opp : "Full time";
+
+    const sc = g.score || { us: 0, them: 0 };
+    const ft = document.getElementById("ftScore");
+    ft.innerHTML = "";
+    const side = (txt, cls) => { const d = document.createElement("div");
+      d.className = "ftTeam" + (cls || ""); d.textContent = txt; return d; };
+    const num = n => { const d = document.createElement("div");
+      d.className = "ftNum"; d.textContent = n; return d; };
+    ft.append(side(store.data.teamName || "Us", " r"), num(sc.us),
+              num(sc.them), side(g.opp || "Opponent"));
+
+    const subs = (g.subs || []).slice().sort((a, b) => a.min - b.min);
+    const sw = document.getElementById("ftSubs");
+    sw.innerHTML = "";
+    subs.forEach(sv => {
+      const row = document.createElement("div");
+      row.className = "ftRow";
+      row.innerHTML = '<span class="min">' + sv.min + "'</span>" +
+        '<span class="o">&#9660; ' + nameOf(sv.outId) + "</span>" +
+        '<span class="i">&#9650; ' + nameOf(sv.inId) + "</span>";
+      sw.appendChild(row);
+    });
+
+    /* Most minutes first: the question this answers at full time is "did
+       anybody get short-changed", and the bottom of the list is the answer. */
+    const mins = minutesPlayed();
+    const mw = document.getElementById("ftMins");
+    mw.innerHTML = "";
+    roster().filter(p => mins.has(p.id))
+      .sort((a, b) => (mins.get(b.id) || 0) - (mins.get(a.id) || 0))
+      .forEach(p => {
+        const row = document.createElement("div");
+        row.className = "ftRow";
+        const who = document.createElement("span");
+        who.className = "who"; who.textContent = p.name;
+        const amt = document.createElement("span");
+        amt.className = "amt"; amt.textContent = (mins.get(p.id) || 0) + "'";
+        row.append(who, amt);
+        mw.appendChild(row);
+      });
+
+    const nt = document.getElementById("ftNotes");
+    if (document.activeElement !== nt) nt.value = g.notes || "";
+  }
+  function openFinish() {
+    if (!store.data.gameday) return;
+    if (currentView === "game") syncBoardToLineup();   // the shape at full time
+    gamesPanel.classList.remove("open");
+    closeGameCfg();
+    renderFinish();
+    finishPanel.classList.add("open");
+  }
+  document.getElementById("finishGameBtn")?.addEventListener("click", openFinish);
+  document.getElementById("ftCancel")?.addEventListener("click",
+    () => finishPanel.classList.remove("open"));
+  finishPanel?.addEventListener("click", e => {
+    if (e.target === finishPanel) finishPanel.classList.remove("open");
+  });
+  document.getElementById("ftNotes")?.addEventListener("input", e => {
+    const g = gday(); g.notes = e.target.value; saveGday();
+  });
+  document.getElementById("ftShare")?.addEventListener("click", () => shareGameSummary(gday()));
+  document.getElementById("ftConfirm")?.addEventListener("click", () => {
+    const g = gday();
+    g.completed = true;
+    g.finishedAt = new Date().toISOString();
+    /* Freeze the minutes as they stood at full time. They are reconstructed from
+       the log everywhere else, but the log cannot know when the game ENDED — so
+       without this a completed game's minutes would keep growing with the
+       clock. */
+    g.minutes = {};
+    minutesPlayed().forEach((v, k) => { g.minutes[k] = v; });
+    saveGday();
+    upsertCurrentGame();
+    finishPanel.classList.remove("open");
+    renderGamesList();
+    gamesPanel.classList.add("open");   // land on the list, with it now filed
+  });
   document.getElementById("newGameBtn").addEventListener("click", () => {
     if (currentView === "game") syncBoardToLineup();
     upsertCurrentGame();   // archive the current one first
