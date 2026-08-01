@@ -452,9 +452,9 @@ body.drillsMode #boardView > main{
 .tok{
   position:absolute;display:flex;align-items:center;justify-content:center;
   transform:translate(-50%,-50%);
-  width:clamp(20px,6.5%,32px);aspect-ratio:1;
+  width:clamp(23px,7.5%,37px);aspect-ratio:1;
   border-radius:50%;
-  font-weight:700;font-size:clamp(9px,1.6vh,12px);
+  font-weight:700;font-size:clamp(10.5px,1.8vh,14px);
   letter-spacing:.02em;
   cursor:grab;touch-action:none;
   transition:left .35s ease,top .35s ease;
@@ -468,7 +468,7 @@ body.drillsMode #boardView > main{
 .tok.opp{background:var(--opp);color:var(--opp-ink)}
 .tok .pname{
   position:absolute;top:100%;left:50%;transform:translateX(-50%);
-  margin-top:2px;font-size:clamp(8px,1.4vh,10px);font-weight:600;
+  margin-top:2px;font-size:clamp(9.2px,1.6vh,11.5px);font-weight:600;
   color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85);
   white-space:nowrap;pointer-events:none;line-height:1;
   letter-spacing:.03em;
