@@ -269,6 +269,46 @@ export function initBoard(store) {
     document.getElementById("subPos").value = outP.pos;   // default to the spot being filled
     subPanel.classList.add("open");
   }
+
+  // player menu sheet: edit position or substitute directly from the pitch
+  let pmCtx = null;
+  const pmPanel = document.getElementById("playerMenuPanel");
+  window.openPlayerMenu = function(id) {
+    const p = roster().find(p => p.id === id);
+    if (!p) return;
+    pmCtx = id;
+    document.getElementById("pmName").textContent = p.name;
+    document.getElementById("pmPos").value = p.pos || "";
+    pmPanel.classList.add("open");
+  };
+  document.getElementById("pmSaveBtn")?.addEventListener("click", () => {
+    if (!pmCtx) return;
+    const p = roster().find(x => x.id === pmCtx);
+    if (p) {
+      const pos = document.getElementById("pmPos").value.trim().toUpperCase();
+      if (pos && p.pos !== pos) {
+        p.pos = pos;
+        store.save({ roster: store.data.roster });
+        renderTeam();
+        renderBench();
+      }
+    }
+    pmPanel.classList.remove("open");
+  });
+  document.getElementById("pmSubBtn")?.addEventListener("click", () => {
+    if (!pmCtx) return;
+    const b = bstate();
+    delete b.placed[pmCtx];
+    saveBoard();
+    renderTeam();
+    pmPanel.classList.remove("open");
+  });
+  document.getElementById("pmCancelBtn")?.addEventListener("click", () => {
+    pmPanel.classList.remove("open");
+  });
+  pmPanel?.addEventListener("click", e => {
+    if (e.target === pmPanel) pmPanel.classList.remove("open");
+  });
   /* ONE swap path, used by the drag-and-drop sheet and the substitutions modal.
      The player coming on inherits the spot being vacated; the position is theirs
      to keep or change. */
@@ -614,6 +654,7 @@ export function initBoard(store) {
       const sx = e.clientX, sy = e.clientY;
       let lastX = e.clientX, lastY = e.clientY, moved = false;
       const b = bstate();
+      const origPos = b.placed[id] ? { ...b.placed[id] } : null;
       const mv = ev => {
         lastX = ev.clientX; lastY = ev.clientY;
         if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 6) return; // ignore jitter so taps stay clean
@@ -632,6 +673,7 @@ export function initBoard(store) {
         benchZone.classList.remove("dropTarget");
         if (!moved) {                                 // a tap, not a drag
           if (subSel != null && subSel !== id) openSubSheet(subSel, id);  // sub the selected player in
+          else if (typeof openPlayerMenu === "function") openPlayerMenu(id);
           return;
         }
         t.el.classList.remove("dragging"); dragging = false;
@@ -641,7 +683,24 @@ export function initBoard(store) {
         }
         const bz = benchZone.getBoundingClientRect();
         const overBench = lastX >= bz.left && lastX <= bz.right && lastY >= bz.top && lastY <= bz.bottom;
-        if (overBench || lastY > r.bottom + 10) { delete b.placed[id]; renderTeam(); }
+        if (overBench || lastY > r.bottom + 10) { delete b.placed[id]; renderTeam(); saveBoard(); return; }
+        
+        let swapped = false;
+        if (origPos) {
+           for (const [otherIdStr, pos] of Object.entries(b.placed)) {
+              const otherId = Number(otherIdStr);
+              if (otherId === id) continue;
+              const px = r.left + pos.x * r.width;
+              const py = r.top + pos.y * r.height;
+              if (Math.hypot(lastX - px, lastY - py) < 30) {
+                 b.placed[id] = { ...b.placed[otherId] };
+                 b.placed[otherId] = origPos;
+                 swapped = true;
+                 break;
+              }
+           }
+        }
+        if (swapped) renderTeam();
         saveBoard();
       };
       t.el.addEventListener("pointermove", mv);
@@ -858,14 +917,7 @@ export function initBoard(store) {
   /* Point every ball at the line it is about to travel down, and remember the
      offset on the item so hit-testing can use it. Cheap: a handful of balls. */
   function orientBalls() {
-    const r = board.getBoundingClientRect(), c = gridCellPx();
-    drillItems.forEach(it => {
-      if (it.kind !== "dball" || !it.el) return;
-      const [ux, uy] = ballFacing(it.x, it.y);
-      it.offVis = [ux * BALL_VIS_OFF * c / r.width, uy * BALL_VIS_OFF * c / r.height];
-      it.el.style.setProperty("--bx", (ux * BALL_VIS_OFF * 100) + "%");
-      it.el.style.setProperty("--by", (uy * BALL_VIS_OFF * 100) + "%");
-    });
+    // Disabled visual offsets to perfectly align the ball to the hidden grid
   }
   /* A ball is DRAWN clear of its player, so the ball the coach can SEE is not
      where the ball's model position is. Match a ball at BOTH points and always
@@ -877,9 +929,6 @@ export function initBoard(store) {
     (items || drillItems).forEach(it => {
       const dx = (it.x - x) * r.width, dy = (it.y - y) * r.height;
       let d = Math.hypot(dx, dy);
-      if (it.kind === "dball" && it.offVis)
-        d = Math.min(d, Math.hypot(dx + it.offVis[0] * r.width,
-                                   dy + it.offVis[1] * r.height));
       if (d < bd) { bd = d; best = it; }
     });
     return best ? [best.x, best.y] : [x, y];
@@ -2482,6 +2531,23 @@ export function initBoard(store) {
     gamesPanel.classList.remove("open");
     openGameCfg();         // straight into the setup form
   });
+  document.getElementById("createGameDayBtn")?.addEventListener("click", () => {
+    // FPL style: create game day directly from the Team sheet, capturing the layout instantly
+    upsertCurrentGame();
+    const b = bstate();
+    store.data.gameday = {
+      date: "", time: "", opp: "", notes: "",
+      lineup: {
+        formation: b.formation, squad: b.squad,
+        placed: JSON.parse(JSON.stringify(b.placed)), at: Date.now()
+      }
+    };
+    saveGday();
+    renderGameday();
+    document.getElementById("ctlMenuPanel").classList.remove("open");
+    setView("game");
+    openGameCfg();
+  });
   document.getElementById("closeGames")?.addEventListener("click", () => gamesPanel.classList.remove("open"));
   gamesPanel.addEventListener("click", e => { if (e.target === gamesPanel) gamesPanel.classList.remove("open"); });
   document.getElementById("gCapture").addEventListener("click", () => {
@@ -2982,9 +3048,12 @@ export function initBoard(store) {
                      dx = p[0] - pathPts[i-1][0];
                      dy = p[1] - pathPts[i-1][1];
                  }
-                 const len = Math.hypot(dx, dy) || 1;
-                 return { left: ((p[0] + (dx/len)*0.025)*_r.width)+'px',
-                          top:  ((p[1] + (dy/len)*0.025)*_r.height)+'px' };
+                 const dxPx = dx * _r.width;
+                 const dyPx = dy * _r.height;
+                 const lenPx = Math.hypot(dxPx, dyPx) || 1;
+                 const offsetPx = 0.025 * _r.width; // uniform physical pixel offset
+                 return { left: (p[0] * _r.width + (dxPx/lenPx) * offsetPx)+'px',
+                          top:  (p[1] * _r.height + (dyPx/lenPx) * offsetPx)+'px' };
              });
              // Convert the final keyframe back to normalised 0..1. These are PX
              // now (see the note above); dividing by 100 as if they were still

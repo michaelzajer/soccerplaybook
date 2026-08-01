@@ -96,9 +96,9 @@ window.addEventListener("unhandledrejection", function(event) {
   </header>
   <div id="controls">
     <div class="seg" id="viewSeg">
-      <button class="on" data-view="team">Team <span class="chev">⌄</span></button>
-      <button data-view="game">Game day <span class="chev">⌄</span></button>
-      <button data-view="drills">Drills <span class="chev">⌄</span></button>
+      <button class="on" data-view="team">Team <span class="chev">☰</span></button>
+      <button data-view="game">Game day <span class="chev">☰</span></button>
+      <button data-view="drills">Drills <span class="chev">☰</span></button>
     </div>
   </div>
 
@@ -410,6 +410,7 @@ window.addEventListener("unhandledrejection", function(event) {
     <div class="sheet">
       <h2 id="ctlMenuTitle">Team options</h2>
       <div class="menuSheet">
+        <button class="primary" id="createGameDayBtn">Start Game Day</button>
         <button id="squadBtn">My squad…</button>
         <button id="namesToggle">Player names</button>
         <button id="oppToggle">Opposition</button>
@@ -462,6 +463,20 @@ window.addEventListener("unhandledrejection", function(event) {
       <div class="hint">The player coming on takes that spot. Change the position if they are playing somewhere different.</div>
       <button class="primary" id="subConfirm">Make substitution</button>
       <button class="close" id="subCancel">Cancel</button>
+    </div>
+  </div>
+
+  <div id="playerMenuPanel" class="overlay">
+    <div class="sheet">
+      <h2 id="pmName">Player Name</h2>
+      <div class="cfgRow">
+        <label class="tlab">Position
+          <input id="pmPos" maxlength="3" autocomplete="off" list="posList">
+        </label>
+      </div>
+      <button class="primary" id="pmSaveBtn">Save</button>
+      <button class="close" id="pmSubBtn">Substitute (Move to Bench)</button>
+      <button class="close" id="pmCancelBtn">Cancel</button>
     </div>
   </div>
 
@@ -576,9 +591,10 @@ window.addEventListener("unhandledrejection", function(event) {
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
+<link rel="stylesheet" href="styles.css?v=164" />
 <script src="js/drills.js?v=147"></script>
-<script src="js/drill-text.js?v=152"></script>
-<script type="module" src="js/app.js?v=155"></script>
+<script src="js/drill-text.js?v=162"></script>
+<script type="module" src="js/app.js?v=163"></script>
 
 </body>
 </html>

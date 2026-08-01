@@ -403,11 +403,12 @@ body:not(.drillsMode) #drillSequencer { display: none; }
   flex:1 1 auto;min-height:0;height:auto;
   display:flex;align-items:center;justify-content:center;
   overflow:hidden;
-  padding:2px 12px calc(var(--clear-toolbar) + env(safe-area-inset-bottom));
+  /* In Team/Game views, the bench sits below main in the normal flow, so we
+     only need standard padding. */
+  padding:2px 12px 12px;
 }
-/* The kit tray is summoned from the toolbar and dismissed after use, so drills
-   no longer permanently reserves its height — only the toolbar's. */
-/* Drills reserves only the dock's height; panes overlay the pitch above it. */
+/* In Drills mode, the floating dock sits at the bottom of the screen over main,
+   so we must reserve space for it so the pitch isn't obscured. */
 body.drillsMode #boardView > main{
   padding-bottom:calc(var(--dock-h) + 26px + env(safe-area-inset-bottom));
 }
@@ -639,13 +640,13 @@ body:not(.drillsMode) #playDrillBtn{display:none}
      board.js sets --bx/--by per ball from the line departing it (magnitude
      BALL_VIS_OFF = 0.85 of a piece, which is where the player's 0.5 radius and
      the ball's 0.35 stop overlapping). The fallback is down-right. */
-  transform:translate(-50%,-50%) translate(var(--bx,60%),var(--by,60%));
+  transform:translate(-50%,-50%);
 }
 .dball{width:70%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 55%,#d9d9d9 100%);position:relative;
   box-shadow:0 0 0 1.5px rgba(0,0,0,.65), 0 1px 3px rgba(0,0,0,.5)}
 .dball::after{content:"";position:absolute;inset:30%;background:#111;border-radius:50%;clip-path:polygon(50% 0,95% 35%,78% 90%,22% 90%,5% 35%)}
-.att{width:80%;aspect-ratio:1;border-radius:50%;background:var(--team);border:1.5px solid rgba(0,0,0,.2)}
-.def{width:80%;aspect-ratio:1;border-radius:50%;background:var(--opp);border:1.5px solid rgba(0,0,0,.2)}
+.att{width:80%;height:80%;display:flex;align-items:center;justify-content:center;aspect-ratio:1;border-radius:50%;background:var(--team);border:1.5px solid rgba(0,0,0,.2)}
+.def{width:80%;height:80%;display:flex;align-items:center;justify-content:center;aspect-ratio:1;border-radius:50%;background:var(--opp);border:1.5px solid rgba(0,0,0,.2)}
 .goal{
   width:100%;height:42%;
   border:2.5px solid #fff;border-bottom:none;border-radius:2px 2px 0 0;

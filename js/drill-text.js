@@ -321,41 +321,120 @@ function parseDrill(text, nameFromArg) {
       return { mode: mode, pts: [a, b] };
     };
 
+    var stateTrack = {};
     var cones = items.filter(function(it) { return it.kind === 'cone'; });
     cones.sort(function(a, b) {
       if (Math.abs(a.y - b.y) > 0.05) return a.y - b.y;
       return a.x - b.x;
     });
 
-    var labelPt = function (tok) {
+    var labelPt = function (tok, returnKey) {
       tok = tok.toLowerCase().trim();
+      var pt = null;
+      var key = null;
       
-      // Look for any mention of player/p followed by number
-      var mPlayer = /(?:player|p)\s*(\d+)/.exec(tok);
-      if (mPlayer) {
-        var hit = items.filter(function (x) { return (x.kind === 'att' || x.kind === 'def') && String(x.num) === String(mPlayer[1]); })[0];
-        if (hit) return [hit.x, hit.y];
+      if (tok === "the ball" || tok === "ball") {
+        var dball = items.find(function(it) { return it.kind === 'dball'; });
+        if (dball) {
+            key = 'dball';
+            pt = stateTrack[key] || [dball.x, dball.y];
+        }
       }
       
-      // Look for any mention of cone/marker/c/o followed by number
-      var mCone = /(?:cone|marker|c|o)\s*(\d+)/.exec(tok);
-      if (mCone) {
-        var hit = cones.filter(function(x) { return String(x.num) === String(mCone[1]); })[0];
-        if (hit) return [hit.x, hit.y];
-        var i = +mCone[1] - 1;
-        if (cones[i]) return [cones[i].x, cones[i].y];
+      if (!pt) {
+          var mPlayer = /(?:player|p)\s*(\d+)/.exec(tok);
+          if (mPlayer) {
+            var hit = items.filter(function (x) { return (x.kind === 'att' || x.kind === 'def') && String(x.num) === String(mPlayer[1]); })[0];
+            if (hit) {
+                key = hit.kind + hit.num;
+                pt = stateTrack[key] || [hit.x, hit.y];
+            }
+          }
       }
       
-      // Fallback: just a number. Prefer players first, then fallback to anything else.
-      var mNum = /\b(\d+)\b/.exec(tok);
-      if (mNum) {
-        var players = items.filter(function(x) { return (x.kind === 'att' || x.kind === 'def') && String(x.num) === String(mNum[1]); });
-        if (players.length > 0) return [players[0].x, players[0].y];
-        var hit = items.filter(function (x) { return String(x.num) === String(mNum[1]); })[0];
-        if (hit) return [hit.x, hit.y];
+      if (!pt) {
+          var mCone = /(?:cone|marker|c|o)\s*(\d+)/.exec(tok);
+          if (mCone) {
+            var hit = cones.filter(function(x) { return String(x.num) === String(mCone[1]); })[0];
+            if (!hit) {
+                var i = +mCone[1] - 1;
+                if (cones[i]) hit = cones[i];
+            }
+            if (hit) {
+                key = hit.kind + hit.num;
+                pt = stateTrack[key] || [hit.x, hit.y];
+            }
+          }
       }
       
-      throw new Error('cannot find "' + tok + '"');
+      if (!pt) {
+          var mNum = /\b(\d+)\b/.exec(tok);
+          if (mNum) {
+            var players = items.filter(function(x) { return (x.kind === 'att' || x.kind === 'def') && String(x.num) === String(mNum[1]); });
+            var hit = players.length > 0 ? players[0] : items.filter(function (x) { return String(x.num) === String(mNum[1]); })[0];
+            if (hit) {
+                key = hit.kind + hit.num;
+                pt = stateTrack[key] || [hit.x, hit.y];
+            }
+          }
+      }
+      
+      if (returnKey) return { pt: pt, key: key };
+      return pt;
+    };
+    
+    var resolveTarget = function(str, p1) {
+      str = str.trim();
+      var distMatch = /^(\d+(?:\.\d+)?)m\s+(.*)$/i.exec(str);
+      var dist = null;
+      var isShortOf = false;
+      if (distMatch) {
+        dist = parseFloat(distMatch[1]);
+        str = distMatch[2].trim();
+        if (str.toLowerCase().startsWith("short of ")) {
+            isShortOf = true;
+            str = str.substring(9).trim();
+        }
+      }
+      
+      if (str.toLowerCase().startsWith("towards ")) str = str.substring(8).trim();
+      
+      var p2 = null;
+      var dir = str.toLowerCase();
+      if (dir === "left") p2 = [p1[0] - 1, p1[1]];
+      else if (dir === "right") p2 = [p1[0] + 1, p1[1]];
+      else if (dir === "up" || dir === "forward") p2 = [p1[0], p1[1] - 1];
+      else if (dir === "down" || dir === "back" || dir === "backward") p2 = [p1[0], p1[1] + 1];
+      else {
+        var betweenMatch = /^between\s+(.*?)\s+and\s+(.*)$/i.exec(str);
+        if (betweenMatch) {
+          var ptA = labelPt(betweenMatch[1]);
+          var ptB = labelPt(betweenMatch[2]);
+          if (ptA && ptB) p2 = [(ptA[0] + ptB[0])/2, (ptA[1] + ptB[1])/2];
+        } else {
+          p2 = labelPt(str);
+        }
+      }
+      
+      if (!p2) return null;
+      
+      if (dist !== null) {
+        var dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+        var AR = 105/68; // pitch aspect ratio
+        var lenPx = Math.sqrt(dx*dx + (dy*AR)*(dy*AR));
+        if (lenPx === 0) return p2;
+        
+        if (isShortOf) {
+            var totalDistMeters = lenPx * 68;
+            var newDist = Math.max(0, totalDistMeters - dist);
+            var scale = (newDist / 68) / lenPx;
+            p2 = [p1[0] + dx * scale, p1[1] + dy * scale];
+        } else {
+            var scale = (dist / 68) / lenPx;
+            p2 = [p1[0] + dx * scale, p1[1] + dy * scale];
+        }
+      }
+      return p2;
     };
 
     var strokes = [];
@@ -402,8 +481,24 @@ function parseDrill(text, nameFromArg) {
         if (mode === "runs" || mode === "run" || mode === "moves" || mode === "move") mode = "run";
         if (mode === "dribbles" || mode === "dribble") mode = "dribble";
         
+        var targetStr = m[3].trim();
+        if (targetStr.toLowerCase().startsWith("to ")) targetStr = targetStr.substring(3).trim();
+        if (targetStr.toLowerCase().includes("with the ball")) {
+            mode = "dribble";
+            targetStr = targetStr.replace(/with the ball/i, "").trim();
+        }
+        
         try {
-          var p1 = labelPt(m[1]), p2 = labelPt(m[3]);
+          var p1Obj = labelPt(m[1], true);
+          if (!p1Obj || !p1Obj.pt) return;
+          var p1 = p1Obj.pt;
+          var p2 = resolveTarget(targetStr, p1);
+          if (!p2) return;
+          
+          // update state for the subject ONLY if they are running/dribbling
+          if (p1Obj.key && mode !== "pass") {
+              stateTrack[p1Obj.key] = p2;
+          }
           
           if (mode === "pass" && !snappedBall) {
             // Snap the ball to the FIRST passer's location to fix disconnection
@@ -415,14 +510,16 @@ function parseDrill(text, nameFromArg) {
             }
           }
           
+          // Use a fixed aspect ratio roughly matching the pitch (68/105) to compute a true physical length
+          var AR = 105/68; // height multiplier
           var dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-          var len = Math.sqrt(dx * dx + dy * dy);
-          var shorten = 0.025; // keep lines from overlapping icons
+          var lenPx = Math.sqrt(dx * dx + (dy * AR) * (dy * AR));
+          var shortenPx = 0.025; // keep lines from overlapping icons in width-relative units
           
           var a = p1, b = p2;
-          if (len > shorten * 2) {
-             a = [p1[0] + (dx/len)*shorten, p1[1] + (dy/len)*shorten];
-             b = [p2[0] - (dx/len)*shorten, p2[1] - (dy/len)*shorten];
+          if (lenPx > shortenPx * 2) {
+             a = [p1[0] + (dx/lenPx)*shortenPx, p1[1] + (dy/lenPx)*shortenPx/AR];
+             b = [p2[0] - (dx/lenPx)*shortenPx, p2[1] - (dy/lenPx)*shortenPx/AR];
           }
           
           var strokePts = [];
@@ -433,7 +530,40 @@ function parseDrill(text, nameFromArg) {
               +(a[1] + (b[1] - a[1]) * t).toFixed(4)
             ]);
           }
-          strokes.push({ mode: mode, pts: strokePts, seq: strokes.length + 1 });
+          
+          // "Running onto a pass" intercept logic:
+          // If a player runs immediately after a pass is played to them, they are running to receive it.
+          // We redirect the pass to end exactly where their run ends.
+          if (strokes.length > 0 && (mode === "run" || mode === "sprint")) {
+             var lastStroke = strokes[strokes.length - 1];
+             if (lastStroke.mode === "pass") {
+                var lastEnd = lastStroke.rawEnd || lastStroke.pts[lastStroke.pts.length - 1];
+                var distToPassEnd = Math.hypot(lastEnd[0] - p1[0], lastEnd[1] - p1[1]);
+                if (distToPassEnd < 0.05) {
+                   var passA = lastStroke.rawStart || lastStroke.pts[0];
+                   var passB = p2; // The pass now ends where the run ends
+                   var pdx = passB[0] - passA[0], pdy = passB[1] - passA[1];
+                   var plenPx = Math.sqrt(pdx*pdx + (pdy*AR)*(pdy*AR));
+                   var pA = passA, pB = passB;
+                   if (plenPx > shortenPx * 2) {
+                       pA = [passA[0] + (pdx/plenPx)*shortenPx, passA[1] + (pdy/plenPx)*shortenPx/AR];
+                       pB = [passB[0] - (pdx/plenPx)*shortenPx, passB[1] - (pdy/plenPx)*shortenPx/AR];
+                   }
+                   var newPassPts = [];
+                   for (var k = 0; k <= 16; k++) {
+                       var pt = k / 16;
+                       newPassPts.push([
+                          +(pA[0] + (pB[0] - pA[0]) * pt).toFixed(4),
+                          +(pA[1] + (pB[1] - pA[1]) * pt).toFixed(4)
+                       ]);
+                   }
+                   lastStroke.pts = newPassPts;
+                   lastStroke.rawEnd = passB;
+                }
+             }
+          }
+          
+          strokes.push({ mode: mode, pts: strokePts, seq: strokes.length + 1, rawStart: p1, rawEnd: p2 });
           success = true;
         } catch (e) {
           // silently ignore parse errors so user can type freely
