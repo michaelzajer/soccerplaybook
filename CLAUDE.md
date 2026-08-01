@@ -65,7 +65,7 @@ drill-text 162, app 172), which makes a deploy non-deterministic:
    download and parse), `js/drills.js?v=NN`, `js/drill-text.js?v=NN`,
    `js/app.js?v=NN`.
 2. In `js/app.js`: `firebase-config.js?v=NN`, `board.js?v=NN`.
-3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v148**.
+3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v149**.
 4. `node --check js/*.js sw.js` before declaring done, then the `_*.mjs` suite.
 3. Always give Michael this block at the end (his standing request):
 
@@ -493,6 +493,60 @@ reaching the confirm button never means scrolling inside a box first.
   `applySubs` mutates player objects in place, so re-copying the live array
   carries the drift forward and makes correct behaviour look broken.
 
+## NO ENGLISH PARSER IN THE APP (v149 — do not add one back)
+
+`parseSequenceLines` was a ~260-line regex parser for prose ("player 1 passes to
+player 2 who runs out 5m to meet the ball…"). It has been deleted. Three reasons,
+all of which apply to any replacement:
+
+1. **It was wired to the drill NOTES box** (`#drillNotes` / `#liveNotes` /
+   `#deNotes`) and recompiled on every keystroke, doing `drillSteps = [strokes]`
+   then `pushState()`. Typing a coaching point onto a hand-drawn drill silently
+   destroyed the drill. Notes are notes now; the boxes only mirror each other.
+2. **It failed silently by design** — a `catch` that ignored errors "so the user
+   can type freely", plus early returns on unresolved references. There was no
+   way to tell "understood you" from "ignored you". On Michael's reference
+   sentence it emitted two passes both struck by player 1, dropped the run, and
+   attached `then passes…` to the wrong subject, with no error.
+3. **It duplicated the engine.** Rules 3a-3c already express "running onto a
+   pass"; the parser had its own "intercept logic" rewriting the previous pass's
+   endpoint. Two inference systems for one job, from different data.
+
+The replacement is the workflow, not more code: **prose → Claude → notation →
+Import from text…**, with the import panel showing a numbered readback of what
+was parsed before anything is saved. See DRILL-NOTATION.md section 0.
+
+- New notation form, and the only multi-word endpoint: **`5m from 2 towards 1`**
+  — a point a real distance off one reference along the line to another. Shared
+  by both the metric and grid parsers via `stepTowards`. An arrow (`->`) is
+  required when either end uses it, since `A to B` cannot be split safely.
+- `tools/examples/meet-the-ball.txt` is the worked prose→notation example and
+  `_drilltext.mjs` drives it end to end.
+
+**Known limit, stated plainly:** `DEP_TOL` is 0.08 pitch widths ≈ 5.4 m, so a
+movement shorter than that is invisible to the dependency rules. "Runs out 5m to
+meet the ball" therefore plays as *ball into space, lands, player collects it*
+rather than the two moving together. That reads fine as a drill. Genuine
+simultaneity needs the explicit `after:[strokeIndex]` links from the
+architecture section, NOT a smaller tolerance.
+
+### Two engine bugs found while testing this (v149)
+
+- **`loadPreset` did not unflatten strokes.** It did
+  `s.pts.map(pt => [pt[0], pt[1]])`, which assumes NESTED points — true of the
+  built-in drills in `js/drills.js`, false for anything from the notation parser
+  or Firestore, both of which are FLAT. Indexing a number gives `undefined`, so
+  such a drill loaded its pieces and then animated nothing at all. It now goes
+  through `unflatStroke`, exactly as `loadDrill` does.
+- **`buildTimeline` alerted a raw stack trace** on any failure — useless to a
+  coach on a phone, and it covered the pitch. Now `console.error` plus resetting
+  the Play button.
+- **`nearPt` is now aspect-weighted.** It compared normalised coordinates with an
+  unweighted hypot, so "same place" was 5.4 m across the pitch but 8.4 m up it.
+  Same bug class as the leg-length fix in v141, same fix: weight `dy` by
+  `PITCH_LEN / PITCH_WID` so `DEP_TOL` means one real distance in every
+  direction. All three reference drills still pass.
+
 ## Drill notation (v138)
 
 A text format for describing a drill precisely: a GRID picture of the layout plus
@@ -586,7 +640,7 @@ does the jsdom boot: stubs canvas getContext, pointer capture and
 getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
 the timeline with one that buffers every `.to()` and can `settle()` them.
 `node --check js/*.js sw.js` first, always. Run: `for t in _laps _shuttle _align
-_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome
+_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome _drilltext
 _smoke _smoke_app; do node $t.mjs; done`
 (`_landing.mjs` covers the marketing page's hero drill demos, which are a
 separate hand-rolled animation in index.html, not the app engine.)

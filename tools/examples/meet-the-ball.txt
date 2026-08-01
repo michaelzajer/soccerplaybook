@@ -1,0 +1,36 @@
+# "Player 1 passes to player 2, who runs out 5m to meet the ball and then
+#  passes to player 3 who is at cone 3."
+#
+# This is the worked example of prose -> notation. Every clause in that sentence
+# lands somewhere explicit:
+#
+#   "passes to player 2 ... who runs out 5m to meet the ball"
+#       the pass does NOT end on player 2's cone. It ends at the meeting point,
+#       5 m off his cone towards the passer, and player 2 runs to the same
+#       point. Two lines ending in the same place is what the engine reads as
+#       "arrive together" (rule 3b) — the pass first, then the run.
+#
+#   "then passes to player 3"
+#       drawn after the run, so it waits for player 2 to get there and for the
+#       ball to arrive (rules 1 and 2).
+#
+#   "who is at cone 3"
+#       just tells us where player 3 is, which the GRID already says. It is not
+#       an action, so it produces no line.
+
+DRILL Meet the ball
+
+GRID
+.  .  .   .  .  .  .  .  .   .  .
+.  .  .   .  .  .  .  o+3  .  .  .
+.  .  .   .  .  .  .  .  .   .  .
+.  .  o+2 .  .  .  .  .  .   .  .
+.  .  .   .  .  .  .  .  .   .  .
+.  .  .   .  .  .  .  .  .   .  .
+.  .  o!+1 . .  .  .  .  .   .  .
+.  .  *   .  .  .  .  .  .   .  .
+
+LINES
+1. pass 1  -> 5m from 2 towards 1
+2. run  2  -> 5m from 2 towards 1
+3. pass 2  -> 3

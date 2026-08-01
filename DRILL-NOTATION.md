@@ -13,6 +13,54 @@ want), or **draw a grid picture** (when the layout is irregular).
 
 ---
 
+# 0. Starting from plain English
+
+You do not have to write notation by hand. Say the drill the way you would say
+it to an assistant coach, and have Claude turn it into notation:
+
+> player 1 passes to player 2 who runs out 5m to meet the ball and then passes
+> to player 3 who is at cone 3
+
+becomes `tools/examples/meet-the-ball.txt`. Paste that into **Import from text…**
+and the panel shows you what it read — piece count and a numbered list of lines
+with their lengths in metres — before anything is saved.
+
+**The app does not parse English, deliberately.** It used to: a parser wired to
+the drill notes box compiled every keystroke, silently dropped any clause it
+could not read, and overwrote lines you had drawn on the board. On the sentence
+above it produced two passes both struck by player 1 and threw the run away,
+with no error. It was removed in v149. Language understanding happens where
+language understanding is good; the app parses one strict format and tells you
+when it cannot.
+
+## What a sentence turns into
+
+Each clause has to land somewhere explicit. Using the example:
+
+| The words | Where they go |
+|---|---|
+| "player 1 passes to player 2" | `pass 1 -> …` |
+| "who runs out 5m to meet the ball" | the pass ends at `5m from 2 towards 1`, and player 2 runs to the same point |
+| "then passes to player 3" | `pass 2 -> 3`, written after the run so it waits for it |
+| "who is at cone 3" | nothing — it describes the GRID, it is not an action |
+
+The rule of thumb: **anything that says where somebody stands belongs in the
+layout; only movement becomes a line.**
+
+## A limit worth knowing before you write "5m"
+
+The playback engine decides what waits for what by comparing positions, and its
+"same place" radius is about **5.4 m**. A movement shorter than that is invisible
+to it. So "runs out 5m to meet the ball" plays as *the ball is passed into the
+space, arrives, and player 2 comes onto it* — correct as a drill, but player 2
+does not set off until the ball has landed.
+
+If you want the runner clearly moving as the pass travels, make it **8–10 m**.
+Genuinely simultaneous "runs to meet it" needs the explicit step links described
+at the end of CLAUDE.md, not a smaller tolerance.
+
+---
+
 # 1. Describing it in metres
 
 Three blocks, in the order you would explain the drill to an assistant.
@@ -84,6 +132,7 @@ queue, and so on. So with 12 players and 4 cones, players 1–4 stand on the con
 | `pass 1 -> 2` | an explicit step |
 | `run 1 -> c2` | …by player or by cone |
 | `passrun c1 -> c2` | pass and follow, as one action |
+| `run 2 -> 5m from 2 towards 1` | a point a real distance off something, towards something else |
 
 `pass and follow` writes a **closed** circuit — four passes for four cones, not
 three. That closing pass is what recycles players back to the queue; leave it out
@@ -157,6 +206,15 @@ Numbering is optional; `1.` or `1)` at the start of a line is ignored.
 - **A bare square** — a column letter and a row number, `A1` top-left, counting
   the way you wrote the grid. Use this for a pass into space, where the ball is
   meant to stop short of anybody.
+- **A point a real distance away** — `5m from 2 towards 1` means "start at
+  player 2 and move 5 m along the line to player 1". Both ends can be any of the
+  references above. Distances are true metres on a 68 x 105 pitch, so 5 m across
+  and 5 m up the pitch are the same length even though they are different
+  fractions of the board. This is the form to reach for whenever a player comes
+  off their cone to meet a ball or drops short to receive.
+
+  An arrow (`->`) is required when either end is one of these, because the bare
+  `A to B` form cannot tell where the endpoint stops and "towards" begins.
 
 ### What the engine does on its own
 

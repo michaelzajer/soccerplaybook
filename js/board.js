@@ -1777,12 +1777,15 @@ export function initBoard(store) {
     setDrillsMode(true);
     clearDrillItems();
     (p.items || []).forEach(i => addDrillItem(i.kind, i.x, i.y, i.color, i.num, i.id, i.startCone));
-    const loadedStrokes = (p.strokes || []).map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]), ...(s.color ? { color: s.color } : {}), ...(s.from != null ? { from: s.from } : {}) }));
-    if (p.steps) {
-      drillSteps = p.steps.map(step => step.map(s => ({ mode: s.mode, pts: s.pts.map(pt => [pt[0], pt[1]]), ...(s.color ? { color: s.color } : {}), ...(s.from != null ? { from: s.from } : {}) })));
-    } else {
-      drillSteps = [loadedStrokes];
-    }
+    /* Go through unflatStroke, exactly as loadDrill does. This used to do
+       `s.pts.map(pt => [pt[0], pt[1]])`, which assumes the points are already
+       NESTED — true of the built-in drills in drills.js, but not of anything
+       that came from the notation parser or out of Firestore, both of which are
+       flat. Indexing a number gives undefined, so the drill loaded its pieces
+       and then silently animated nothing. */
+    const load = s => unflatStroke(s);
+    drillSteps = p.steps ? p.steps.map(step => step.map(load))
+                         : [(p.strokes || []).map(load)];
     currentStep = 0;
     changeStep(0);
   }
@@ -2097,8 +2100,41 @@ export function initBoard(store) {
   document.getElementById("importDrillBtn")?.addEventListener("click", () => {
     drillPanel.classList.remove("open");
     document.getElementById("impError").textContent = "";
+    document.getElementById("impRead").hidden = true;
     importPanel?.classList.add("open");
   });
+
+  /* Live readback: parse as you type and show either the error (with the line
+     that caused it) or a numbered list of what was understood. Nothing is
+     saved by this — it only tells you what Add would do. */
+  const impPreview = () => {
+    const txt = (document.getElementById("impText").value || "").trim();
+    const read = document.getElementById("impRead");
+    const errEl = document.getElementById("impError");
+    errEl.textContent = "";
+    if (!txt || txt[0] === "{" || typeof window.parseDrillText !== "function") {
+      read.hidden = true; return;
+    }
+    let d;
+    try { d = window.parseDrillText(txt); }
+    catch (ex) { read.hidden = true; errEl.textContent = String(ex.message || ex); return; }
+    read.innerHTML = "";
+    const head = document.createElement("div");
+    head.className = "impReadHead";
+    head.textContent = d.items.length + " pieces, " + d.strokes.length +
+      (d.strokes.length === 1 ? " line" : " lines");
+    read.appendChild(head);
+    d.strokes.forEach((s, i) => {
+      const row = document.createElement("div");
+      row.className = "impReadRow";
+      const a = [s.pts[0], s.pts[1]], b = [s.pts[s.pts.length - 2], s.pts[s.pts.length - 1]];
+      const m = Math.round(Math.hypot((b[0] - a[0]) * PITCH_WID, (b[1] - a[1]) * PITCH_LEN));
+      row.textContent = (i + 1) + ". " + s.mode + " · " + m + " m";
+      read.appendChild(row);
+    });
+    read.hidden = false;
+  };
+  document.getElementById("impText")?.addEventListener("input", impPreview);
   importPanel?.addEventListener("click", e => {
     if (e.target === importPanel) importPanel.classList.remove("open");
   });
@@ -3324,7 +3360,16 @@ export function initBoard(store) {
          ever starting earlier than rules 1 and 2 allow.
        ============================================================== */
     const timeOf = it => pieceTime.get(it) || 0;
-    const nearPt = (a, b, tol) => Math.hypot(a[0] - b[0], a[1] - b[1]) < (tol || DEP_TOL);
+    /* "Same place" must mean the same REAL distance in every direction. This
+       used an unweighted hypot on normalised coordinates, so on a 68 x 105
+       pitch the same-place radius was 5.4 m across and 8.4 m up — a leg was
+       judged to start "where another one ended" from half again as far away
+       vertically. Same bug as the leg-length one fixed in v141, same fix:
+       weight dy by the aspect ratio so the units are pitch WIDTHS of real
+       distance. DEP_TOL 0.08 is therefore 5.4 m in any direction. */
+    const AR_DEP = PITCH_LEN / PITCH_WID;
+    const nearPt = (a, b, tol) =>
+      Math.hypot(a[0] - b[0], (a[1] - b[1]) * AR_DEP) < (tol || DEP_TOL);
 
     plan.forEach((p, i) => {
       let t = Math.max(timeOf(p.actor), p.ball ? timeOf(p.ball) : 0);
@@ -3414,9 +3459,13 @@ export function initBoard(store) {
     if (playDrillLabel) playDrillLabel.textContent = "Stop";
     if (playDrillBtn) playDrillBtn.classList.add("on");
     } catch (e) {
-      alert("Error in buildTimeline:\n" + e.stack);
-      console.error(e);
+      /* This used to alert() a raw stack trace, which a coach on a phone can do
+         nothing with. The stack goes to the console for us; the coach gets told
+         the drill could not be played and is left with the board intact. */
+      console.error("buildTimeline failed", e);
       drillTimeline = null;
+      if (playDrillLabel) playDrillLabel.textContent = "Play";
+      if (playDrillBtn) playDrillBtn.classList.remove("on");
     }
   }
 
@@ -3453,48 +3502,24 @@ export function initBoard(store) {
   if (playDrillBtn) playDrillBtn.addEventListener("click", startDrillAnim);
 
 
-  // Semantic Drill Parser auto-animations
-  const handleSemanticInput = (e) => {
-    if (typeof window.parseSequenceLines === 'function') {
-      const text = e.target.value;
-      if (text.trim() === "") return;
-      
-      const strokes = window.parseSequenceLines(text, drillItems);
-      if (strokes && strokes.length > 0) {
-        // Group all semantic strokes into a single step so they draw simultaneously
-        drillSteps = [strokes];
-        if (typeof strokeBufs !== 'undefined') strokeBufs.drills = drillSteps[0];
-        currentStep = 0;
-        changeStep(0);
-        
-        // Stop current animation and redraw board with new lines
-        if (typeof stopDrillAnim === 'function') stopDrillAnim();
-        if (typeof draw === 'function') draw();
-        
-        // Let the state save automatically so the visual lines persist
-        if (typeof pushState === 'function') pushState();
-      }
-    }
-  };
+  /* NOTES ARE NOTES (v149). These boxes used to be wired to an English parser
+     that re-compiled them on every keystroke and did `drillSteps = [strokes]`,
+     which REPLACED the lines you had drawn on the board and then saved that.
+     Typing a coaching point onto a hand-drawn drill destroyed it, silently.
 
+     The parser itself is gone too: it dropped any line it could not read (a
+     deliberate `catch` that ignored errors "so the user can type freely"), so
+     there was no way to tell "understood you" from "ignored you". Text input
+     now goes through Import from text…, which uses the strict notation parser
+     and REPORTS what it read. See DRILL-NOTATION.md. */
   const drillNotesBox = document.getElementById("drillNotes");
   const liveNotesBox = document.getElementById("liveNotes");
-
-  const handleLiveNotesInput = (e) => {
-    // Sync the two boxes so saving works seamlessly
-    if (e.target === drillNotesBox) {
-      if (liveNotesBox) liveNotesBox.value = drillNotesBox.value;
-    } else if (e.target === liveNotesBox) {
-      if (drillNotesBox) drillNotesBox.value = liveNotesBox.value;
-    }
-    handleSemanticInput({target: {value: e.target.value}});
+  const syncNotes = e => {
+    const from = e.target, to = from === drillNotesBox ? liveNotesBox : drillNotesBox;
+    if (to) to.value = from.value;
   };
-
-  if (drillNotesBox) drillNotesBox.addEventListener("input", handleLiveNotesInput);
-  if (liveNotesBox) liveNotesBox.addEventListener("input", handleLiveNotesInput);
-  
-  const deNotesBox = document.getElementById("deNotes");
-  if (deNotesBox) deNotesBox.addEventListener("input", handleSemanticInput);
+  if (drillNotesBox) drillNotesBox.addEventListener("input", syncNotes);
+  if (liveNotesBox) liveNotesBox.addEventListener("input", syncNotes);
 
   /* ---------------- init ---------------- */
 

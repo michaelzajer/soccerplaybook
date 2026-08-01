@@ -7,6 +7,39 @@
 (function (root) {
 const KIND = { o:"cone", d:"disc", "*":"dball", G:"goal", g:"mini", p:"pole" };
 
+/* A point `metres` along the line from A towards B.
+
+   This is what lets a drill say "player 2 comes 5 m off his cone to meet the
+   ball" exactly, instead of the coach eyeballing a grid square. It is also the
+   one thing prose needs that the notation could not express, so without it a
+   sentence like "runs out 5m to meet the ball" had nowhere to compile to.
+
+   Distances are REAL metres, so the vector is converted before scaling: the
+   pitch is 68 x 105, so 5 m across it and 5 m up it are different fractions of
+   the board. Pass PW/PH as 1 when A and B are already in metres. */
+function stepTowards(A, B, metres, PW, PH) {
+  const dx = (B[0] - A[0]) * PW, dy = (B[1] - A[1]) * PH;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (!len) return [A[0], A[1]];
+  const f = metres / len;
+  return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
+}
+/* `<N>m from <ref> towards <ref>` — the only multi-word endpoint form. Kept
+   deliberately narrow: one shape, no synonyms beyond towards/toward/to, so a
+   line either parses or fails loudly. */
+const REL_PT = /^([\d.]+)\s*m\s+from\s+(\S+)\s+(?:towards?|to)\s+(\S+)$/i;
+
+/* Split "A -> B" into its two ends. An arrow is required when either end is a
+   multi-word relative point; the bare "A to B" form still works when both ends
+   are single tokens, and is checked second so "5m from 2 towards 1" cannot be
+   torn apart at its own "to". */
+function splitEnds(rest) {
+  const arrow = rest.split(/\s*(?:->|>)\s*/);
+  if (arrow.length === 2) return [arrow[0].trim(), arrow[1].trim()];
+  const plain = /^(\S+)\s+to\s+(\S+)$/i.exec(rest.trim());
+  return plain ? [plain[1], plain[2]] : null;
+}
+
 /* ==================== METRIC STYLE ====================
    Describe the drill the way a coach would: the shape and its size in METRES,
    how the players are spread, then what happens.
@@ -149,6 +182,9 @@ function metricDrill(name, pitch, coneL, playerL, seqL) {
     return { mode:mode, pts:out };
   };
   var labelPt = function (tok) {
+    tok = String(tok).trim();
+    var rel = REL_PT.exec(tok);                 // these are already in metres
+    if (rel) return stepTowards(labelPt(rel[2]), labelPt(rel[3]), +rel[1], 1, 1);
     var m = /^[co](\d+)$/i.exec(tok);
     if (m) { var i = +m[1] - 1; if (!ring[i]) throw new Error("no cone c" + m[1]); return ring[i]; }
     if (/^\d+$/.test(tok)) {
@@ -174,14 +210,17 @@ function metricDrill(name, pitch, coneL, playerL, seqL) {
       strokes.push(mk("run", front[1], front[0]));
       return;
     }
-    if ((m = /^(pass|run|dribble|passrun|pass\+run|carry)\s+(\S+)\s*(?:->|>|to)\s*(\S+)$/i.exec(l))) {
+    if ((m = /^(pass|run|dribble|passrun|pass\+run|carry)\s+(.+)$/i.exec(l))) {
       var mode = { pass:"pass", run:"run", dribble:"dribble", passrun:"passrun",
                    "pass+run":"passrun", carry:"dribble" }[m[1].toLowerCase()];
-      strokes.push(mk(mode, labelPt(m[2]), labelPt(m[3])));
+      var ends = splitEnds(m[2]);
+      if (!ends) throw new Error('SEQUENCE: cannot read "' + l + '" — expected  ' + m[1] + ' A -> B');
+      strokes.push(mk(mode, labelPt(ends[0]), labelPt(ends[1])));
       return;
     }
     throw new Error('SEQUENCE: cannot read "' + l + '".\n' +
-      '  Try: pass and follow | shuttle | pass 1 -> 2 | run 1 -> c2 | passrun c1 -> c2');
+      '  Try: pass and follow | shuttle | pass 1 -> 2 | run 1 -> c2 | passrun c1 -> c2\n' +
+      '       run 2 -> 5m from 2 towards 1');
   });
   if (!strokes.length) throw new Error("SEQUENCE: nothing to do");
 
@@ -284,9 +323,16 @@ function parseDrill(text, nameFromArg) {
     return at(col - 1, row - 1);
   };
   const resolve = s => {
+    s = String(s).trim();
     if (label.has(s)) return label.get(s);
     const g = gridRef(s);                                  // a bare square = into space
     if (g) return g;
+    const rel = REL_PT.exec(s);                            // "5m from 2 towards 1"
+    if (rel) {
+      const A = resolve(rel[2]), B = resolve(rel[3]);
+      const p = stepTowards([A.x, A.y], [B.x, B.y], +rel[1], pitch[0], pitch[1]);
+      return { x:+p[0].toFixed(4), y:+p[1].toFixed(4) };
+    }
     throw new Error(`cannot find "${s}" — no such piece, and not a grid square`);
   };
 
@@ -294,11 +340,13 @@ function parseDrill(text, nameFromArg) {
   const MODES = { pass:"pass", run:"run", dribble:"dribble", passrun:"passrun",
                   "pass+run":"passrun", carry:"dribble" };
   const strokes = actions.map((a, i) => {
-    const m = /^(?:\d+[.)]\s*)?(\S+)\s+(\S+)\s*(?:->|>|to)\s*(\S+)\s*$/i.exec(a);
+    const m = /^(?:\d+[.)]\s*)?(\S+)\s+(.+)$/.exec(a.trim());
     if (!m) throw new Error(`line ${i + 1} not understood: "${a}"\n  expected e.g.  pass 1 -> 2`);
     const kind = MODES[m[1].toLowerCase()];
     if (!kind) throw new Error(`line ${i + 1}: "${m[1]}" is not pass / run / dribble / passrun`);
-    const A = resolve(m[2]), B = resolve(m[3]);
+    const ends = splitEnds(m[2]);
+    if (!ends) throw new Error(`line ${i + 1} not understood: "${a}"\n  expected e.g.  pass 1 -> 2`);
+    const A = resolve(ends[0]), B = resolve(ends[1]);
     const pts = [];
     for (let k = 0; k <= 16; k++) {                        // 17 points, as tidyStroke emits
       const t = k / 16;
@@ -312,267 +360,5 @@ function parseDrill(text, nameFromArg) {
 
 
   root.parseDrillText = parseDrill;
-
-  root.parseSequenceLines = function(text, items) {
-    var lines = text.split(/\r?\n/);
-    var strokes = [];
-    var mk = function (mode, a, b) {
-      if (!b) return { mode: mode, pts: [a] };
-      return { mode: mode, pts: [a, b] };
-    };
-
-    var stateTrack = {};
-    var cones = items.filter(function(it) { return it.kind === 'cone'; });
-    cones.sort(function(a, b) {
-      if (Math.abs(a.y - b.y) > 0.05) return a.y - b.y;
-      return a.x - b.x;
-    });
-
-    var labelPt = function (tok, returnKey) {
-      tok = tok.toLowerCase().trim();
-      var pt = null;
-      var key = null;
-      
-      if (tok === "the ball" || tok === "ball") {
-        var dball = items.find(function(it) { return it.kind === 'dball'; });
-        if (dball) {
-            key = 'dball';
-            pt = stateTrack[key] || [dball.x, dball.y];
-        }
-      }
-      
-      if (!pt) {
-          var mPlayer = /(?:player|p)\s*(\d+)/.exec(tok);
-          if (mPlayer) {
-            var hit = items.filter(function (x) { return (x.kind === 'att' || x.kind === 'def') && String(x.num) === String(mPlayer[1]); })[0];
-            if (hit) {
-                key = hit.kind + hit.num;
-                pt = stateTrack[key] || [hit.x, hit.y];
-            }
-          }
-      }
-      
-      if (!pt) {
-          var mCone = /(?:cone|marker|c|o)\s*(\d+)/.exec(tok);
-          if (mCone) {
-            var hit = cones.filter(function(x) { return String(x.num) === String(mCone[1]); })[0];
-            if (!hit) {
-                var i = +mCone[1] - 1;
-                if (cones[i]) hit = cones[i];
-            }
-            if (hit) {
-                key = hit.kind + hit.num;
-                pt = stateTrack[key] || [hit.x, hit.y];
-            }
-          }
-      }
-      
-      if (!pt) {
-          var mNum = /\b(\d+)\b/.exec(tok);
-          if (mNum) {
-            var players = items.filter(function(x) { return (x.kind === 'att' || x.kind === 'def') && String(x.num) === String(mNum[1]); });
-            var hit = players.length > 0 ? players[0] : items.filter(function (x) { return String(x.num) === String(mNum[1]); })[0];
-            if (hit) {
-                key = hit.kind + hit.num;
-                pt = stateTrack[key] || [hit.x, hit.y];
-            }
-          }
-      }
-      
-      if (returnKey) return { pt: pt, key: key };
-      return pt;
-    };
-    
-    var resolveTarget = function(str, p1) {
-      str = str.trim();
-      var distMatch = /^(\d+(?:\.\d+)?)m\s+(.*)$/i.exec(str);
-      var dist = null;
-      var isShortOf = false;
-      if (distMatch) {
-        dist = parseFloat(distMatch[1]);
-        str = distMatch[2].trim();
-        if (str.toLowerCase().startsWith("short of ")) {
-            isShortOf = true;
-            str = str.substring(9).trim();
-        }
-      }
-      
-      if (str.toLowerCase().startsWith("towards ")) str = str.substring(8).trim();
-      
-      var p2 = null;
-      var dir = str.toLowerCase();
-      if (dir === "left") p2 = [p1[0] - 1, p1[1]];
-      else if (dir === "right") p2 = [p1[0] + 1, p1[1]];
-      else if (dir === "up" || dir === "forward") p2 = [p1[0], p1[1] - 1];
-      else if (dir === "down" || dir === "back" || dir === "backward") p2 = [p1[0], p1[1] + 1];
-      else {
-        var betweenMatch = /^between\s+(.*?)\s+and\s+(.*)$/i.exec(str);
-        if (betweenMatch) {
-          var ptA = labelPt(betweenMatch[1]);
-          var ptB = labelPt(betweenMatch[2]);
-          if (ptA && ptB) p2 = [(ptA[0] + ptB[0])/2, (ptA[1] + ptB[1])/2];
-        } else {
-          p2 = labelPt(str);
-        }
-      }
-      
-      if (!p2) return null;
-      
-      if (dist !== null) {
-        var dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-        var AR = 105/68; // pitch aspect ratio
-        var lenPx = Math.sqrt(dx*dx + (dy*AR)*(dy*AR));
-        if (lenPx === 0) return p2;
-        
-        if (isShortOf) {
-            var totalDistMeters = lenPx * 68;
-            var newDist = Math.max(0, totalDistMeters - dist);
-            var scale = (newDist / 68) / lenPx;
-            p2 = [p1[0] + dx * scale, p1[1] + dy * scale];
-        } else {
-            var scale = (dist / 68) / lenPx;
-            p2 = [p1[0] + dx * scale, p1[1] + dy * scale];
-        }
-      }
-      return p2;
-    };
-
-    var strokes = [];
-    var success = false;
-    var snappedBall = false;
-    
-    // Support multiple actions separated by "and" or punctuation
-    var normalizedLines = [];
-    lines.forEach(function(raw) {
-      // Split on common conjunctions and punctuation
-      var parts = raw.split(/\s+and\s+|\.\s*|,\s*|;\s*|\bthen\b/i);
-      var currentSubject = null;
-      parts.forEach(function(p) {
-        var l = p.trim().replace(/^\d+[.)]\s*/, "");
-        if (!l) return;
-        
-        // If the part doesn't have a subject (starts with verb), inject the previous subject
-        var verbMatch = /^(passes|pass|runs|run|dribbles|dribble|carries|carry|moves|move)\s+/i.exec(l);
-        if (verbMatch && currentSubject) {
-           l = currentSubject + " " + l;
-        }
-        
-        var m = /^(.*?)\s+(passes|pass|runs|run|dribbles|dribble|carries|carry|moves|move)(.*)$/i.exec(l);
-        if (m) {
-           currentSubject = m[1];
-           normalizedLines.push(l);
-        } else {
-           // Also allow the old syntax "pass 1 -> 2"
-           var oldM = /^(pass|run|dribble|carry)\s+(\S+)\s*(?:->|>|to)\s*(.*)$/i.exec(l);
-           if (oldM) {
-               currentSubject = oldM[2];
-               normalizedLines.push(oldM[2] + " " + oldM[1] + " to " + oldM[3]);
-           }
-        }
-      });
-    });
-
-    normalizedLines.forEach(function(l) {
-      var m = /^(.*?)\s+(passes|pass|runs|run|dribbles|dribble|carries|carry|moves|move)(.*)$/i.exec(l);
-      if (m) {
-        var mode = m[2].toLowerCase();
-        if (mode === "carry" || mode === "carries") mode = "dribble";
-        if (mode === "passes" || mode === "pass") mode = "pass";
-        if (mode === "runs" || mode === "run" || mode === "moves" || mode === "move") mode = "run";
-        if (mode === "dribbles" || mode === "dribble") mode = "dribble";
-        
-        var targetStr = m[3].trim();
-        if (targetStr.toLowerCase().startsWith("to ")) targetStr = targetStr.substring(3).trim();
-        if (targetStr.toLowerCase().includes("with the ball")) {
-            mode = "dribble";
-            targetStr = targetStr.replace(/with the ball/i, "").trim();
-        }
-        
-        try {
-          var p1Obj = labelPt(m[1], true);
-          if (!p1Obj || !p1Obj.pt) return;
-          var p1 = p1Obj.pt;
-          var p2 = resolveTarget(targetStr, p1);
-          if (!p2) return;
-          
-          // update state for the subject ONLY if they are running/dribbling
-          if (p1Obj.key && mode !== "pass") {
-              stateTrack[p1Obj.key] = p2;
-          }
-          
-          if (mode === "pass" && !snappedBall) {
-            // Snap the ball to the FIRST passer's location to fix disconnection
-            var dball = items.find(function(it) { return it.kind === 'dball'; });
-            if (dball) {
-              dball.x = p1[0];
-              dball.y = p1[1];
-              snappedBall = true;
-            }
-          }
-          
-          // Use a fixed aspect ratio roughly matching the pitch (68/105) to compute a true physical length
-          var AR = 105/68; // height multiplier
-          var dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-          var lenPx = Math.sqrt(dx * dx + (dy * AR) * (dy * AR));
-          var shortenPx = 0.025; // keep lines from overlapping icons in width-relative units
-          
-          var a = p1, b = p2;
-          if (lenPx > shortenPx * 2) {
-             a = [p1[0] + (dx/lenPx)*shortenPx, p1[1] + (dy/lenPx)*shortenPx/AR];
-             b = [p2[0] - (dx/lenPx)*shortenPx, p2[1] - (dy/lenPx)*shortenPx/AR];
-          }
-          
-          var strokePts = [];
-          for (var k = 0; k <= 16; k++) {
-            var t = k / 16;
-            strokePts.push([
-              +(a[0] + (b[0] - a[0]) * t).toFixed(4),
-              +(a[1] + (b[1] - a[1]) * t).toFixed(4)
-            ]);
-          }
-          
-          // "Running onto a pass" intercept logic:
-          // If a player runs immediately after a pass is played to them, they are running to receive it.
-          // We redirect the pass to end exactly where their run ends.
-          if (strokes.length > 0 && (mode === "run" || mode === "sprint")) {
-             var lastStroke = strokes[strokes.length - 1];
-             if (lastStroke.mode === "pass") {
-                var lastEnd = lastStroke.rawEnd || lastStroke.pts[lastStroke.pts.length - 1];
-                var distToPassEnd = Math.hypot(lastEnd[0] - p1[0], lastEnd[1] - p1[1]);
-                if (distToPassEnd < 0.05) {
-                   var passA = lastStroke.rawStart || lastStroke.pts[0];
-                   var passB = p2; // The pass now ends where the run ends
-                   var pdx = passB[0] - passA[0], pdy = passB[1] - passA[1];
-                   var plenPx = Math.sqrt(pdx*pdx + (pdy*AR)*(pdy*AR));
-                   var pA = passA, pB = passB;
-                   if (plenPx > shortenPx * 2) {
-                       pA = [passA[0] + (pdx/plenPx)*shortenPx, passA[1] + (pdy/plenPx)*shortenPx/AR];
-                       pB = [passB[0] - (pdx/plenPx)*shortenPx, passB[1] - (pdy/plenPx)*shortenPx/AR];
-                   }
-                   var newPassPts = [];
-                   for (var k = 0; k <= 16; k++) {
-                       var pt = k / 16;
-                       newPassPts.push([
-                          +(pA[0] + (pB[0] - pA[0]) * pt).toFixed(4),
-                          +(pA[1] + (pB[1] - pA[1]) * pt).toFixed(4)
-                       ]);
-                   }
-                   lastStroke.pts = newPassPts;
-                   lastStroke.rawEnd = passB;
-                }
-             }
-          }
-          
-          strokes.push({ mode: mode, pts: strokePts, seq: strokes.length + 1, rawStart: p1, rawEnd: p2 });
-          success = true;
-        } catch (e) {
-          // silently ignore parse errors so user can type freely
-        }
-      }
-    });
-    
-    if (success) return strokes;
-    return null;
-  };
 
 })(typeof window !== "undefined" ? window : globalThis);

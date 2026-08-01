@@ -1065,6 +1065,18 @@ body.gameView #scoreBar{display:flex}
   width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);
   color:var(--ink);font-family:inherit;font-size:15px;padding:9px 10px;resize:vertical;min-height:44px;
 }
+/* import readback — what the notation parser understood, before you commit */
+.impRead{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:8px 10px;display:flex;flex-direction:column;gap:3px;
+}
+.impRead[hidden]{display:none}
+.impReadHead{
+  font-size:var(--t-xs);font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:2px;
+}
+.impReadRow{font-size:var(--t-sm);color:var(--ink-dim);font-variant-numeric:tabular-nums}
+
 .drillNotes:focus{outline:none;border-color:var(--accent)}
 .drillNotes::placeholder{color:var(--ink-faint)}
 
