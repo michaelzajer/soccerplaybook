@@ -242,6 +242,7 @@ function parseDrill(text, nameFromArg) {
   let mode = null;
   const gridRows = [], actions = [], coneL = [], playerL = [], seqL = [];
   let pitch = [PITCH_W, PITCH_H];
+  let rotateL = null;
 
   for (const raw of lines) {
     const line = raw.replace(/#.*$/, "").trim();          // # comments
@@ -250,6 +251,9 @@ function parseDrill(text, nameFromArg) {
     if (head.startsWith("DRILL")) { if (!nameFromArg) name = line.slice(5).trim() || name; continue; }
     const pm = /^PITCH\s+([\d.]+)\s*(?:x|by)\s*([\d.]+)/i.exec(line);
     if (pm) { pitch = [+pm[1], +pm[2]]; continue; }
+    /* ROTATE states the net effect of ONE lap, so the engine never has to work
+       it out from where legs happen to start and end. */
+    if (/^ROTATE\b/i.test(line)) { rotateL = line.replace(/^ROTATE\s*/i, ""); continue; }
     if (head === "GRID")     { mode = "grid";    continue; }
     if (head === "LINES")    { mode = "lines";   continue; }
     if (head === "CONES" || head === "MARKERS") { mode = "cones";   continue; }
@@ -340,22 +344,104 @@ function parseDrill(text, nameFromArg) {
   const MODES = { pass:"pass", run:"run", dribble:"dribble", passrun:"passrun",
                   "pass+run":"passrun", carry:"dribble" };
   const strokes = actions.map((a, i) => {
-    const m = /^(?:\d+[.)]\s*)?(\S+)\s+(.+)$/.exec(a.trim());
+    let body = a.trim();
+    /* ---- the intent clauses, stripped off the end of the line first ----
+       `after 2`     do not start until step 2 has finished (and its ball landed)
+       `with 4`      start at the same moment as step 4
+       `meets 3`     finish at the same moment as step 3 (running onto a pass)
+       `around c2`   loop the path around that marker instead of going straight
+       `via A, B`    explicit waypoints
+       Step numbers are 1-based and may only point BACKWARDS, which is how a
+       coach describes a drill anyway: "A passes, THEN B runs onto it". */
+    const intent = {};
+    const grab = (re, fn) => { const m = re.exec(body); if (m) { body = body.replace(re, "").trim(); fn(m); } };
+    grab(/\bafter\s+([\d,\s]+?)(?=\s+(?:with|meets|around|via)\b|$)/i,
+         m => intent.after = m[1].split(/[,\s]+/).filter(Boolean).map(n => +n - 1));
+    grab(/\bwith\s+([\d,\s]+?)(?=\s+(?:after|meets|around|via)\b|$)/i,
+         m => intent.with = m[1].split(/[,\s]+/).filter(Boolean).map(n => +n - 1));
+    grab(/\bmeets\s+(\d+)/i, m => intent.arriveWith = +m[1] - 1);
+    /* `by 2` names WHO does it, separately from where the line is drawn. Needed
+       whenever a leg starts somewhere its actor does not live — "dribble from
+       the check point back around the cone" is performed by the player whose
+       home is cone 2, but the line starts 5 m away from it. Without this the
+       slot would be the check point, which nobody occupies on the next lap, and
+       the rotation would stall. */
+    grab(/\bby\s+(\S+)/i, m => intent.by = m[1]);
+    grab(/\baround\s+(\S+)/i, m => intent.around = m[1]);
+    grab(/\bvia\s+(.+)$/i, m => intent.via = m[1].split(/\s*,\s*/).filter(Boolean));
+
+    const m = /^(?:\d+[.)]\s*)?(\S+)\s+(.+)$/.exec(body);
     if (!m) throw new Error(`line ${i + 1} not understood: "${a}"\n  expected e.g.  pass 1 -> 2`);
     const kind = MODES[m[1].toLowerCase()];
     if (!kind) throw new Error(`line ${i + 1}: "${m[1]}" is not pass / run / dribble / passrun`);
     const ends = splitEnds(m[2]);
     if (!ends) throw new Error(`line ${i + 1} not understood: "${a}"\n  expected e.g.  pass 1 -> 2`);
+    [intent.after, intent.with].forEach(list => (list || []).forEach(j => {
+      if (!(j >= 0 && j < i))
+        throw new Error(`line ${i + 1}: step ${j + 1} must be an EARLIER step`);
+    }));
+    if (intent.arriveWith != null && !(intent.arriveWith >= 0 && intent.arriveWith < i))
+      throw new Error(`line ${i + 1}: "meets" must name an EARLIER step`);
+
     const A = resolve(ends[0]), B = resolve(ends[1]);
-    const pts = [];
-    for (let k = 0; k <= 16; k++) {                        // 17 points, as tidyStroke emits
-      const t = k / 16;
-      pts.push(+(A.x + (B.x - A.x) * t).toFixed(4), +(A.y + (B.y - A.y) * t).toFixed(4));
+
+    /* Waypoints. `around X` puts two of them either side of X, which is what
+       turns a straight line into a run round the back of a cone — the shape
+       tidyStroke would otherwise flatten (it caps the bow at 0.22 of the
+       chord, deliberately, so a hand-drawn wobble cannot become a loop). */
+    let mids = [];
+    if (intent.via) mids = intent.via.map(t => { const p = resolve(t); return [p.x, p.y]; });
+    if (intent.around) {
+      const C = resolve(intent.around);
+      const ax = A.x, ay = A.y;
+      let vx = C.x - ax, vy = (C.y - ay) * (pitch[1] / pitch[0]);
+      const L = Math.hypot(vx, vy) || 1;
+      const R = 4 / pitch[0];                       // swing about 4 m wide
+      const nx = -vy / L * R, ny = (vx / L * R) * (pitch[0] / pitch[1]);
+      const beyond = stepTowards([C.x, C.y], [ax, ay], -4, pitch[0], pitch[1]);
+      mids = [[C.x + nx, C.y + ny], [beyond[0], beyond[1]], [C.x - nx, C.y - ny]];
     }
-    return { mode:kind, pts };                             // already flattened for Firestore
+
+    const path = [[A.x, A.y], ...mids, [B.x, B.y]];
+    /* Resample the whole polyline to 17 points, the count tidyStroke emits, so
+       planned and hand-drawn strokes are the same shape of data. */
+    const seg = [];
+    let total = 0;
+    for (let k = 1; k < path.length; k++) {
+      const d = Math.hypot(path[k][0] - path[k-1][0], path[k][1] - path[k-1][1]);
+      seg.push(d); total += d;
+    }
+    const pts = [];
+    for (let k = 0; k <= 16; k++) {
+      let want = (k / 16) * total, j = 0;
+      while (j < seg.length - 1 && want > seg[j]) { want -= seg[j]; j++; }
+      const f = seg[j] ? want / seg[j] : 0;
+      pts.push(+(path[j][0] + (path[j+1][0] - path[j][0]) * f).toFixed(4),
+               +(path[j][1] + (path[j+1][1] - path[j][1]) * f).toFixed(4));
+    }
+
+    /* A leg belongs to a SLOT, not to a player. Recording the START POINT as
+       the actor's slot is what lets the drill keep looping: on lap two whoever
+       is now standing there performs it. Pinning the piece id froze the
+       rotation — that is the v123 lesson, now stated in the data instead of
+       being worked around at playback. */
+    const home = intent.by ? resolve(intent.by) : A;
+    const out = { mode:kind, pts, actor:{ slot:[home.x, home.y] } };
+    if (intent.after) out.after = intent.after;
+    if (intent.with) out.with = intent.with;
+    if (intent.arriveWith != null) out.arriveWith = intent.arriveWith;
+    if (mids.length) out.via = true;
+    return out;                                           // already flat for Firestore
   });
 
-  return { id:"txt-" + Date.now().toString(36), name, items, strokes };
+  const drill = { id:"txt-" + Date.now().toString(36), name, items, strokes };
+  if (rotateL) {
+    const cycle = rotateL.split(/\s*(?:->|>)\s*/).map(s => s.trim()).filter(Boolean)
+      .filter(s => !/^queue$/i.test(s))     // "queue" is implied by the last hop
+      .map(s => { const p = resolve(s); return [p.x, p.y]; });
+    if (cycle.length > 1) drill.rotate = { cycle };
+  }
+  return drill;
 }
 
 

@@ -52,8 +52,8 @@ if (new URLSearchParams(location.search).has("debug")) {
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tailwind.css?v=150">
-<link rel="stylesheet" href="styles.css?v=150">
+<link rel="stylesheet" href="tailwind.css?v=151">
+<link rel="stylesheet" href="styles.css?v=151">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body>
@@ -291,6 +291,8 @@ if (new URLSearchParams(location.search).has("debug")) {
       <!-- playback pace: bigger multiplier shown = quicker; see SPEEDS in board.js -->
       <button id="dpSpeedBtn" aria-label="Playback speed">1×</button>
       <button id="dpInfoBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors text-lg" aria-label="Drill Instructions">ⓘ</button>
+      <!-- the drill's steps, as data rather than as lines to be re-read off the pitch -->
+      <button id="dpStepsBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors text-lg" aria-label="Drill steps">☰</button>
       <!-- Loop toggle. An SVG (not the 🔁 emoji) so it inherits currentColor and
            can actually show an on/off state; styled in styles.css #dpLoopBtn. -->
       <button id="dpLoopBtn" aria-label="Loop drill" aria-pressed="false" title="Keep the rotation running">
@@ -649,6 +651,38 @@ if (new URLSearchParams(location.search).has("debug")) {
     </div>
   </div>
 
+  <!-- ============ DRILL STEP LIST ============
+       The drill as DATA, not as lines to be re-read off the pitch. Draw order is
+       semantics — the engine reads dependencies backwards through it — so this
+       list is the drill's source, and reordering here changes what it does. -->
+  <div id="stepsPanel" class="overlay">
+    <div class="sheet">
+      <div class="subsHead">
+        <h2>Steps</h2>
+        <span class="subsClock" id="stepsCount"></span>
+      </div>
+      <div class="stepList" id="stepList"></div>
+
+      <!-- timing editor for the selected step -->
+      <div class="stepEdit" id="stepEdit" hidden>
+        <div class="stepEditHead" id="stepEditHead">Step 2</div>
+        <div class="seg stepWhen" id="stepWhen">
+          <button data-when="" class="on">On its own</button>
+          <button data-when="after">After</button>
+          <button data-when="with">With</button>
+          <button data-when="meets">Meets</button>
+        </div>
+        <div class="stepRefs" id="stepRefs"></div>
+        <div class="hint" id="stepWhenHint"></div>
+      </div>
+
+      <div class="err" id="stepsErr"></div>
+      <button class="close" id="stepsCapture" hidden>Capture the current timing as steps</button>
+      <button class="primary" id="stepsSave">Save the drill</button>
+      <button class="close" id="stepsClose">Close</button>
+    </div>
+  </div>
+
   <!-- menu sheet -->
   <div id="menuPanel" class="overlay">
     <div class="sheet">
@@ -671,9 +705,9 @@ if (new URLSearchParams(location.search).has("debug")) {
      styles.css is linked once, in <head>. It used to be linked here as well at a
      different ?v=, which cost a second download and parse of a 50KB stylesheet
      plus a late reflow on every load. -->
-<script src="js/drills.js?v=150"></script>
-<script src="js/drill-text.js?v=150"></script>
-<script type="module" src="js/app.js?v=150"></script>
+<script src="js/drills.js?v=151"></script>
+<script src="js/drill-text.js?v=151"></script>
+<script type="module" src="js/app.js?v=151"></script>
 
 </body>
 </html>

@@ -216,15 +216,48 @@ Numbering is optional; `1.` or `1)` at the start of a line is ignored.
   An arrow (`->`) is required when either end is one of these, because the bare
   `A to B` form cannot tell where the endpoint stops and "towards" begins.
 
-### What the engine does on its own
+### Saying what waits for what
 
-You do not need to describe the timing. Given the lines in draw order it works out:
+For a simple drill you can leave the timing alone and the engine will work it
+out from the draw order. For anything with a check-away, a compound step, or a
+run round a marker, **say it** — the engine's guesses are made from distances,
+and a movement under about 5.4 m is smaller than the radius it treats as "the
+same place", so short movements are invisible to it.
 
-- a pass into space, with a player running on to collect it;
-- a pass aimed at wherever a player has just run to;
-- a player leaving only once they have played the ball;
-- the ball arriving before the man who passed it;
-- everyone rotating back through the queue at the end of a lap.
+Add any of these to the end of a line. Step numbers are 1-based and may only
+point at **earlier** steps, which is how you would describe a drill anyway.
+
+| Clause | Meaning |
+|---|---|
+| `after 2` | do not start until step 2 has finished (and its ball has landed) |
+| `after 2, 3` | …until both have |
+| `with 4` | start at the same moment as step 4 — "passes to 3 *and* runs to c3" |
+| `meets 3` | finish at the same moment as step 3 — running onto a pass |
+| `around c2` | loop the path round that marker instead of going straight through |
+| `via A, B` | explicit waypoints |
+| `by 2` | who performs it, when the line does not start where they live |
+
+`by` matters more than it looks. A leg's actor is stored as a **slot** — "whoever
+is standing here at the start of the lap" — never as a particular player. That is
+what lets a circuit keep cycling: on the second lap player 5 is on cone 1, so
+player 5 plays player 1's part. If a line starts somewhere nobody lives (a
+check-away point, say), `by` names the slot so the rotation does not stall.
+
+### ROTATE
+
+One line stating the net effect of a lap:
+
+```
+ROTATE c1 -> c2 -> c3 -> c4 -> queue
+```
+
+Whoever is on c1 moves to c2, c2 to c3, and so on; the last one joins the **back
+of the queue**; the front of the queue steps onto c1 and everyone behind shuffles
+up. Without it the engine reconstructs the rotation from where legs happen to
+start and end, which works for a follow-your-pass square and goes wrong as soon
+as a drill contains a leg that is not a rotation step.
+
+Worked example: `tools/examples/check-away-rotation.txt`.
 
 ## Worked example
 

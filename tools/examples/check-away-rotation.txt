@@ -1,0 +1,53 @@
+# Michael's drill, written out in full:
+#
+#   "Player 1 starts on cone 1, player 2 on cone 2, player 3 on cone 3, player 4
+#    on cone 4. Players 5, 6, 7+ are lined up behind player 1.
+#    Player 2 runs 5m towards player 1. Player 1 passes to player 2. Player 2
+#    runs back around cone 2 with the ball and passes to player 3 and runs to
+#    cone 3. Player 3 passes to player 4 and runs to cone 4. Player 4 passes to
+#    player 5, who is now in the vacant position where player 1 started at cone
+#    1. Player 5 passes to player 1 who is at cone 2 and the cycle continues."
+#
+# Every clause that the OLD engine had to guess at is now stated:
+#   "runs 5m towards"      a 5 m move is smaller than DEP_TOL (5.4 m), so the
+#                          engine could not see it. `after` says the order
+#                          instead of it being inferred from distance.
+#   "and runs to cone 3"   two legs from one sentence that must go together —
+#                          `with` says so; there was no way to express it.
+#   "back around cone 2"   `around` keeps the loop. tidyStroke flattens any
+#                          drawn curve to a chord ("never let it loop").
+#   the cycle              ROTATE states the net effect of a lap, so the queue
+#                          cannot shuffle forward at 100ms like it used to.
+#
+# Cones in GRID mode are numbered in READING ORDER — left to right, top to
+# bottom. So the top-left cone is o1. Do not rely on that for the circuit
+# order; that is what ROTATE is for.
+
+DRILL Check away and rotate
+
+GRID
+.  .  o+2   .  .  .  .  o+3  .  .
+.  .  .     .  .  .  .  .    .  .
+.  .  .     .  .  .  .  .    .  .
+.  .  o!+1  .  .  .  .  o+4  .  .
+.  .  *     .  .  .  .  .    .  .
+.  .  5     .  .  .  .  .    .  .
+.  .  6     .  .  .  .  .    .  .
+.  .  7     .  .  .  .  .    .  .
+
+# o1 = cone 2 (top left, player 2)      o2 = cone 3 (top right, player 3)
+# o3 = cone 1 (the entry, player 1)     o4 = cone 4 (bottom right, player 4)
+
+LINES
+1. run     2 -> 5m from 2 towards 1
+2. pass    1 -> 5m from 2 towards 1                  after 1
+3. dribble 5m from 2 towards 1 -> o1  by 2           after 2  around o1
+4. pass    2 -> 3                                    after 3
+5. run     2 -> o2                                   with 4
+6. run     1 -> o1                                   after 5
+7. pass    3 -> 4                                    after 4
+8. run     3 -> o4                                   with 7
+9. pass    4 -> o3                                   after 7
+10. run    4 -> 7                                    with 9
+
+ROTATE o3 -> o1 -> o2 -> o4 -> queue

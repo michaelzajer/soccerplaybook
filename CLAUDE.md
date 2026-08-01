@@ -65,7 +65,7 @@ drill-text 162, app 172), which makes a deploy non-deterministic:
    download and parse), `js/drills.js?v=NN`, `js/drill-text.js?v=NN`,
    `js/app.js?v=NN`.
 2. In `js/app.js`: `firebase-config.js?v=NN`, `board.js?v=NN`.
-3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v150**.
+3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v151**.
 4. `node --check js/*.js sw.js` before declaring done, then the `_*.mjs` suite.
 3. Always give Michael this block at the end (his standing request):
 
@@ -634,7 +634,57 @@ on screen.
   back to pass-and-follow. Guard the CONTROL rather than letting the parser throw
   an error at the coach.
 
-## ARCHITECTURE: is the inference engine the right approach? (reviewed v140)
+## THE PLANNED DRILL MODEL (v151) — the migration, done
+
+The architecture review below said the model was right and the STORAGE was
+wrong: playback re-derived intent from geometry on every run, so precision
+problems became behaviour problems. That migration is now built. Michael's
+check-away rotation drill is the reference case, because it breaks every part of
+the old inference at once.
+
+**A stroke may now carry INTENT, all fields optional:**
+
+```
+{ mode, pts,
+  actor:{slot:[x,y]} | {piece:id},   // WHO — a slot, not a player
+  after:[strokeIdx...],              // start once these have finished
+  with:[strokeIdx...],               // start on the same beat as these
+  arriveWith:strokeIdx,              // finish on the same beat as this
+  via:true }                         // pts are a real path; do not tidy
+drill.rotate = { cycle:[[x,y]...] }  // the net effect of one lap
+```
+
+`buildTimeline` checks whether any stroke carries intent. If so it takes the
+PLANNED path — resolve the actor from its slot, time the leg from the declared
+graph — and the inference rules are not consulted at all. If not, everything
+behaves exactly as before. Every drill saved before v151 is on the legacy path,
+which is why all three reference drills still pass unchanged.
+
+**Three things that had to be got right, each of which looked like a bug first:**
+
+- **A slot resolves against LAP-START positions, not live ones.** Matching live
+  positions let a player who merely ran through a slot inherit that slot's
+  remaining legs — player 2 ended up performing player 3's and player 4's steps
+  as well as his own. Within one lap a role is one person; across laps the slot
+  rebinds to whoever has rotated into it. The ball is the exception: it is
+  wherever it has been played to.
+- **A declared rotation is scheduled at the END of the lap, once.** The inferred
+  version schedules each piece at its own last-moved time, which is zero for
+  anyone who has not moved — so a standing queue shuffled forward at 100ms,
+  before the ball had been passed.
+- **Loop mode must wait for the rotation.** `loopTriggerTime` was the ball's
+  finish; with a declared rotation the next lap has to start after the queue has
+  finished shuffling, or the new lap's slots resolve to the wrong people.
+
+**Notation:** `after N` / `with N` / `meets N` / `around X` / `via A,B` / `by X`
+on a line, plus a `ROTATE a -> b -> c -> queue` block. `by` names the actor when
+a line does not start where its actor lives (a check-away point), which without
+it would store a slot nobody occupies and stall the rotation.
+
+`_plan.mjs` drives the whole thing: parser → app → two laps, asserting the
+ordering, the preserved loop, the end-of-lap rotation and the rebinding.
+
+## ARCHITECTURE: is the inference engine the right approach? (reviewed v140, MIGRATED v151)
 
 Verdict: the model is right, the STORAGE is wrong. Playback re-derives intent
 from geometry on every run, so precision problems become behaviour problems.
@@ -679,7 +729,7 @@ does the jsdom boot: stubs canvas getContext, pointer capture and
 getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
 the timeline with one that buffers every `.to()` and can `settle()` them.
 `node --check js/*.js sw.js` first, always. Run: `for t in _laps _shuttle _align
-_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome _drilltext _gameday
+_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome _drilltext _gameday _plan
 _smoke _smoke_app; do node $t.mjs; done`
 (`_landing.mjs` covers the marketing page's hero drill demos, which are a
 separate hand-rolled animation in index.html, not the app engine.)

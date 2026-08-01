@@ -1046,6 +1046,11 @@ export function initBoard(store) {
   function tidyStroke(st, items, snapFn) {
     const pts = st.pts;
     if (!pts || pts.length < 2 || st.mode === "draw") return st;  // freehand stays freehand
+    /* A `via` path is deliberate geometry — a run around a cone, a curved
+       overlap — not a wobbly attempt at a straight line. Tidying clamps the bow
+       at 0.22 of the chord (see below, "never let it loop"), which would
+       straighten exactly the shape the coach asked for. */
+    if (st.via) return st;
     const r = board.getBoundingClientRect();
     const A0 = pts[0], B0 = pts[pts.length - 1];
     const snap = snapFn || function (x, y) { return snapEndpoint(x, y, items); };
@@ -1106,11 +1111,12 @@ export function initBoard(store) {
     };
     const strokes = (d.strokes || []).map(st => {
       const u = unflatStroke(st);
+      /* Carry the intent fields through. Rebuilding the stroke from
+         {mode,color,pts} alone silently stripped actor/after/with/via, so
+         tidying a planned drill turned it back into a guessed one. */
       const fixed = tidyStroke(
-        { mode:u.mode, color:u.color, pts:u.pts.map(pt => [pt[0], pt[1]]) }, items, snap);
-      const out = flatStroke(fixed);
-      if (u.color) out.color = u.color;
-      return out;
+        { ...u, pts: u.pts.map(pt => [pt[0], pt[1]]) }, items, snap);
+      return flatStroke(fixed);
     });
     return Object.assign({}, d, { items:items, strokes:strokes });
   }
@@ -1144,6 +1150,17 @@ export function initBoard(store) {
     }
     if (current) {
        svgHtml += buildSvgPath(current, r, "stroke-current");
+    }
+    /* The step selected in the step list is traced again on top, so the list and
+       the drawing are obviously the same thing. Drawn LAST and unfilled, so it
+       reads as a highlight rather than as another line in the drill. */
+    const selStroke = strokes.find(s => s && s._sel);
+    if (selStroke && selStroke.pts && selStroke.pts.length > 1) {
+      const p = selStroke.pts;
+      let d = `M ${p[0][0] * r.width} ${p[0][1] * r.height} `;
+      for (let k = 1; k < p.length; k++) d += `L ${p[k][0] * r.width} ${p[k][1] * r.height} `;
+      svgHtml += `<path d="${d}" fill="none" stroke="#3b82f6" stroke-width="7" ` +
+                 `stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>`;
     }
     if (tacticalLayer) tacticalLayer.innerHTML = svgHtml;
   }
@@ -1965,6 +1982,7 @@ export function initBoard(store) {
     }
     currentStep = 0;
     changeStep(0);
+    if (typeof renderSteps === "function") renderSteps();
   }
   document.getElementById("saveDrillBtn").addEventListener("click", () => {
     const name = drillNameIn.value.trim() || ("Drill " + (drills().length + 1));
@@ -2211,9 +2229,12 @@ export function initBoard(store) {
         const pts = Array.isArray(st.pts && st.pts[0])
           ? st.pts.map(pt => [+pt[0], +pt[1]])        // [[x,y],...]
           : unflatStroke(st).pts;                     // already flat
-        return flatStroke({ mode: st.mode || "run", pts,
-                            ...(st.color ? { color: st.color } : {}) });
+        /* Keep the intent fields — they ARE the drill now, not decoration. */
+        return flatStroke({ ...st, mode: st.mode || "run", pts });
       });
+      if (d.rotate && Array.isArray(d.rotate.cycle)) {
+        d.rotate = { cycle: d.rotate.cycle.map(p => [clamp01(+p[0]), clamp01(+p[1])]) };
+      } else delete d.rotate;
     } catch (ex) {
       errEl.textContent = String(ex.message || ex);
       return;
@@ -3271,6 +3292,9 @@ export function initBoard(store) {
   const playDrillLabel = document.getElementById("playDrillLabel");
 
   let loopModeActive = false;
+  /* Set to an array by the step list to have buildTimeline record the timing it
+     inferred, so a hand-drawn drill can be converted into an editable plan. */
+  let captureIntent = null;
   let currentState = null;
 
   function stopDrillAnim() {
@@ -3332,6 +3356,77 @@ export function initBoard(store) {
                         them and joining the opposite back.
      Lanes need no special handling either: legs and stations are local, so two
      drills side by side simply never reference each other's stations. */
+  /* ---- DECLARED rotation (v151) ----
+     `ROTATE c1 -> c2 -> c3 -> c4 -> queue` states the net effect of one lap:
+     whoever is on c1 moves to c2, c2 to c3, and so on, the last one joins the
+     BACK of the queue, and the front of the queue steps onto c1.
+
+     The inferred version below works out the same thing from where legs happen
+     to start and end, which is fine for a follow-your-pass square and wrong the
+     moment a drill has a leg that does not correspond to a rotation step — in
+     Michael's check-away drill it shuffled the queue forward at 100ms, before
+     the ball had been passed, and put player 1 at the back of the queue instead
+     of on cone 2. When the cycle is declared there is nothing to work out. */
+  function rotateDeclared(state, startPos, rot, startAt, rect) {
+    const cyc = (rot && rot.cycle) || [];
+    if (cyc.length < 2) return;
+    const AR = PITCH_LEN / PITCH_WID;
+    const dist = (a, b) => Math.hypot(a.x - b.x, (a.y - b.y) * AR);
+    const players = state.filter(st => isPlayerKind(st.item.kind));
+    const at = pt => {                       // who STARTED the lap on this spot
+      let best = null, bd = Infinity;
+      players.forEach(st => {
+        const sp = startPos.get(st.item); if (!sp) return;
+        const d = dist(sp, { x: pt[0], y: pt[1] });
+        if (d < bd) { bd = d; best = st; }
+      });
+      return best;
+    };
+    /* The queue is everyone who started behind the first station and is not
+       standing on a station: ordered by how far back they are. */
+    const stationOf = new Set(cyc.map(p => { const s = at(p); return s && s.item; }));
+    const head = cyc[0];
+    const queue = players
+      .filter(st => !stationOf.has(st.item))
+      .map(st => ({ st, d: dist(startPos.get(st.item) || st, { x: head[0], y: head[1] }) }))
+      .sort((a, b) => a.d - b.d)
+      .map(o => o.st);
+
+    const target = new Map();                // piece -> where it ends the lap
+    for (let i = 0; i < cyc.length - 1; i++) {
+      const who = at(cyc[i]); if (who) target.set(who, cyc[i + 1]);
+    }
+    const last = at(cyc[cyc.length - 1]);
+    const tailSlot = queue.length
+      ? startPos.get(queue[queue.length - 1].item)
+      : null;
+    if (last && tailSlot) target.set(last, [tailSlot.x, tailSlot.y]);
+    if (queue.length) {
+      target.set(queue[0], cyc[0]);          // front of the queue steps up
+      for (let i = 1; i < queue.length; i++) {
+        const slot = startPos.get(queue[i - 1].item);
+        if (slot) target.set(queue[i], [slot.x, slot.y]);
+      }
+    }
+
+    /* ONE time for the whole re-lay: the END OF THE LAP. The inferred version
+       schedules each piece at its own last-moved time, which is zero for anyone
+       who never moved — so a queue standing still shuffled forward at 100ms,
+       before the ball had even been passed. A rotation is what happens when the
+       lap is over, so it happens when the lap is over. */
+    let done = startAt;
+    target.forEach((pt, st) => {
+      if (Math.hypot(st.x - pt[0], st.y - pt[1]) < 0.005) return;   // already there
+      drillTimeline.to(st.item.el, {
+        keyframes: [{ left: (pt[0] * rect.width) + "px", top: (pt[1] * rect.height) + "px" }],
+        duration: 700 / 1000, ease: "none"
+      }, (startAt + 100) / 1000);
+      st.x = pt[0]; st.y = pt[1];
+      done = Math.max(done, startAt + 100 + 700);
+    });
+    return done;
+  }
+
   function rotateDrill(state, startPos, legs, pieceTime, rect) {
     if (!legs.length) return;
 
@@ -3466,10 +3561,46 @@ export function initBoard(store) {
        decided here: a leg's start can depend on a leg drawn LATER (a runner
        meeting a pass), so the clock is resolved separately in pass B. */
 
-    allStrokes.forEach(stroke => {
+    /* Does this drill carry INTENT? A planned drill states who does what and
+       what waits for what; playback then only interpolates. Anything without
+       intent falls through to the geometric inference below, which is the
+       legacy path every drill saved before v151 relies on. */
+    const planned = allStrokes.some(s => s.actor || s.after || s.with || s.arriveWith != null);
+    const byStroke = new Map();          // stroke index -> plan index
+
+    allStrokes.forEach((stroke, sIdx) => {
         if (stroke.pts.length < 2) return;
         const startPt = stroke.pts[0];
         let closest = null;
+
+        /* ---- PLANNED: the actor was decided when the drill was written ----
+           `{slot:[x,y]}` means "whoever is standing here NOW", which is what
+           makes a rotation keep working: after one lap player 5 is on cone 1,
+           so player 5 performs cone 1's leg. `{piece:id}` pins one piece for a
+           one-off. Either way there is no threshold to tune. */
+        if (stroke.actor) {
+          const want = stroke.mode === "pass" ? ["dball"] : ["att", "def"];
+          const slot = stroke.actor.slot || startPt;
+          let best = null, bd = Infinity;
+          currentState.forEach(st => {
+            if (stroke.actor.piece != null) { if (st.item.id === stroke.actor.piece) best = st; return; }
+            if (!want.includes(st.item.kind)) return;
+            /* MATCH AGAINST WHERE EVERYONE STOOD AT THE START OF THE LAP, not
+               where they have got to mid-lap. Within one lap "player 3" is one
+               person; across laps the same slot rebinds to whoever has rotated
+               into it, which is what keeps a circuit running. Matching against
+               live positions instead made a player who ran through a slot
+               inherit that slot's remaining legs — in this drill player 2 ended
+               up performing player 3's and player 4's steps as well as his own.
+               The BALL is the exception: it is wherever it has been played to. */
+            const ref = st.item.kind === "dball" ? st : (startPos.get(st.item) || st);
+            const d = Math.hypot(ref.x - slot[0], (ref.y - slot[1]) * (PITCH_LEN / PITCH_WID));
+            if (d < bd) { bd = d; best = st; }
+          });
+          closest = best;
+        }
+        if (!closest && stroke.actor && stroke.mode === "pass") return;  // no ball, no pass
+        if (!closest) {
         /* A leg belongs to a SLOT, not to a player. Whoever is standing on the
            leg's start position right now performs it — that is what makes the
            drill keep looping: after one rotation player 5 is on cone 1, so
@@ -3512,7 +3643,8 @@ export function initBoard(store) {
             });
             if (forced) closest = forced;
         }
-        
+        }
+
         let closestBall = null;
         if (closest && (stroke.mode === "dribble" || stroke.mode === "passrun")) {
           let minDBall = 0.15; // VERY forgiving 15% distance for the ball too!
@@ -3609,10 +3741,12 @@ export function initBoard(store) {
              ballEnd = [parseFloat(bend.left) / _r.width, parseFloat(bend.top) / _r.height];
           }
 
+          byStroke.set(sIdx, plan.length);
           plan.push({
             actor: closest.item, ball: closestBall ? closestBall.item : null,
             isBallLeg: closest.item.kind === "dball",
-            startPt, endPt, dur, ballDur, keyframes, ballKeyframes, startDeps
+            startPt, endPt, dur, ballDur, keyframes, ballKeyframes, startDeps,
+            stroke, sIdx
           });
 
           closest.x = endPt[0];
@@ -3664,8 +3798,58 @@ export function initBoard(store) {
     const nearPt = (a, b, tol) =>
       Math.hypot(a[0] - b[0], (a[1] - b[1]) * AR_DEP) < (tol || DEP_TOL);
 
+    /* Putting a leg on the timeline. Shared by the planned and the inferred
+       paths so the two can only ever disagree about TIMING, never about what
+       actually gets animated. */
+    function emitLeg(p) {
+      drillTimeline.to(p.actor.el, {
+        keyframes: p.keyframes, duration: p.dur / 1000
+      }, p.start / 1000);
+      pieceTime.set(p.actor, p.end);
+      if (p.ball) {
+        /* Its own duration, so on a pass+run the ball ARRIVES BEFORE the player
+           who played it. Tracked separately too: the next leg waiting on the
+           ball must wait for the ball, not for the runner still jogging over. */
+        p.ballEnd = p.start + p.ballDur;
+        drillTimeline.to(p.ball.el, {
+          keyframes: p.ballKeyframes, duration: p.ballDur / 1000
+        }, p.start / 1000);
+        pieceTime.set(p.ball, p.ballEnd);
+      }
+    }
+
     plan.forEach((p, i) => {
       let t = Math.max(timeOf(p.actor), p.ball ? timeOf(p.ball) : 0);
+
+      /* ---- PLANNED TIMING ----
+         When the drill says what waits for what, use that and nothing else.
+         The inference rules below exist to GUESS this graph from geometry; if
+         we have been told, guessing can only disagree. Rule 1 above still
+         applies, because a player cannot be in two places at once however the
+         drill is written.
+
+         The references are stroke indices and may only point BACKWARDS, which
+         is how a coach describes a drill anyway ("A passes, THEN B runs"). */
+      const s = p.stroke;
+      if (s && (s.after || s.with || s.arriveWith != null)) {
+        const at = j => { const k = byStroke.get(j); return k == null ? null : plan[k]; };
+        (s.after || []).forEach(j => {
+          const q = at(j);
+          /* Wait for the BALL if that leg struck one — a receiver waits for the
+             pass to land, not for the passer to finish jogging over. */
+          if (q) t = Math.max(t, (q.isBallLeg ? q.end : (q.ballEnd != null ? q.ballEnd : q.end)) + LEG_GAP);
+        });
+        (s.with || []).forEach(j => { const q = at(j); if (q) t = Math.max(t, q.start); });
+        if (s.arriveWith != null) {
+          const q = at(s.arriveWith);
+          if (q) t = Math.max(t, (q.isBallLeg ? q.end : q.end) - p.dur);
+        }
+        p.start = Math.max(0, t);
+        p.end = p.start + p.dur;
+        emitLeg(p);
+        return;
+      }
+
       /* Rule 2, but only for pieces this leg actually NEEDS. It used to wait for
          everything arriving at the start point, which meant a receiver could not
          play on until the passer had finished jogging over to him — the moment
@@ -3701,21 +3885,23 @@ export function initBoard(store) {
             p.start = Math.max(p.start, plan[j].start + (plan[j].dur * 0.1));
       }
       p.end = p.start + p.dur;
+      emitLeg(p);
 
-      drillTimeline.to(p.actor.el, {
-        keyframes: p.keyframes, duration: p.dur / 1000
-      }, p.start / 1000);
-      pieceTime.set(p.actor, p.end);
-
-      if (p.ball) {
-        /* Its own duration, so on a pass+run the ball ARRIVES BEFORE the player
-           who played it. Tracked separately too: the next leg waiting on the
-           ball must wait for the ball, not for the runner still jogging over. */
-        p.ballEnd = p.start + p.ballDur;
-        drillTimeline.to(p.ball.el, {
-          keyframes: p.ballKeyframes, duration: p.ballDur / 1000
-        }, p.start / 1000);
-        pieceTime.set(p.ball, p.ballEnd);
+      /* CAPTURE. When the step list asks, record the timing the inference just
+         worked out as an explicit link, so a hand-drawn drill can be turned
+         into an editable plan that plays identically. A leg starting on the
+         same beat as an earlier one is a `with`; otherwise it is `after`
+         whichever earlier leg it was actually waiting on. */
+      if (captureIntent) {
+        const rec = { si: p.sIdx, slot: [p.startPt[0], p.startPt[1]] };
+        let bestAfter = null, bestEnd = -1;
+        for (let j = 0; j < i; j++) {
+          if (Math.abs(plan[j].start - p.start) < 2) { rec.with = plan[j].sIdx; break; }
+          const e = plan[j].isBallLeg ? plan[j].end : (plan[j].ballEnd || plan[j].end);
+          if (e <= p.start + 1 && e > bestEnd) { bestEnd = e; bestAfter = plan[j].sIdx; }
+        }
+        if (rec.with == null && bestAfter != null && p.start > 1) rec.after = bestAfter;
+        captureIntent.push(rec);
       }
     });
 
@@ -3725,7 +3911,16 @@ export function initBoard(store) {
        stroke happened to end. The queue direction is taken from the spacing
        between the last two numbered players at their START positions, so it
        works for a line, a diagonal or a staggered queue. */
-    rotateDrill(currentState, startPos, legs, pieceTime, board.getBoundingClientRect());
+    const declaredRot = activePreset && activePreset.rotate;
+    let rotEnd = 0;
+    if (declaredRot && declaredRot.cycle && declaredRot.cycle.length > 1) {
+      let lapEnd = 0;
+      plan.forEach(p => { lapEnd = Math.max(lapEnd, p.end, p.ballEnd || 0); });
+      rotEnd = rotateDeclared(currentState, startPos, declaredRot, lapEnd,
+                              board.getBoundingClientRect());
+    } else {
+      rotateDrill(currentState, startPos, legs, pieceTime, board.getBoundingClientRect());
+    }
 
     if (!hasAnyAnimation) {
       drillTimeline = null;
@@ -3741,7 +3936,13 @@ export function initBoard(store) {
     
     // In continuous passing drills, don't wait for the last trailing runner to finish jogging
     // before starting the next lap. Start as soon as the ball finishes its sequence!
-    const loopTriggerTime = (maxBallTime > 0) ? maxBallTime : maxRunTime;
+    /* A DECLARED rotation must finish before the next lap starts, or the queue
+       is still shuffling forward while the new lap's first pass is played and
+       the slots resolve to the wrong people. Without one, keep the old
+       behaviour: start again as soon as the ball has finished its sequence,
+       rather than waiting for the last runner to jog in. */
+    const loopTriggerTime = rotEnd > 0 ? rotEnd
+                          : (maxBallTime > 0) ? maxBallTime : maxRunTime;
     if (loopModeActive && loopTriggerTime > 0) {
         drillTimeline.call(() => {
             if (loopModeActive) buildTimeline(false);
@@ -3793,6 +3994,352 @@ export function initBoard(store) {
     });
   }
   if (playDrillBtn) playDrillBtn.addEventListener("click", startDrillAnim);
+
+  /* ================= DRILL STEP LIST (v152) =================
+     The drill as data. Until now a drill could only be read back off the pitch
+     as a cloud of lines, which is exactly why every timing problem had to be
+     debugged by watching the animation. The step model added in v151 stores who
+     does what and what waits for what; this is the window onto it.
+
+     DRAW ORDER IS SEMANTICS — dependencies are read backwards through it — so
+     reordering here changes what the drill DOES, and every after/with/meets
+     reference has to be remapped when it happens. Getting that wrong silently
+     corrupts a drill, so a move that would leave a step depending on a LATER
+     step is refused rather than quietly dropped.
+     ========================================================== */
+  const stepsPanel = document.getElementById("stepsPanel");
+  let stepSel = null;                       // index of the selected step
+
+  const stepStrokes = () => (drillSteps[currentStep] || []);
+  const PLAYER_KINDS = ["att", "def"];
+
+  /* Plain English for one leg. The endpoints are matched against the pieces on
+     the pitch, because "pass to player 3" is what the coach wrote and
+     "0.75,0.06" is not. */
+  function describeStep(s) {
+    const pts = unflatStroke(s).pts;
+    if (!pts.length) return s.mode;
+    const end = pts[pts.length - 1];
+    const cones = drillItems.filter(i => i.kind === "cone" || i.kind === "disc");
+    const AR = PITCH_LEN / PITCH_WID;
+    const near = (pt, list) => {
+      let best = null, bd = Infinity;
+      list.forEach(i => {
+        const d = Math.hypot(i.x - pt[0], (i.y - pt[1]) * AR);
+        if (d < bd) { bd = d; best = i; }
+      });
+      return bd < 0.06 ? best : null;
+    };
+    const nameFor = pt => {
+      const p = near(pt, drillItems.filter(i => PLAYER_KINDS.includes(i.kind)));
+      if (p) return "player " + (p.num || "?");
+      const c = near(pt, cones);
+      if (c) return "cone " + (cones.indexOf(c) + 1);
+      return "space";
+    };
+    const verb = { pass:"Pass", run:"Run", dribble:"Dribble", passrun:"Pass and follow" }[s.mode] || s.mode;
+    return verb + " to " + nameFor(end) + (s.via ? ", round the outside" : "");
+  }
+
+  function stepLength(s) {
+    const pts = unflatStroke(s).pts;
+    let m = 0;
+    for (let i = 1; i < pts.length; i++)
+      m += Math.hypot((pts[i][0] - pts[i-1][0]) * PITCH_WID,
+                      (pts[i][1] - pts[i-1][1]) * PITCH_LEN);
+    return Math.round(m);
+  }
+  const stepTiming = s =>
+    s.after && s.after.length ? "after " + s.after.map(i => i + 1).join(" & ")
+    : s.with && s.with.length ? "with " + s.with.map(i => i + 1).join(" & ")
+    : s.arriveWith != null ? "meets " + (s.arriveWith + 1)
+    : "";
+
+  function renderSteps() {
+    const list = document.getElementById("stepList");
+    if (!list) return;
+    const ss = stepStrokes();
+    list.innerHTML = "";
+    document.getElementById("stepsCount").textContent =
+      ss.length + (ss.length === 1 ? " step" : " steps");
+
+    ss.forEach((s, i) => {
+      const row = document.createElement("div");
+      row.className = "stepRow" + (stepSel === i ? " sel" : "");
+      row.dataset.i = i;
+
+      const n = document.createElement("span");
+      n.className = "n"; n.textContent = i + 1;
+
+      const main = document.createElement("button");
+      main.className = "stepMain"; main.type = "button";
+      const what = document.createElement("span");
+      what.className = "stepWhat"; what.textContent = describeStep(s);
+      const meta = document.createElement("span");
+      meta.className = "stepMeta";
+      const tim = stepTiming(s);
+      meta.innerHTML = stepLength(s) + " m" +
+        (tim ? ' · <span class="tim">' + tim + "</span>" : "");
+      main.append(what, meta);
+
+      const btns = document.createElement("div");
+      btns.className = "stepBtns";
+      const up = document.createElement("button");
+      up.type = "button"; up.textContent = "▲"; up.dataset.move = "-1";
+      up.setAttribute("aria-label", "Move step " + (i + 1) + " earlier");
+      up.disabled = i === 0;
+      const dn = document.createElement("button");
+      dn.type = "button"; dn.textContent = "▼"; dn.dataset.move = "1";
+      dn.setAttribute("aria-label", "Move step " + (i + 1) + " later");
+      dn.disabled = i === ss.length - 1;
+      btns.append(up, dn);
+
+      const del = document.createElement("button");
+      del.className = "del"; del.type = "button"; del.innerHTML = "&times;";
+      del.dataset.del = "1";
+      del.setAttribute("aria-label", "Delete step " + (i + 1));
+
+      row.append(n, main, btns, del);
+      list.appendChild(row);
+    });
+
+    /* The timing editor only makes sense against a selected step, and only
+       EARLIER steps can be referenced — a dependency that points forwards is
+       not a drill, it is a deadlock. */
+    const ed = document.getElementById("stepEdit");
+    if (stepSel == null || !ss[stepSel]) { ed.hidden = true; }
+    else {
+      ed.hidden = false;
+      const s = ss[stepSel];
+      document.getElementById("stepEditHead").textContent =
+        "Step " + (stepSel + 1) + " · " + describeStep(s);
+      const mode = s.after && s.after.length ? "after"
+                 : s.with && s.with.length ? "with"
+                 : s.arriveWith != null ? "meets" : "";
+      [...document.querySelectorAll("#stepWhen button")].forEach(b =>
+        b.classList.toggle("on", (b.dataset.when || "") === mode));
+
+      const refs = document.getElementById("stepRefs");
+      refs.innerHTML = "";
+      if (mode) {
+        const chosen = mode === "after" ? (s.after || [])
+                     : mode === "with" ? (s.with || [])
+                     : [s.arriveWith];
+        for (let j = 0; j < stepSel; j++) {
+          const b = document.createElement("button");
+          b.type = "button"; b.textContent = j + 1; b.dataset.ref = j;
+          if (chosen.includes(j)) b.classList.add("on");
+          refs.appendChild(b);
+        }
+        if (!stepSel) {
+          const d = document.createElement("div");
+          d.className = "hint";
+          d.textContent = "The first step has nothing to wait for.";
+          refs.appendChild(d);
+        }
+      }
+      document.getElementById("stepWhenHint").textContent =
+        mode === "after" ? "Starts once the step above has finished and its ball has landed."
+        : mode === "with" ? "Starts on the same beat — a pass and the run that goes with it."
+        : mode === "meets" ? "Timed to finish together — running onto a pass."
+        : "Starts as soon as the player and the ball are free.";
+    }
+
+    document.getElementById("stepsCapture").hidden =
+      ss.some(s => s.actor || s.after || s.with || s.arriveWith != null) || !ss.length;
+  }
+
+  /* Remap every reference through a permutation. `map[old] = new`; a reference
+     to a removed step becomes null and is dropped. */
+  function remapRefs(ss, map) {
+    ss.forEach(s => {
+      const fix = list => {
+        const out = (list || []).map(i => map[i]).filter(i => i != null);
+        return out.length ? out : null;
+      };
+      const a = fix(s.after), w = fix(s.with);
+      if (a) s.after = a; else delete s.after;
+      if (w) s.with = w; else delete s.with;
+      if (s.arriveWith != null) {
+        const m = map[s.arriveWith];
+        if (m == null) delete s.arriveWith; else s.arriveWith = m;
+      }
+    });
+  }
+  const stepsErr = msg => { document.getElementById("stepsErr").textContent = msg || ""; };
+
+  function applySteps(ss) {
+    drillSteps[currentStep] = ss;
+    strokeBufs.drills = drillSteps[currentStep];
+    if (currentView === "drills") strokes = strokeBufs.drills;
+    if (activePreset) activePreset.strokes = ss;
+    stopDrillAnim();
+    redraw();
+    renderSteps();
+  }
+
+  function moveStep(i, d) {
+    const ss = stepStrokes().slice();
+    const j = i + d;
+    if (j < 0 || j >= ss.length) return;
+    const map = ss.map((_, k) => k);
+    map[i] = j; map[j] = i;
+    const moved = ss.slice();
+    moved[j] = ss[i]; moved[i] = ss[j];
+    /* Refuse a move that would leave something depending on a LATER step. The
+       alternative is dropping the dependency, which is the silent-failure
+       behaviour the English parser was deleted for. */
+    const test = JSON.parse(JSON.stringify(moved));
+    remapRefs(test, map);
+    const bad = test.findIndex((s, k) =>
+      (s.after || []).some(r => r >= k) || (s.with || []).some(r => r >= k) ||
+      (s.arriveWith != null && s.arriveWith >= k));
+    if (bad > -1) {
+      stepsErr("Cannot move that: step " + (bad + 1) + " would end up waiting for a later step. " +
+               "Change its timing first.");
+      return;
+    }
+    stepsErr("");
+    remapRefs(moved, map);
+    stepSel = j;
+    applySteps(moved);
+  }
+
+  function deleteStep(i) {
+    const ss = stepStrokes().slice();
+    const map = ss.map((_, k) => k < i ? k : k > i ? k - 1 : null);
+    ss.splice(i, 1);
+    remapRefs(ss, map);
+    stepsErr("");
+    stepSel = null;
+    applySteps(ss);
+  }
+
+  document.getElementById("stepList")?.addEventListener("click", e => {
+    const row = e.target.closest(".stepRow"); if (!row) return;
+    const i = +row.dataset.i;
+    const mv = e.target.closest("[data-move]");
+    if (mv) return moveStep(i, +mv.dataset.move);
+    if (e.target.closest("[data-del]")) return deleteStep(i);
+    stepSel = (stepSel === i) ? null : i;
+    stepsErr("");
+    renderSteps();
+    highlightStep();
+  });
+
+  /* Selecting a step marks its line on the pitch, so the list and the drawing
+     are obviously the same thing. */
+  function highlightStep() {
+    const ss = stepStrokes();
+    ss.forEach((s, i) => { if (stepSel === i) s._sel = true; else delete s._sel; });
+    redraw();
+  }
+
+  document.getElementById("stepWhen")?.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b || stepSel == null) return;
+    const ss = stepStrokes().slice();
+    const s = ss[stepSel]; if (!s) return;
+    delete s.after; delete s.with; delete s.arriveWith;
+    const when = b.dataset.when || "";
+    if (when && stepSel > 0) {                       // default to the step before
+      if (when === "after") s.after = [stepSel - 1];
+      else if (when === "with") s.with = [stepSel - 1];
+      else s.arriveWith = stepSel - 1;
+    }
+    ensureActors(ss);
+    applySteps(ss);
+  });
+  document.getElementById("stepRefs")?.addEventListener("click", e => {
+    const b = e.target.closest("[data-ref]"); if (!b || stepSel == null) return;
+    const j = +b.dataset.ref;
+    const ss = stepStrokes().slice();
+    const s = ss[stepSel]; if (!s) return;
+    if (s.arriveWith != null) s.arriveWith = j;       // only one target makes sense
+    else {
+      const key = s.after ? "after" : s.with ? "with" : null;
+      if (!key) return;
+      const list = s[key];
+      const at = list.indexOf(j);
+      if (at > -1) { if (list.length > 1) list.splice(at, 1); }   // never empty it
+      else list.push(j);
+      list.sort((x, y) => x - y);
+    }
+    ensureActors(ss);
+    applySteps(ss);
+  });
+
+  /* Editing the timing turns the drill into a PLANNED one, and a planned drill
+     bypasses the inference entirely — so every step needs an actor, or the ones
+     without would resolve by proximity while the rest resolve by slot. Give
+     each leg the slot it starts from, which is what the notation does. */
+  function ensureActors(ss) {
+    ss.forEach(s => {
+      if (s.actor) return;
+      const pts = unflatStroke(s).pts;
+      if (pts.length) s.actor = { slot: [pts[0][0], pts[0][1]] };
+    });
+  }
+
+  /* Capture: play the drill once on the inference path, then write the timing
+     it worked out back onto the strokes as explicit links. That turns any drill
+     drawn by hand into an editable plan without changing how it looks. */
+  document.getElementById("stepsCapture")?.addEventListener("click", () => {
+    const ss = stepStrokes().slice();
+    captureIntent = [];
+    buildTimeline(true);
+    stopDrillAnim();
+    const cap = captureIntent; captureIntent = null;
+    if (!cap || !cap.length) { stepsErr("Nothing to capture — the drill did not play."); return; }
+    cap.forEach(c => {
+      const s = ss[c.si]; if (!s) return;
+      s.actor = { slot: c.slot };
+      if (c.with != null) s.with = [c.with];
+      else if (c.after != null) s.after = [c.after];
+    });
+    ensureActors(ss);
+    stepsErr("");
+    applySteps(ss);
+  });
+
+  function openSteps() {
+    stepSel = null; stepsErr("");
+    renderSteps();
+    stepsPanel?.classList.add("open");
+  }
+  document.getElementById("dpStepsBtn")?.addEventListener("click", openSteps);
+  document.getElementById("stepsClose")?.addEventListener("click", () => {
+    stepSel = null; highlightStep();
+    stepsPanel.classList.remove("open");
+  });
+  stepsPanel?.addEventListener("click", e => {
+    if (e.target === stepsPanel) { stepSel = null; highlightStep(); stepsPanel.classList.remove("open"); }
+  });
+  document.getElementById("stepsSave")?.addEventListener("click", () => {
+    const ss = stepStrokes().map(flatStroke).map(s => { const o = { ...s }; delete o._sel; return o; });
+    const cur = activePreset;
+    if (cur && cur.id != null && drills().some(d => d.id === cur.id)) {
+      const list = drills().map(d => d.id === cur.id ? { ...d, strokes: ss,
+        ...(cur.rotate ? { rotate: cur.rotate } : {}) } : d);
+      store.data.drills = list;
+      store.save({ drills: list });
+      stepsErr("");
+    } else {
+      /* Not one of the coach's own drills (a built-in, or something imported but
+         never saved) — save it as a new one rather than silently doing nothing. */
+      const d = { id: Date.now(), name: (cur && cur.name) || "Drill",
+        items: drillItems.map(({ kind, x, y, color, num, id, startCone }) => ({ kind, x, y,
+          ...(color ? { color } : {}), ...(num ? { num } : {}),
+          ...(id != null ? { id } : {}), ...(startCone ? { startCone: true } : {}) })),
+        strokes: ss, ...(cur && cur.rotate ? { rotate: cur.rotate } : {}) };
+      store.data.drills = [...drills(), d];
+      store.save({ drills: store.data.drills });
+      activePreset = d;
+    }
+    renderDrillList();
+    const btn = document.getElementById("stepsSave");
+    btn.textContent = "Saved ✓";
+    setTimeout(() => { btn.textContent = "Save the drill"; }, 900);
+  });
 
 
   /* NOTES ARE NOTES (v149). These boxes used to be wired to an English parser
