@@ -40,7 +40,7 @@ window.addEventListener("unhandledrejection", function(event) {
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tailwind.css?v=146">
+<link rel="stylesheet" href="tailwind.css?v=148">
 <link rel="stylesheet" href="styles.css?v=146">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
@@ -89,49 +89,52 @@ window.addEventListener("unhandledrejection", function(event) {
 
 <!-- ============ BOARD VIEW ============ -->
 <section id="boardView" class="view md:max-w-[430px] md:mx-auto md:border-x md:border-white/10 md:shadow-2xl relative">
-  <div id="controls">
-    <div class="seg" id="viewSeg">
-      <button class="on" data-view="team">Team <span class="chev">☰</span></button>
-      <button data-view="game">Game day <span class="chev">☰</span></button>
-      <button data-view="drills">Drills <span class="chev">☰</span></button>
+  <div id="controls" class="w-full flex items-center gap-1 sm:gap-2 px-1 sm:px-4 pb-1 pt-[calc(12px+env(safe-area-inset-top))] shrink-0">
+    <div class="seg !flex-1 flex" id="viewSeg">
+      <button class="on flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3 whitespace-nowrap" data-view="team">Team <span class="chev">☰</span></button>
+      <button class="flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3 whitespace-nowrap" data-view="game">Game day <span class="chev">☰</span></button>
+      <button class="flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3 whitespace-nowrap" data-view="drills">Drills <span class="chev">☰</span></button>
     </div>
+    <button class="chip iconChip shrink-0 px-2 sm:px-4 text-[10px] sm:text-sm" id="menuBtn" aria-label="Menu">⋯</button>
   </div>
-  <header>
-    <h1 id="hdrTeam">Soccer Play Book</h1>
+  <header class="flex items-center gap-1 sm:gap-2 px-1 sm:px-2 py-0.5 shrink-0 w-full max-w-full">
+    <h1 id="hdrTeam" class="text-[var(--ink)] text-[11px] sm:text-[13px] font-bold tracking-wide uppercase whitespace-nowrap shrink min-w-0 overflow-hidden text-ellipsis">Soccer Play Book</h1>
     
-    <div id="matchBar">
-      <button id="gameChip">Game</button>
-      <button id="timerChip" hidden>00:00</button>
-      <button id="subsChip" hidden>Subs 10:00</button>
-      <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
+    <div id="matchBar" class="flex-1 shrink min-w-0 items-center gap-1 px-1 py-0.5 bg-[var(--surface)] border border-[var(--line)] rounded-md">
+      <button id="gameChip" class="flex-1 text-left min-w-0 overflow-hidden text-ellipsis text-[11px] sm:text-[13px] font-bold tracking-wide uppercase px-1 py-0.5 text-[var(--ink-dim)]">Game</button>
+      <button id="gameCfgChip" class="px-1 py-0.5 text-[var(--ink-dim)] hover:text-[var(--ink)] text-[11px] sm:text-[13px]" hidden aria-label="Game configuration">…</button>
     </div>
-
-    <div class="spacer"></div>
-    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
   </header>
 
-  <div id="scoreBar">
-    <div class="scoreSide">
-      <div class="scoreName" id="scoreUsName">Us</div>
-      <div class="scoreBtns">
-        <button data-team="us" data-d="-1" aria-label="Us minus one">−</button>
-        <div class="scoreNum" id="scoreUs">0</div>
-        <button data-team="us" data-d="1" aria-label="Us plus one">+</button>
+  <div id="scoreBar" class="w-full mt-1 px-1 sm:px-3 py-1 bg-surface border-y sm:border border-line sm:rounded-md flex items-center justify-center gap-2 sm:gap-6">
+    <div id="scoreWrapper" class="flex items-center justify-center gap-1 sm:gap-3 shrink min-w-0">
+      <div class="scoreSide flex flex-col items-center gap-0 sm:gap-1 min-w-0">
+        <div class="scoreName max-w-[20vw] sm:max-w-[30vw] text-[9px] sm:text-[11px] font-bold tracking-wider text-ink-dim uppercase truncate" id="scoreUsName">Us</div>
+        <div class="scoreBtns flex items-center gap-1 sm:gap-2">
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="us" data-d="-1" aria-label="Us minus one">−</button>
+          <div class="scoreNum min-w-5 sm:min-w-10 text-base sm:text-[26px] text-center font-bold leading-none tabular-nums" style="color:#7CFC7A; font-family:'Barlow Condensed',monospace; letter-spacing:.02em; text-shadow:0 0 10px rgba(124,252,122,.35);" id="scoreUs">0</div>
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="us" data-d="1" aria-label="Us plus one">+</button>
+        </div>
+      </div>
+      <div class="scoreColon text-xs sm:text-[26px] font-bold text-ink-faint self-end pb-1 sm:pb-1 shrink-0">:</div>
+      <div class="scoreSide flex flex-col items-center gap-0 sm:gap-1 min-w-0">
+        <div class="scoreName max-w-[20vw] sm:max-w-[30vw] text-[9px] sm:text-[11px] font-bold tracking-wider text-ink-dim uppercase truncate" id="scoreThemName">Opp</div>
+        <div class="scoreBtns flex items-center gap-1 sm:gap-2">
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
+          <div class="scoreNum min-w-5 sm:min-w-10 text-base sm:text-[26px] text-center font-bold leading-none tabular-nums" style="color:#7CFC7A; font-family:'Barlow Condensed',monospace; letter-spacing:.02em; text-shadow:0 0 10px rgba(124,252,122,.35);" id="scoreThem">0</div>
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
+        </div>
       </div>
     </div>
-    <div class="scoreColon">:</div>
-    <div class="scoreSide">
-      <div class="scoreName" id="scoreThemName">Opp</div>
-      <div class="scoreBtns">
-        <button data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
-        <div class="scoreNum" id="scoreThem">0</div>
-        <button data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
-      </div>
+    
+    <div id="scoreTimers" class="flex items-center gap-1 shrink-0">
+      <button id="timerChip" class="px-1 py-1 sm:px-2 sm:py-2 text-[9px] sm:text-sm bg-bg border border-line rounded-md text-ink font-semibold tabular-nums whitespace-nowrap" hidden>00:00</button>
+      <button id="subsChip" class="px-1 py-1 sm:px-2 sm:py-2 text-[9px] sm:text-sm bg-bg border border-line rounded-md text-ink font-semibold tabular-nums whitespace-nowrap" hidden>Subs 10:00</button>
     </div>
   </div>
 
-  <main class="flex-1 w-full relative h-full m-0 p-0 overflow-hidden flex items-center justify-center bg-black">
-<div id="board" class="w-full h-full max-h-full max-w-full aspect-[68/105] relative rounded-none border-none shadow-none overflow-hidden">
+  <main class="flex-1 w-full relative h-full m-0 p-0 overflow-hidden flex flex-col items-center justify-center bg-black">
+<div id="board" class="w-full h-full max-h-full max-w-full aspect-[68/105] relative rounded-none border-none shadow-none overflow-hidden shrink min-h-0">
     <svg id="tacticalLayer" width="100%" height="100%" style="position:absolute; top:0; left:0; pointer-events:none; z-index:2;">
       <defs>
         <!-- Pass Arrow -->
@@ -160,6 +163,17 @@ window.addEventListener("unhandledrejection", function(event) {
       <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
     </div>
       </div>
+  <div id="benchZone">
+    <div id="subHint" class="subHint" hidden></div>
+    <span class="benchLabel">Subs</span>
+    <!-- game day only: the full two-column substitutions screen -->
+    <button id="openSubsBtn" aria-label="Open substitutions">&#8646; Subs</button>
+    <div id="bench"></div>
+    <div id="outZone">
+      <span class="outLabel">Out</span>
+      <div id="outList"></div>
+    </div>
+  </div>
 </main>
   
 
@@ -225,18 +239,6 @@ window.addEventListener("unhandledrejection", function(event) {
    </div>
   </div>
 
-  <div id="benchZone">
-    <div id="subHint" class="subHint" hidden></div>
-    <span class="benchLabel">Subs</span>
-    <!-- game day only: the full two-column substitutions screen -->
-    <button id="openSubsBtn" aria-label="Open substitutions">&#8646; Subs</button>
-    <div id="bench"></div>
-    <div id="outZone">
-      <span class="outLabel">Out</span>
-      <div id="outList"></div>
-    </div>
-  </div>
-  <!-- notes pane -->
   <div id="drillNotesPane" class="drillOnly hidden" style="position:absolute; bottom:72px; left:16px; right:16px; background:rgba(18,18,18,0.95); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.8); z-index:130; padding:12px;">
     <textarea id="liveNotes" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; padding:12px; font-size:14px; resize:vertical; min-height:100px; outline:none;" placeholder="e.g. Player 1 passes to Player 2&#10;Player 1 runs to Cone 2..."></textarea>
   </div>
@@ -592,10 +594,10 @@ window.addEventListener("unhandledrejection", function(event) {
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<link rel="stylesheet" href="styles.css?v=168" />
+<link rel="stylesheet" href="styles.css?v=173" />
 <script src="js/drills.js?v=147"></script>
 <script src="js/drill-text.js?v=162"></script>
-<script type="module" src="js/app.js?v=164"></script>
+<script type="module" src="js/app.js?v=167"></script>
 
 </body>
 </html>

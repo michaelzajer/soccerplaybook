@@ -2153,11 +2153,11 @@ export function initBoard(store) {
     c.beginPath(); c.arc(x, y, r, 0, 7);
     c.fillStyle = fill; c.fill();
     c.lineWidth = Math.max(1.5, r * 0.09); c.strokeStyle = "rgba(0,0,0,.25)"; c.stroke();
-    c.fillStyle = ink; c.font = `700 ${Math.round(r * 0.82)}px 'Barlow Condensed',sans-serif`;
+    c.fillStyle = ink; c.font = `700 ${Math.round(r * 0.90)}px 'Barlow Condensed',sans-serif`;
     c.textAlign = "center"; c.textBaseline = "middle";
     c.fillText(label, x, y + r * 0.05);
     if (name) {
-      c.font = `600 ${Math.round(r * 0.75)}px 'Barlow Condensed',sans-serif`;
+      c.font = `600 ${Math.round(r * 0.82)}px 'Barlow Condensed',sans-serif`;
       c.fillStyle = "#fff";
       c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = 4;
       c.fillText(name, x, y + r * 1.85);
@@ -2202,14 +2202,47 @@ export function initBoard(store) {
     if (guestShareBlocked()) return;
     const b = bstate();
     
-    // Calculate dynamic footer height based on substitutes
+    // Group Starting XI and Substitutes
+    const onPitch = roster().filter(p => b.placed[p.id]);
     const offPitch = roster().filter(p => !b.placed[p.id]);
     const benchList = offPitch.filter(p => !isOut(p.id));
     const outList = offPitch.filter(p => isOut(p.id));
 
+    const posGroups = {
+      "GOALKEEPERS": [],
+      "DEFENDERS": [],
+      "MIDFIELDERS": [],
+      "FORWARDS": [],
+      "OTHER": []
+    };
+    
+    const defs = ["RB", "RWB", "CB", "LB", "LWB"];
+    const mids = ["CDM", "CM", "CAM", "RM", "LM"];
+    const fwds = ["RW", "LW", "ST", "CF"];
+    
+    onPitch.forEach(p => {
+      const pos = (p.pos || "").toUpperCase();
+      if (pos === "GK") posGroups["GOALKEEPERS"].push(p);
+      else if (defs.includes(pos)) posGroups["DEFENDERS"].push(p);
+      else if (mids.includes(pos)) posGroups["MIDFIELDERS"].push(p);
+      else if (fwds.includes(pos)) posGroups["FORWARDS"].push(p);
+      else posGroups["OTHER"].push(p);
+    });
+
     let footerHeight = 0;
+    let hasStarting = false;
+    
+    for (const [title, list] of Object.entries(posGroups)) {
+      if (list.length > 0) {
+        if (!hasStarting) { footerHeight += 70; hasStarting = true; }
+        footerHeight += 65 + Math.ceil(list.length / 2) * 50 + 40;
+      }
+    }
+
     if (benchList.length > 0) {
-      footerHeight += 70 + 65 + Math.ceil(benchList.length / 2) * 50 + 40;
+      if (hasStarting) footerHeight += 70; // For "SUBSTITUTES" heading
+      else if (footerHeight === 0) footerHeight += 70; // Or if it's the first thing
+      footerHeight += 65 + Math.ceil(benchList.length / 2) * 50 + 40;
     }
     if (outList.length > 0) {
       if (footerHeight === 0) footerHeight += 70;
@@ -2265,7 +2298,7 @@ export function initBoard(store) {
     function drawSection(title, list) {
       if (list.length === 0) return;
       c.fillStyle = "#ffd60a";
-      c.font = "700 36px 'Barlow Condensed',sans-serif";
+      c.font = "700 40px 'Barlow Condensed',sans-serif";
       c.fillText(title, leftX, currentY);
       
       currentY += 65;
@@ -2275,11 +2308,11 @@ export function initBoard(store) {
         const colX = (i % 2 === 0) ? leftX : rightX;
         
         c.fillStyle = "#95a09a";
-        c.font = "700 32px 'Barlow Condensed',sans-serif";
+        c.font = "700 35px 'Barlow Condensed',sans-serif";
         c.fillText(p.pos, colX, currentY);
         
         c.fillStyle = "#ffffff";
-        c.font = "600 32px 'Barlow Condensed',sans-serif";
+        c.font = "600 35px 'Barlow Condensed',sans-serif";
         c.fillText(p.name, colX + 80, currentY);
         
         if (i % 2 !== 0 || i === list.length - 1) currentY += 50;
@@ -2287,8 +2320,34 @@ export function initBoard(store) {
       currentY += 40;
     }
     
-    drawSection("BENCH", benchList);
-    drawSection("OUT", outList);
+    // Draw Starting XI groups
+    let drewStartingHeading = false;
+    for (const [title, list] of Object.entries(posGroups)) {
+      if (list.length > 0) {
+        if (!drewStartingHeading) {
+          c.fillStyle = "#ffd60a";
+          c.font = "800 46px 'Barlow Condensed',sans-serif";
+          c.fillText("STARTING XI", leftX, currentY);
+          currentY += 70;
+          drewStartingHeading = true;
+        }
+        drawSection(title, list);
+      }
+    }
+    
+    if (benchList.length > 0) {
+      if (drewStartingHeading) {
+        c.fillStyle = "#ffd60a";
+        c.font = "800 46px 'Barlow Condensed',sans-serif";
+        c.fillText("SUBSTITUTES", leftX, currentY);
+        currentY += 70;
+      }
+      drawSection("BENCH", benchList);
+    }
+    
+    if (outList.length > 0) {
+      drawSection("OUT", outList);
+    }
     
     await shareCanvas(cv, teamName.replace(/\s+/g, "-").toLowerCase() + "-lineup.png", teamName + " line-up");
   }

@@ -40,8 +40,8 @@ window.addEventListener("unhandledrejection", function(event) {
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tailwind.css?v=105">
-<link rel="stylesheet" href="styles.css?v=105">
+<link rel="stylesheet" href="tailwind.css?v=147">
+<link rel="stylesheet" href="styles.css?v=146">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body>
@@ -89,48 +89,54 @@ window.addEventListener("unhandledrejection", function(event) {
 
 <!-- ============ BOARD VIEW ============ -->
 <section id="boardView" class="view md:max-w-[430px] md:mx-auto md:border-x md:border-white/10 md:shadow-2xl relative">
-  <header>
-    <h1 id="hdrTeam">Soccer Play Book</h1>
-    <div class="spacer"></div>
-    <button class="chip iconChip" id="menuBtn" aria-label="Menu">⋯</button>
+  <div id="controls" class="w-full flex items-center gap-1 sm:gap-[6px] px-1 sm:px-4 pb-1 pt-[calc(12px+env(safe-area-inset-top))] shrink-0">
+    <div class="seg flex-1 flex" id="viewSeg">
+      <button class="on flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3" data-view="team">Team <span class="chev">☰</span></button>
+      <button class="flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3" data-view="game">Game day <span class="chev">☰</span></button>
+      <button class="flex-1 text-center text-[10px] sm:text-sm px-1 sm:px-3" data-view="drills">Drills <span class="chev">☰</span></button>
+    </div>
+    <button class="chip iconChip shrink-0 px-2 sm:px-4 text-[10px] sm:text-sm" id="menuBtn" aria-label="Menu">⋯</button>
+  </div>
+  <header class="flex items-center gap-1 sm:gap-2 px-1 sm:px-2 py-0.5 shrink-0 w-full max-w-full">
+    <h1 id="hdrTeam" class="text-[var(--ink)] text-[11px] sm:text-[13px] font-bold tracking-wide uppercase whitespace-nowrap shrink min-w-0 overflow-hidden text-ellipsis">Soccer Play Book</h1>
+    
+    <div id="matchBar" class="flex-1 shrink min-w-0 items-center gap-1 px-1 py-0.5 bg-[var(--surface)] border border-[var(--line)] rounded-md">
+      <button id="gameChip" class="flex-1 text-left min-w-0 overflow-hidden text-ellipsis text-[11px] sm:text-[13px] font-bold tracking-wide uppercase px-1 py-0.5 text-[var(--ink-dim)]">Game</button>
+      <button id="gameCfgChip" class="px-1 py-0.5 text-[var(--ink-dim)] hover:text-[var(--ink)] text-[11px] sm:text-[13px]" hidden aria-label="Game configuration">…</button>
+    </div>
   </header>
-  <div id="controls">
-    <div class="seg" id="viewSeg">
-      <button class="on" data-view="team">Team <span class="chev">⌄</span></button>
-      <button data-view="game">Game day <span class="chev">⌄</span></button>
-      <button data-view="drills">Drills <span class="chev">⌄</span></button>
-    </div>
-  </div>
 
-  <div id="matchBar">
-    <button id="gameChip">Game</button>
-    <button id="timerChip" hidden>00:00</button>
-    <button id="subsChip" hidden>Subs 10:00</button>
-    <button id="gameCfgChip" hidden aria-label="Game configuration">…</button>
-  </div>
-
-  <div id="scoreBar">
-    <div class="scoreSide">
-      <div class="scoreName" id="scoreUsName">Us</div>
-      <div class="scoreBtns">
-        <button data-team="us" data-d="-1" aria-label="Us minus one">−</button>
-        <div class="scoreNum" id="scoreUs">0</div>
-        <button data-team="us" data-d="1" aria-label="Us plus one">+</button>
+  <div id="scoreBar" class="w-full mt-1 px-1 sm:px-3 py-1 bg-surface border-y sm:border border-line sm:rounded-md flex items-center">
+    <div id="scoreWrapper" class="flex items-center justify-start gap-1 sm:gap-3 shrink min-w-0">
+      <div class="scoreSide flex flex-col items-center gap-0 sm:gap-1 min-w-0">
+        <div class="scoreName max-w-[20vw] sm:max-w-[30vw] text-[9px] sm:text-[11px] font-bold tracking-wider text-ink-dim uppercase truncate" id="scoreUsName">Us</div>
+        <div class="scoreBtns flex items-center gap-1 sm:gap-2">
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="us" data-d="-1" aria-label="Us minus one">−</button>
+          <div class="scoreNum min-w-5 sm:min-w-10 text-base sm:text-[26px] text-center font-bold leading-none tabular-nums" style="color:#7CFC7A; font-family:'Barlow Condensed',monospace; letter-spacing:.02em; text-shadow:0 0 10px rgba(124,252,122,.35);" id="scoreUs">0</div>
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="us" data-d="1" aria-label="Us plus one">+</button>
+        </div>
+      </div>
+      <div class="scoreColon text-xs sm:text-[26px] font-bold text-ink-faint self-end pb-1 sm:pb-1 shrink-0">:</div>
+      <div class="scoreSide flex flex-col items-center gap-0 sm:gap-1 min-w-0">
+        <div class="scoreName max-w-[20vw] sm:max-w-[30vw] text-[9px] sm:text-[11px] font-bold tracking-wider text-ink-dim uppercase truncate" id="scoreThemName">Opp</div>
+        <div class="scoreBtns flex items-center gap-1 sm:gap-2">
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
+          <div class="scoreNum min-w-5 sm:min-w-10 text-base sm:text-[26px] text-center font-bold leading-none tabular-nums" style="color:#7CFC7A; font-family:'Barlow Condensed',monospace; letter-spacing:.02em; text-shadow:0 0 10px rgba(124,252,122,.35);" id="scoreThem">0</div>
+          <button class="flex items-center justify-center w-5 h-5 sm:w-[30px] sm:h-[30px] text-sm sm:text-[20px] rounded-full bg-surface-2 border border-line-strong text-ink font-bold leading-none p-0 shrink-0" data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
+        </div>
       </div>
     </div>
-    <div class="scoreColon">:</div>
-    <div class="scoreSide">
-      <div class="scoreName" id="scoreThemName">Opp</div>
-      <div class="scoreBtns">
-        <button data-team="them" data-d="-1" aria-label="Opponent minus one">−</button>
-        <div class="scoreNum" id="scoreThem">0</div>
-        <button data-team="them" data-d="1" aria-label="Opponent plus one">+</button>
-      </div>
+    
+    <div class="spacer flex-1"></div>
+    
+    <div id="scoreTimers" class="flex items-center gap-1 shrink-0">
+      <button id="timerChip" class="px-1 py-1 sm:px-2 sm:py-2 text-[9px] sm:text-sm bg-bg border border-line rounded-md text-ink font-semibold tabular-nums whitespace-nowrap" hidden>00:00</button>
+      <button id="subsChip" class="px-1 py-1 sm:px-2 sm:py-2 text-[9px] sm:text-sm bg-bg border border-line rounded-md text-ink font-semibold tabular-nums whitespace-nowrap" hidden>Subs 10:00</button>
     </div>
   </div>
 
-  <main class="flex-1 w-full relative h-full m-0 p-0 overflow-hidden flex items-center justify-center bg-black">
-<div id="board" class="w-full h-full max-h-full max-w-full aspect-[68/105] relative rounded-none border-none shadow-none overflow-hidden">
+  <main class="flex-1 w-full relative h-full m-0 p-0 overflow-hidden flex flex-col items-center justify-center bg-black">
+<div id="board" class="w-full h-full max-h-full max-w-full aspect-[68/105] relative rounded-none border-none shadow-none overflow-hidden shrink min-h-0">
     <svg id="tacticalLayer" width="100%" height="100%" style="position:absolute; top:0; left:0; pointer-events:none; z-index:2;">
       <defs>
         <!-- Pass Arrow -->
@@ -158,20 +164,18 @@ window.addEventListener("unhandledrejection", function(event) {
       <select id="formation"></select>
       <button class="chip iconChip" id="reformBtn" aria-label="Reset formation" title="Reset players to formation">⟳</button>
     </div>
-    <div id="drillPlayerBar" class="hidden drillOnly absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-[#121212]/80 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.6)] z-50 w-max max-w-[95%]">
-    <button id="dpPrevDrill" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors" aria-label="Previous Drill">◀</button>
-    <div class="flex flex-col items-center justify-center px-1 max-w-[120px]">
-      <div id="dpTitle" class="text-white font-bold text-sm tracking-wide truncate w-full text-center">Drill Title</div>
-      <div id="dpStep" class="text-white/40 text-[10px] uppercase tracking-wider font-semibold mt-0.5">Step 1 of 1</div>
-    </div>
-    <div class="flex items-center gap-1">
-      <button id="dpInfoBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors text-lg" aria-label="Drill Instructions">ⓘ</button>
-      <button id="dpLoopBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors text-lg" aria-label="Loop Drill" title="Continuous Rotation">🔁</button>
-      <button id="playDrillBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-blue-500 text-white shadow-lg active:scale-95 transition-transform"><span id="playDrillGlyph" class="ml-0.5 text-lg">▶</span></button>
-    </div>
-    <button id="dpNextDrill" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors" aria-label="Next Drill">▶</button>
-  </div>
       </div>
+  <div id="benchZone">
+    <div id="subHint" class="subHint" hidden></div>
+    <span class="benchLabel">Subs</span>
+    <!-- game day only: the full two-column substitutions screen -->
+    <button id="openSubsBtn" aria-label="Open substitutions">&#8646; Subs</button>
+    <div id="bench"></div>
+    <div id="outZone">
+      <span class="outLabel">Out</span>
+      <div id="outList"></div>
+    </div>
+  </div>
 </main>
   
 
@@ -234,23 +238,41 @@ window.addEventListener("unhandledrejection", function(event) {
       </div>
       <div class="hint">Independent of the game timer. Counts down, alerts, and restarts automatically. The countdown shows on the Team view while running.</div>
     </div>
-    <button class="close" id="closeGame">Back to pitch</button>
    </div>
   </div>
 
-  <div id="benchZone">
-    <div id="subHint" class="subHint" hidden></div>
-    <span class="benchLabel">Subs</span>
-    <div id="bench"></div>
-    <div id="outZone">
-      <span class="outLabel">Out</span>
-      <div id="outList"></div>
+  <div id="drillNotesPane" class="drillOnly hidden" style="position:absolute; bottom:72px; left:16px; right:16px; background:rgba(18,18,18,0.95); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.8); z-index:130; padding:12px;">
+    <textarea id="liveNotes" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; padding:12px; font-size:14px; resize:vertical; min-height:100px; outline:none;" placeholder="e.g. Player 1 passes to Player 2&#10;Player 1 runs to Cone 2..."></textarea>
+  </div>
+
+    <!-- Transport bar. Positioned in styles.css (#drillPlayerBar), docked to the
+         bottom zone with the other controls — it sat over the attacking third. -->
+    <div id="drillPlayerBar" class="hidden drillOnly flex items-center gap-3 bg-[#121212]/80 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+    <button id="dpPrevDrill" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors" aria-label="Previous Drill">◀</button>
+    <div class="flex flex-col items-center justify-center px-1 max-w-[120px]">
+      <div id="dpTitle" class="text-white font-bold text-sm tracking-wide truncate w-full text-center">Drill Title</div>
+      <div id="dpStep" class="text-white/40 text-[10px] uppercase tracking-wider font-semibold mt-0.5">Step 1 of 1</div>
     </div>
+    <div class="flex items-center gap-1">
+      <!-- playback pace: bigger multiplier shown = quicker; see SPEEDS in board.js -->
+      <button id="dpSpeedBtn" aria-label="Playback speed">1×</button>
+      <button id="dpInfoBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors text-lg" aria-label="Drill Instructions">ⓘ</button>
+      <!-- Loop toggle. An SVG (not the 🔁 emoji) so it inherits currentColor and
+           can actually show an on/off state; styled in styles.css #dpLoopBtn. -->
+      <button id="dpLoopBtn" aria-label="Loop drill" aria-pressed="false" title="Keep the rotation running">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+          <path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+        </svg>
+        <span class="loopLbl">Loop</span>
+      </button>
+      <button id="playDrillBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-blue-500 text-white shadow-lg active:scale-95 transition-transform"><span id="playDrillGlyph" class="ml-0.5 text-lg">▶</span></button>
+    </div>
+    <button id="dpNextDrill" class="w-8 h-8 flex items-center justify-center rounded-full text-white/60 active:bg-white/10 active:text-white transition-colors" aria-label="Next Drill">▶</button>
   </div>
   <div id="drillTray" class="drillOnly absolute bottom-16 left-4 right-4 bg-[#121212]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[110] transform translate-y-0 transition-transform duration-300 ease-out p-2 flex flex-row overflow-x-auto gap-2">
     <div class="flex gap-2 overflow-x-auto scrollbar-hide trayItems items-center">
       <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="cone"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="cone"></div></div><span class="text-xs text-white/60 font-medium">Cone</span></div>
-      <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="disc"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="disc"></div></div><span class="text-xs text-white/60 font-medium">Marker</span></div>
       <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="pole"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="pole"></div></div><span class="text-xs text-white/60 font-medium">Pole</span></div>
       <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="dball"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="dball"></div></div><span class="text-xs text-white/60 font-medium">Ball</span></div>
       <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="att"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="att"></div></div><span class="text-xs text-white/60 font-medium">Player</span></div>
@@ -258,6 +280,7 @@ window.addEventListener("unhandledrejection", function(event) {
       <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="goal"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="goal"></div></div><span class="text-xs text-white/60 font-medium">Goal</span></div>
       <div class="flex flex-row items-center gap-2 px-3 py-1.5 rounded-xl active:bg-white/10 shrink-0 titem" data-kind="mini"><div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"><div class="mini"></div></div><span class="text-xs text-white/60 font-medium">Mini</span></div>
     </div>
+  </div><!-- /#drillTray -->
 
   <div id="dragGhost"></div>
 
@@ -305,13 +328,36 @@ window.addEventListener("unhandledrejection", function(event) {
       </div>
     </div>
     
-  <!-- FAB for Kit -->
-  <button id="kitFab" class="drillOnly absolute bottom-4 right-4 w-14 h-14 rounded-full bg-blue-600 text-white shadow-[0_8px_30px_rgba(37,99,235,0.6)] flex items-center justify-center active:scale-95 transition-transform z-50" aria-label="Kit">
-    <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-  </button>
   
+  <!-- Drills dock: the one persistent drills control. Each segment reveals its
+       own pane (kit tray / line tools / transport) directly above the dock;
+       only one is open at a time, so only the dock reserves screen space. -->
+  <div id="drillDock" class="drillOnly">
+    <button data-pane="kit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L21 8 L12 13 L3 8 Z"/><path d="M3 13 L12 18 L21 13"/></svg>
+      <span>Drill Setup</span>
+    </button>
+    <button data-pane="lines">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17 q4 -8 8 -4 t9 -6"/><path d="M16 6 L20 7 L19 11"/></svg>
+      <span>Lines</span>
+    </button>
+    <button data-pane="play">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 L19 12 L7 20 Z"/></svg>
+      <span>Play</span>
+    </button>
+    <button data-pane="notes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <span>Notes</span>
+    </button>
+    <!-- Colours live on the dock, not inside a pane: you set an item colour
+         while placing kit, and a line colour while drawing, so it has to be
+         reachable from both. No data-pane, so it does not switch panes. -->
+    <button id="colorBtn" aria-label="Colours" title="Colours">
+      <span id="colorDot"></span>
+    </button>
+  </div>
+
   <footer class="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center justify-center gap-1 bg-[#1e2320]/80 backdrop-blur-xl border border-white/10 rounded-full px-4 py-2 shadow-2xl z-[100] w-max max-w-[95%]" style="position: fixed; bottom: 16px;">
-    <button class="tool w-11 h-11 flex items-center justify-center rounded-full active:bg-white/10 transition-colors" id="colorBtn" aria-label="Colours"><span id="colorDot" class="w-4 h-4 rounded-full bg-gradient-to-tr from-red-500 via-yellow-400 to-blue-500 border-2 border-white/70 shadow-sm"></span></button>
     <div class="w-px h-6 bg-white/15 mx-1"></div>
     <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="move" aria-label="Move"><span class="glyph text-xl">✥</span></button>
     <button class="mode w-11 h-11 flex items-center justify-center rounded-full text-white/50 active:text-white transition-colors [&.on]:text-blue-400" data-mode="run" aria-label="Run">
@@ -361,7 +407,6 @@ window.addEventListener("unhandledrejection", function(event) {
       <div id="rosterList" class="rosterList"></div>
       <div class="hint guestNote" id="squadGuestNote" hidden>Guest mode is just for a try — your squad is not saved. Create a free account to save it and use it on any device.</div>
       <div class="hint">Pick a formation to auto-place players. Drag between pitch and bench to sub.</div>
-      <button class="close" id="closeSquad">Done</button>
     </div>
   </div>
 
@@ -370,6 +415,7 @@ window.addEventListener("unhandledrejection", function(event) {
     <div class="sheet">
       <h2 id="ctlMenuTitle">Team options</h2>
       <div class="menuSheet">
+        <button class="primary" id="createGameDayBtn">Set Game Day</button>
         <button id="squadBtn">My squad…</button>
         <button id="namesToggle">Player names</button>
         <button id="oppToggle">Opposition</button>
@@ -377,11 +423,40 @@ window.addEventListener("unhandledrejection", function(event) {
         <button id="drillLibBtn">Drill library…</button>
         <button id="resetBtn">Reset board</button>
       </div>
-      <button class="close" id="closeCtlMenu">Done</button>
     </div>
   </div>
 
   <!-- substitution sheet -->
+  <!-- Game-day substitutions. Two columns like a team sheet: who is on, who is
+       waiting. Tap one from each side, confirm. Stays open so a double or triple
+       change is one visit, and every swap is logged with the match minute. -->
+  <div id="subsModal" class="overlay">
+    <div class="sheet subs">
+      <div class="subsHead">
+        <h2>Substitutions</h2>
+        <span class="subsClock" id="subsClock"></span>
+      </div>
+      <div class="subsCols">
+        <div class="subsCol">
+          <div class="subsColHead off"><span class="subsArrow">&#9660;</span>On the pitch</div>
+          <div class="subsList" id="subsOnList"></div>
+        </div>
+        <div class="subsCol">
+          <div class="subsColHead on"><span class="subsArrow">&#9650;</span>Bench</div>
+          <div class="subsList" id="subsBenchList"></div>
+        </div>
+      </div>
+      <!-- Pairs, in the order you tapped them: first off with first on. A double
+           or triple change is one action, so they all go on at the same minute. -->
+      <div class="subsPick" id="subsPick">
+        <div class="subsPairs" id="subsPairs"></div>
+        <div class="hint" id="subsPickHint">Tap a player on the pitch, then their replacement.</div>
+      </div>
+      <button class="primary" id="subsGoBtn" disabled>Make the swap</button>
+      <div class="subsLog" id="subsLog"></div>
+    </div>
+  </div>
+
   <div id="subPanel" class="overlay">
     <div class="sheet">
       <h2>Substitution</h2>
@@ -396,6 +471,20 @@ window.addEventListener("unhandledrejection", function(event) {
     </div>
   </div>
 
+  <div id="playerMenuPanel" class="overlay">
+    <div class="sheet">
+      <h2 id="pmName">Player Name</h2>
+      <div class="cfgRow">
+        <label class="tlab">Position
+          <input id="pmPos" maxlength="3" autocomplete="off" list="posList">
+        </label>
+      </div>
+      <button class="primary" id="pmSaveBtn">Save</button>
+      <button class="close" id="pmSubBtn">Substitute (Move to Bench)</button>
+      <button class="close" id="pmCancelBtn">Cancel</button>
+    </div>
+  </div>
+
   <!-- saved games sheet -->
   <div id="gamesPanel" class="overlay">
     <div class="sheet">
@@ -403,7 +492,6 @@ window.addEventListener("unhandledrejection", function(event) {
       <button class="close" id="newGameBtn">Set up new game</button>
       <div id="gamesList" class="rosterList"></div>
       <div class="hint">Tap a saved game to open its line-up on the pitch. Use the … chip to get back to its details.</div>
-      <button class="close" id="closeGames">Done</button>
     </div>
   </div>
 
@@ -411,6 +499,9 @@ window.addEventListener("unhandledrejection", function(event) {
   <div id="drillPanel" class="overlay">
     <div class="sheet">
       <h2>Drills</h2>
+      <!-- Entry point for building from scratch, mirroring "Set up new game" -->
+      <button class="close" id="newDrillBtn">Start a new drill</button>
+      <button class="close" id="importDrillBtn">Import from text…</button>
       <div class="presetLabel">Built-in drills</div>
       <div class="seg drillTabs" style="margin: 0 16px 12px; height: 36px;">
         <button class="drillTab on" data-diff="Simple">Simple</button>
@@ -427,7 +518,6 @@ window.addEventListener("unhandledrejection", function(event) {
       <div id="drillList" class="rosterList"></div>
       <div class="hint guestNote" id="drillGuestNote" hidden>Guest mode is just for a try — your drills are not saved. Create a free account to save them and share them.</div>
       <div class="hint">Save keeps what is on the pitch now, with any instructions. Tap a saved drill to load it, or ⓘ to read or edit its instructions.</div>
-      <button class="close" id="closeDrills">Done</button>
     </div>
   </div>
 
@@ -447,7 +537,6 @@ window.addEventListener("unhandledrejection", function(event) {
         <ul class="diList" id="diProgression"></ul>
       </div>
       <button class="primary" id="diLoadBtn">Load onto pitch</button>
-      <button class="close" id="diClose">Back</button>
     </div>
   </div>
 
@@ -456,11 +545,36 @@ window.addEventListener("unhandledrejection", function(event) {
     <div class="sheet">
       <h2 id="deTitle">Drill</h2>
       <label class="tlab">Instructions
-        <textarea id="deNotes" rows="7" maxlength="1500" placeholder="Set-up, how it runs, coaching points…"></textarea>
+        <textarea id="deNotes" rows="4" maxlength="1500" placeholder="Set-up, how it runs, coaching points…"></textarea>
       </label>
       <button class="primary" id="deSaveBtn">Save instructions</button>
       <button class="close" id="deLoadBtn">Load onto pitch</button>
-      <button class="close" id="deClose">Back</button>
+      <!-- puts the drill's raw layout on the clipboard so it can be pasted
+           somewhere else — the only way to get a drill off the device, since
+           drills live in this account's Firestore doc -->
+      <button class="close" id="deCopyBtn">Copy drill data</button>
+      <!-- retro-fits a drill saved under the older, looser rules: cones onto the
+           lattice, line ends onto pieces, lines fitted to clean chords -->
+      <button class="close" id="deTidyBtn">Tidy lines &amp; cones</button>
+    </div>
+  </div>
+
+  <!-- Build a drill from a shape. Deliberately a SHORT sheet: it writes the same
+       notation js/drill-text.js parses, loads it onto the real pitch on every
+       change, and the pitch stays visible above — so the preview is the actual
+       drill, not a second renderer that could disagree with it. -->
+  <!-- import a drill from text: either the notation (see DRILL-NOTATION.md)
+       or the JSON that "Copy drill data" produces -->
+  <div id="importPanel" class="overlay">
+    <div class="sheet">
+      <h2>Import a drill</h2>
+      <div class="hint">Paste drill notation, or the JSON from "Copy drill data".</div>
+      <label class="tlab">
+        <textarea id="impText" rows="8" spellcheck="false"
+          placeholder="DRILL My drill&#10;&#10;GRID&#10;. . o+1 . .&#10;. . * . .&#10;&#10;LINES&#10;pass o1 -> B1"></textarea>
+      </label>
+      <div class="err" id="impError"></div>
+      <button class="primary" id="impGoBtn">Add to my drills</button>
     </div>
   </div>
 
@@ -471,7 +585,6 @@ window.addEventListener("unhandledrejection", function(event) {
       <div class="hint" id="menuEmail"></div>
       <div class="hint" id="syncStatus"></div>
       <button class="close" id="signOutBtn">Sign out</button>
-      <button class="close" id="closeMenu">Back</button>
     </div>
   </div>
 </section>
@@ -483,8 +596,10 @@ window.addEventListener("unhandledrejection", function(event) {
   <option value="RW"><option value="ST"><option value="CF">
 </datalist>
 
-<script src="js/drills.js?v=105"></script>
-<script type="module" src="js/app.js?v=105"></script>
+<link rel="stylesheet" href="styles.css?v=173" />
+<script src="js/drills.js?v=147"></script>
+<script src="js/drill-text.js?v=162"></script>
+<script type="module" src="js/app.js?v=166"></script>
 
 </body>
 </html>

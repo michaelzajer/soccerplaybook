@@ -119,51 +119,27 @@ button.primary:disabled{opacity:.5}
 .introHint{text-align:center;margin-top:2px}
 .err:empty{display:none}
 
-/* ---------- top bar ---------- */
-header{
-  display:flex;align-items:center;gap:6px;
-  padding:4px 16px 2px;flex:0 0 auto;
-}
-header h1{
-  font-size:var(--t-lg);font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--ink);white-space:nowrap;
-  flex:0 1 auto;min-width:0;
-  overflow:hidden;text-overflow:ellipsis;
-}
-header h1::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;
-  background:var(--team);margin-right:8px;vertical-align:2px;
-  box-shadow:0 0 0 1.5px rgba(255,255,255,.25)}
-header .spacer{flex:1}
-
-#controls{
-  display:flex;gap:6px;align-items:center;
-  padding:8px 16px 4px;flex:0 0 auto;
-  padding-top:calc(12px + env(safe-area-inset-top));
-}
-#controls .seg{flex:1}
-#controls .seg button{flex:1;text-align:center}
-
 /* ---------- match bar (game view only) ---------- */
-#matchBar{
-  display:none;align-items:center;gap:4px;
-  margin:0;padding:4px;flex:1 1 auto;min-width:0;
-  background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-md);
-}
+#matchBar{display:none;}
 body.gameView #matchBar{display:flex}
 #matchBar button{
   background:none;border:none;color:var(--ink);font-family:inherit;
-  font-weight:600;font-size:14px;padding:8px 10px;border-radius:8px;
+  font-weight:600;border-radius:8px;
   font-variant-numeric:tabular-nums;white-space:nowrap;
 }
-#matchBar [hidden]{display:none}
+#matchBar [hidden], #scoreTimers [hidden]{display:none}
 #gameChip{
   flex:1;text-align:left;min-width:0;
   overflow:hidden;text-overflow:ellipsis;
 }
 #timerChip,#subsChip{background:var(--bg);border:1px solid var(--line)}
-#matchBar button.live{border-color:var(--accent);color:var(--accent)}
-#matchBar button.subsDue{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#scoreTimers button{
+  background:var(--bg);border:1px solid var(--line);
+  color:var(--ink);font-family:inherit;font-weight:600;
+  border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#scoreTimers button.live{border-color:var(--accent);color:var(--accent)}
+#scoreTimers button.subsDue{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 #gameCfgChip{color:var(--ink-dim);padding:8px 12px}
 #gameCfgChip:hover{color:var(--ink)}
 
@@ -402,9 +378,9 @@ body:not(.drillsMode) #drillSequencer { display: none; }
 }
 #boardView > main{
   flex:1 1 auto;min-height:0;height:auto;
-  display:flex;align-items:center;justify-content:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
   overflow:hidden;
-  /* In Team/Game views, the bench sits below main in the normal flow, so we
+  /* In Team/Game views, the bench sits below the pitch inside main, so we
      only need standard padding. */
   padding:2px 12px 12px;
 }
@@ -936,23 +912,24 @@ svg.icon line,svg.icon path{stroke:currentColor;stroke-width:2.2;fill:none;strok
 
 /* game scoreboard */
 #scoreBar{
-  display:none;flex:0 0 auto;align-items:center;justify-content:center;gap:14px;
-  margin:6px 16px 0;padding:8px 14px;
+  display:none;flex:0 0 auto;align-items:center;
   background:#0c0f0d;border:1px solid var(--line);border-radius:var(--r-md);
 }
 body.gameView #scoreBar{display:flex}
 .scoreSide{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
-.scoreName{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-dim);max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.scoreBtns{display:flex;align-items:center;gap:10px}
+.scoreName{font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scoreBtns{display:flex;align-items:center;}
 .scoreBtns button{
-  width:30px;height:30px;border-radius:50%;flex:0 0 auto;
+  border-radius:50%;flex:0 0 auto;
   background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);
-  font-size:20px;font-weight:700;line-height:1;padding:0;
+  font-weight:700;line-height:1;padding:0;
+  display:flex;align-items:center;justify-content:center;
 }
 .scoreNum{
-  min-width:40px;text-align:center;font-size:34px;font-weight:700;line-height:1;
-  color:#7CFC7A;font-variant-numeric:tabular-nums;
+  text-align:center;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums;
+  color:#7CFC7A;
   font-family:'Barlow Condensed',monospace;letter-spacing:.02em;
   text-shadow:0 0 10px rgba(124,252,122,.35);
 }
