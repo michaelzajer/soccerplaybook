@@ -52,8 +52,8 @@ if (new URLSearchParams(location.search).has("debug")) {
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tailwind.css?v=147">
-<link rel="stylesheet" href="styles.css?v=147">
+<link rel="stylesheet" href="tailwind.css?v=148">
+<link rel="stylesheet" href="styles.css?v=148">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body>
@@ -455,23 +455,28 @@ if (new URLSearchParams(location.search).has("debug")) {
         <h2>Substitutions</h2>
         <span class="subsClock" id="subsClock"></span>
       </div>
-      <div class="subsCols">
-        <div class="subsCol">
-          <div class="subsColHead off"><span class="subsArrow">&#9660;</span>On the pitch</div>
-          <div class="subsList" id="subsOnList"></div>
-        </div>
-        <div class="subsCol">
-          <div class="subsColHead on"><span class="subsArrow">&#9650;</span>Bench</div>
-          <div class="subsList" id="subsBenchList"></div>
-        </div>
+      <!-- The changes lined up so far. A pair is locked in the moment both ends
+           are chosen, so there is no parallel ordering for the coach to hold in
+           their head. Tap a pair to take it back out. -->
+      <div class="subsPairs" id="subsPairs"></div>
+      <div class="subsWarn" id="subsWarn" hidden></div>
+
+      <!-- ONE full-width list, not two narrow columns. It shows the pitch while
+           you are choosing who comes off and the bench while you are choosing
+           the replacement — you never need both at once, and the full width is
+           what makes a 56px row with a readable name possible on a phone. -->
+      <div class="subsStep">
+        <span class="subsStepLbl" id="subsStepLbl">Who is coming off?</span>
+        <button class="subsBack" id="subsBackBtn" hidden>Back</button>
       </div>
-      <!-- Pairs, in the order you tapped them: first off with first on. A double
-           or triple change is one action, so they all go on at the same minute. -->
-      <div class="subsPick" id="subsPick">
-        <div class="subsPairs" id="subsPairs"></div>
-        <div class="hint" id="subsPickHint">Tap a player on the pitch, then their replacement.</div>
-      </div>
+      <div class="subsList" id="subsList"></div>
+
+      <div class="hint" id="subsPickHint"></div>
       <button class="primary" id="subsGoBtn" disabled>Make the swap</button>
+      <div class="subsLogHead" id="subsLogHead" hidden>
+        <span>Changes this game</span>
+        <button class="subsUndo" id="subsUndoBtn">Undo last</button>
+      </div>
       <div class="subsLog" id="subsLog"></div>
     </div>
   </div>
@@ -619,9 +624,9 @@ if (new URLSearchParams(location.search).has("debug")) {
      styles.css is linked once, in <head>. It used to be linked here as well at a
      different ?v=, which cost a second download and parse of a 50KB stylesheet
      plus a late reflow on every load. -->
-<script src="js/drills.js?v=147"></script>
-<script src="js/drill-text.js?v=147"></script>
-<script type="module" src="js/app.js?v=147"></script>
+<script src="js/drills.js?v=148"></script>
+<script src="js/drill-text.js?v=148"></script>
+<script type="module" src="js/app.js?v=148"></script>
 
 </body>
 </html>

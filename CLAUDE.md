@@ -65,7 +65,7 @@ drill-text 162, app 172), which makes a deploy non-deterministic:
    download and parse), `js/drills.js?v=NN`, `js/drill-text.js?v=NN`,
    `js/app.js?v=NN`.
 2. In `js/app.js`: `firebase-config.js?v=NN`, `board.js?v=NN`.
-3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v147**.
+3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v148**.
 4. `node --check js/*.js sw.js` before declaring done, then the `_*.mjs` suite.
 3. Always give Michael this block at the end (his standing request):
 
@@ -89,7 +89,8 @@ controllerchange → reload).
   unavailable:[id...],                     // injured/unavailable roster ids (team-wide, ongoing)
   board:{squad:"11"|"9", formation, showOpp, showNames, placed:{id:{x,y}}},
   gameday:{id?, date, time, opp, notes, score:{us,them}, lineup:{formation,squad,placed,at}|null,
-           subs:[{inId,outId,min,period}]},   // the game's substitution record
+           subs:[{inId,outId,min,period,batch}]}, // the game's substitution record; `batch`
+                                          // groups one confirm so Undo takes it all back
   games:[gameday...],                      // saved games library
   drills:[{id,name,items:[{kind,x,y,color?}], strokes:[{mode,pts:FLAT,color?}]}],
                                      // color (hex) optional: cones/markers/players + lines
@@ -432,46 +433,62 @@ loaded, and it reports the point count before/after.
 - It CANNOT fix a pass struck from where a ball comes to rest *during playback* —
   that is a runtime position, not a stored one. `LOOSE_TOL` handles that case.
 
-## Substitutions modal (v142, multi-swap v143)
+## Substitutions (v142, rebuilt v148)
 
-Game day → **⇄ Subs** on the bench bar (or tap the "Subs" label). A team-sheet
-layout rather than a drag-and-drop puzzle: ON THE PITCH on the left, BENCH on the
-right, tap one from each and confirm. Broadcast language — red down-arrow off,
-green up-arrow on.
+Game day → **⇄ Subs** on the bench bar (or tap the "Subs" label). Broadcast
+language throughout — red down-arrow off, green up-arrow on.
 
-- **A double or triple change is ONE action (v143).** Both columns multi-select and
-  pair in TAP ORDER — nth off with nth on, which is how a coach calls it ("Jack,
-  Tom and Ali off; Sam, Ben and Leo on"), so no extra interaction is needed as
-  long as the pairing is shown plainly. Order badges on the rows, a pair list
-  under them, and anyone picked without a partner shows as a greyed incomplete
-  pair rather than being silently ignored. Tap again to take someone back out.
-- All pairs go on at the SAME match minute, with one save and one render —
-  `applySubs(pairs)` snapshots every vacated spot before mutating anything, so
-  the batch stays correct regardless of ordering. `applySub` is a one-pair wrapper
-  over it for the drag-and-drop path.
-- It **closes and returns to the pitch** after a change (v145). Multi-select
-  already allows a double or triple change in one visit, so there is nothing to
-  stay open for, and the new shape is what the coach wants to see next.
-- Every swap is logged to `gameday.subs` with the match minute and period, and the
-  last six show in the modal. That is the start of a real game-day record.
-- The unavailable list is respected: an injured player is never offered as a sub.
-- `applySub(inId, outId, newPos)` is now the SINGLE swap path — the drag-and-drop
-  `#subPanel` and this modal both call it, so the two cannot diverge.
-- **The player coming on inherits the position they come into (v144)** — a striker
-  on for a centre mid becomes a centre mid, so the pitch label is right. Each pair
-  has its own position box, pre-filled with the vacated position and overriding it
-  if typed (kept in `subsPos` keyed by the outgoing id so a redraw cannot eat it).
-  The v143 bug: `subsPairs()` defaulted `pos` to null, so the row DISPLAYED the
-  outgoing position but never applied it unless the coach retyped it. Note this
-  rewrites the player's squad position, which is what makes the token read
-  correctly; a per-game override would be a bigger change.
-- **Any position is editable in place (v146)** — tap the position label on either
-  column and type. `beginPosEdit()` swaps the label for an input rather than
-  re-rendering, because the lists rebuild on every state change and a re-render
-  would destroy a freshly focused field mid-keystroke; the re-render happens on
-  commit instead. The click must `stopPropagation()` so it does not also select
-  the player for a swap. Enter commits, Escape abandons, a blank box keeps the
-  old value, and `renderTeam()` runs so the pitch token picks up the new label.
+**One pair at a time, and the pair locks in on the second tap (v148).** Tap who
+is coming off, the list switches to the bench, tap their replacement, and that
+change is added to the list. Repeat for a double or triple change, then one
+confirm applies them all at the same match minute.
+
+This replaced tap-order pairing (v143: two columns, nth-off matched with nth-on).
+That was fewer taps on paper and wrong in practice — it asked a coach to hold two
+parallel orders in their head *while a game was running*, and a mis-ordered tap
+could only be fixed by untapping and rebuilding the column. Pairing at the moment
+of the second tap costs nothing and cannot be got wrong. `_subs.mjs` covers the
+case that broke it: picking the second player off before the first one's
+replacement.
+
+**ONE full-width list, not two columns.** On a 430px phone each column was ~195px
+and had to carry a position disc, a name, an order badge and an editable
+position, so names truncated and every target was under 44px. You never need both
+lists at once, so the single list switches: pitch while choosing who comes off,
+bench while choosing who comes on. That buys 56px rows and readable names. There
+is also **no nested scroll** any more — the sheet scrolls, the list does not, so
+reaching the confirm button never means scrolling inside a box first.
+
+- **Minutes played, reconstructed not stored.** Rewind the CURRENT line-up
+  backwards through `gameday.subs` to recover the starting XI, then walk forward
+  accumulating intervals. Reconstructing means the figure is always consistent
+  with the log and an undo cannot strand a stale counter. Only CLOSED intervals
+  count when the clock is not running, which is why `_subs.mjs` can assert exact
+  numbers without a running clock.
+- **The lists are ordered by minutes**: bench fewest-first (who is owed a run),
+  pitch most-first (who has been out there longest). Fair rotation is the whole
+  reason a junior coach subs at all, so the decision input belongs on the screen
+  where the decision is made.
+- **Undo takes back the whole batch.** Every swap in one confirm shares a
+  `batch` id. Undo reverses the batch and DELETES it from the log rather than
+  recording a counter-swap — a mis-tap is not a tactical decision and should not
+  appear in the game's record as one. Entries saved before v148 have no `batch`,
+  so undo falls back to matching on `min`.
+- **Keeper guard.** Taking the GK off with no GK coming on warns and does not
+  block: it is usually a mistake and occasionally deliberate.
+- **Position is edited in ONE place**, the pair row. It used to be editable both
+  on the list row and on the pair row — two overlapping sub-44px targets inside
+  a 195px row, which is a mis-tap generator. The incoming player inherits the
+  vacated position by default (a striker on for a centre mid plays centre mid);
+  typing overrides it. Note this rewrites the player's squad position, which is
+  what makes the pitch token read correctly; a per-game override would be bigger.
+- `applySubs(pairs)` snapshots every vacated spot BEFORE mutating anything, so a
+  batch stays correct regardless of ordering. `applySub` is a one-pair wrapper
+  for the drag-and-drop `#subPanel` path, so the two cannot diverge.
+- The unavailable list is respected: an injured player is never offered.
+- The sheet **closes and returns to the pitch** after a change (v145) — several
+  changes can be queued in one visit, and the new shape is what the coach wants
+  to see next.
 - `_subs.mjs` must reset the roster from a PRISTINE deep copy between sections —
   `applySubs` mutates player objects in place, so re-copying the live array
   carries the drift forward and makes correct behaviour look broken.

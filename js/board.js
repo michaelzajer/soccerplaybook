@@ -349,189 +349,243 @@ export function initBoard(store) {
   subPanel.addEventListener("click", e => { if (e.target === subPanel) { subCtx = null; subPanel.classList.remove("open"); } });
 
   /* ================= SUBSTITUTIONS MODAL =================
-     A game-day sheet rather than a drag-and-drop puzzle: who is on, who is
-     waiting, pick one from each and confirm. Broadcast language throughout —
-     red down-arrow off, green up-arrow on. It stays open, because a double
-     change is one visit to this screen, and each swap is stamped with the
-     match minute and kept with the game.
+     Pitch-side reality: the coach is standing, holding the phone in one hand,
+     watching the game, and has already decided the change. So the flow is two
+     taps per swap — who is coming off, then their replacement — and the pair
+     LOCKS IN at that moment.
+
+     v148 replaced tap-order pairing (two columns, nth-off matched with nth-on).
+     That was fewer taps on paper but it asked the coach to hold two parallel
+     orders in their head while a game was running, and a mis-ordered tap could
+     only be fixed by untapping and starting the column again. Pairing at the
+     moment of the second tap costs nothing and cannot be got wrong.
+
+     The other half of the v147 problem was the two columns themselves: on a
+     430px phone each was ~195px and had to hold a position disc, a name, an
+     order badge and an editable position, so names truncated and every target
+     was under 44px. You never need both lists at once — you are either choosing
+     who comes off or who comes on — so it is ONE full-width list that switches,
+     which buys 56px rows and readable names.
      ======================================================= */
   const subsModal = document.getElementById("subsModal");
-  /* Arrays, in the order they were tapped: the nth player off is paired with the
-     nth player on. That is how a coach calls a triple change — "Jack, Tom and Ali
-     off; Sam, Ben and Leo on" — so pairing by order needs no extra interaction,
-     as long as the pairing is shown plainly enough to check. */
-  let subsOut = [], subsIn = [], subsPos = {};
+  /* Completed pairs, waiting to be applied together. `pendingOut` is the player
+     tapped off who has not been given a replacement yet — when it is set, the
+     list is showing the bench. */
+  let subsPending = [], pendingOut = null;
 
   const matchMinute = () => Math.floor(gtElapsed() / 60000)
     + (gt.period > 1 ? (gt.period - 1) * gt.cfg.mins : 0);
+
+  /* Minutes each player has spent on the pitch, reconstructed from the log.
+     Fair rotation is the whole reason a junior coach subs at all, and "who has
+     had least" is the decision — so it has to be on the screen where the
+     decision is made, not worked out on the sideline.
+
+     Reconstruct rather than store: rewind the CURRENT line-up through the log to
+     recover the starting XI, then walk forward. That way the figure is always
+     consistent with the log, and an undo cannot leave a stale counter behind. */
+  function minutesPlayed() {
+    const b = bstate(), now = matchMinute();
+    const subs = ((store.data.gameday && store.data.gameday.subs) || [])
+      .slice().sort((x, y) => x.min - y.min);
+    const on = new Set(roster().filter(p => b.placed[p.id]).map(p => p.id));
+    for (let i = subs.length - 1; i >= 0; i--) {   // undo back to kick-off
+      on.delete(subs[i].inId); on.add(subs[i].outId);
+    }
+    const mins = new Map(), since = new Map();
+    on.forEach(id => since.set(id, 0));
+    subs.forEach(sv => {
+      if (since.has(sv.outId)) {
+        mins.set(sv.outId, (mins.get(sv.outId) || 0) + (sv.min - since.get(sv.outId)));
+        since.delete(sv.outId);
+      }
+      since.set(sv.inId, sv.min);
+    });
+    since.forEach((from, id) => mins.set(id, (mins.get(id) || 0) + Math.max(0, now - from)));
+    return mins;
+  }
+
+  /* Every swap in one confirm shares a batch id, so Undo takes back the whole
+     triple change the coach just made rather than one third of it. */
   function logSubs(pairs) {
     const g = store.data.gameday;
     if (!g || !pairs.length) return;      // only worth recording during a game
     g.subs = g.subs || [];
-    const min = matchMinute(), period = gt.period;
-    pairs.forEach(pr => g.subs.push({ inId: pr.inId, outId: pr.outId, min, period }));
+    const min = matchMinute(), period = gt.period, batch = Date.now();
+    pairs.forEach(pr => g.subs.push({ inId: pr.inId, outId: pr.outId, min, period, batch }));
     store.save({ gameday: g });
   }
-  function subsRow(p, order) {
+
+  /* Undo reverses the last batch and REMOVES it from the log rather than
+     recording a counter-swap. A mis-tap is not a tactical decision and should
+     not appear in the game's record as one. */
+  function undoLastBatch() {
+    const g = store.data.gameday;
+    const subs = (g && g.subs) || [];
+    if (!subs.length) return 0;
+    const last = subs[subs.length - 1];
+    const key = last.batch != null ? sv => sv.batch === last.batch
+                                   : sv => sv.batch == null && sv.min === last.min;
+    const batch = subs.filter(key);
+    const b = bstate();
+    /* Reverse in the same snapshot-first way applySubs applies, so a batch that
+       shuffled several spots comes back to exactly where it started. */
+    const spots = batch.map(sv => b.placed[sv.inId] ? { ...b.placed[sv.inId] } : null);
+    batch.forEach((sv, i) => {
+      if (!spots[i]) return;
+      b.placed[sv.outId] = spots[i];
+      delete b.placed[sv.inId];
+    });
+    g.subs = subs.filter(sv => !key(sv));
+    store.save({ gameday: g });
+    renderTeam(); renderBench(); saveBoard();
+    return batch.length;
+  }
+
+  const nameOf = id => { const p = roster().find(x => x.id === id); return p ? firstName(p.name) : "?"; };
+  const posOf  = id => { const p = roster().find(x => x.id === id); return p ? (p.pos || "") : ""; };
+
+  /* A list row. Full width, so the name gets the room it needs and the row is a
+     single 56px target — no nested tappable position chip fighting it for the
+     coach's thumb (that edit lives on the pair row now, in one place). */
+  function subsRow(p, mins) {
     const b = document.createElement("button");
-    b.className = "subsRow" + (order > 0 ? " sel" : "");
+    b.className = "subsRow";
     b.type = "button";
     b.dataset.id = p.id;
     const n = document.createElement("span");
     n.className = "num";
-    n.textContent = (p.pos || "?").slice(0, 2);
+    n.textContent = (p.pos || "?").slice(0, 3);
     const w = document.createElement("span");
     w.className = "who"; w.textContent = p.name;
-    const o = document.createElement("span");
-    o.className = "ord"; o.textContent = order;      // only shown when selected
-    /* The position is editable in place: tap it and type. Keeps a wrong position
-       fixable from the screen you noticed it on, rather than a trip to My Squad. */
-    const s2 = document.createElement("span");
-    s2.className = "pos edit";
-    s2.textContent = p.pos || "—";
-    s2.setAttribute("role", "button");
-    s2.setAttribute("tabindex", "0");
-    s2.title = "Tap to change position";
-    s2.addEventListener("click", ev => { ev.stopPropagation(); beginPosEdit(s2, p.id); });
-    s2.addEventListener("keydown", ev => {
-      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); beginPosEdit(s2, p.id); }
-    });
-    b.append(n, w, o, s2);
+    const m = document.createElement("span");
+    m.className = "mins";
+    m.textContent = mins != null ? mins + "'" : "";
+    b.append(n, w, m);
     return b;
   }
-  /* Swap the label for an input IN PLACE rather than re-rendering — the lists are
-     rebuilt on every state change, which would blow away a freshly focused
-     field mid-keystroke. */
-  function beginPosEdit(span, id) {
-    if (span.dataset.editing) return;
-    span.dataset.editing = "1";
-    const p = roster().find(x => x.id === id);
-    const was = p ? (p.pos || "") : "";
-    const inp = document.createElement("input");
-    inp.className = "posEdit";
-    inp.value = was;
-    inp.maxLength = 3;
-    inp.setAttribute("list", "posList");
-    inp.setAttribute("aria-label", "Position");
-    span.replaceWith(inp);
-    inp.focus(); inp.select();
-    let done = false;
-    const commit = save => {
-      if (done) return; done = true;
-      const next = save ? (inp.value || "").trim().toUpperCase().slice(0, 3) : was;
-      if (save && next && next !== was && p) {
-        p.pos = next;
-        saveRoster(roster(), store.data.nextId);
-        renderTeam();                 // the token on the pitch carries the label
-      }
-      renderBench();
-      renderSubsModal();              // safe now: the input is on its way out
-    };
-    inp.addEventListener("keydown", ev => {
-      ev.stopPropagation();
-      if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
-      if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
-    });
-    inp.addEventListener("click", ev => ev.stopPropagation());
-    inp.addEventListener("blur", () => commit(true));
+
+  /* Warn, do not block. A keeper coming off without a keeper coming on is
+     usually a mistake and occasionally deliberate (outfield player in goal), so
+     the coach gets told and still decides. */
+  function keeperWarning(pairs) {
+    const isGK = id => /^GK/i.test(posOf(id));
+    if (!pairs.some(pr => isGK(pr.outId))) return "";
+    if (pairs.some(pr => isGK(pr.inId))) return "";
+    return "That takes your keeper off and no keeper on. Set the position below if someone else is going in goal.";
   }
-  // the complete pairs: the nth off with the nth on
-  const subsPairs = () => {
-    const n = Math.min(subsOut.length, subsIn.length), out = [];
-    for (let i = 0; i < n; i++) {
-      const outId = subsOut[i];
-      /* THE PLAYER COMING ON TAKES THE SPOT AND THE POSITION of the player they
-         replace — a striker on for a centre mid plays centre mid. Defaulting to
-         null here meant the pair row DISPLAYED the outgoing position but never
-         applied it unless the coach retyped it, so the sub kept their own
-         position and the pitch label was wrong. */
-      const outP = roster().find(x => x.id === outId);
-      out.push({ outId, inId: subsIn[i],
-                 pos: subsPos[outId] != null ? subsPos[outId] : (outP ? outP.pos : null) });
-    }
-    return out;
-  };
+
   function renderSubsModal() {
     const b = bstate();
-    const onPitch = roster().filter(p => b.placed[p.id]);
-    const bench   = roster().filter(p => !b.placed[p.id] && !isOut(p.id));
+    const mins = minutesPlayed();
+    const taken = new Set(subsPending.map(pr => pr.outId));
+    const coming = new Set(subsPending.map(pr => pr.inId));
 
-    // a swap invalidates selections, so drop anyone no longer in their column
-    subsOut = subsOut.filter(id => onPitch.some(p => p.id === id));
-    subsIn  = subsIn.filter(id => bench.some(p => p.id === id));
-
-    const fill = (node, list, sel, empty) => {
-      node.innerHTML = "";
-      if (!list.length) {
-        const d = document.createElement("div");
-        d.className = "subsEmpty"; d.textContent = empty;
-        node.appendChild(d); return;
-      }
-      list.forEach(p => node.appendChild(subsRow(p, sel.indexOf(p.id) + 1)));
-    };
-    fill(document.getElementById("subsOnList"), onPitch, subsOut, "Nobody on the pitch yet.");
-    fill(document.getElementById("subsBenchList"), bench, subsIn, "No subs available.");
-
-    /* Pair rows, plus a greyed row for anyone picked without a partner yet, so
-       an odd selection is obvious rather than silently ignored. */
+    /* ---- the pairs lined up so far, plus the half-made one ---- */
     const wrap = document.getElementById("subsPairs");
     wrap.innerHTML = "";
-    const nameOf = id => { const p = roster().find(x => x.id === id); return p ? firstName(p.name) : "?"; };
-    const posOf  = id => { const p = roster().find(x => x.id === id); return p ? (p.pos || "") : ""; };
-    const rows = Math.max(subsOut.length, subsIn.length);
-    for (let i = 0; i < rows; i++) {
-      const oId = subsOut[i], iId = subsIn[i], complete = oId != null && iId != null;
+    subsPending.forEach((pr, i) => {
       const row = document.createElement("div");
-      row.className = "subsPairRow" + (complete ? "" : " part");
-      const ord = document.createElement("span");
-      ord.className = "ord"; ord.textContent = complete ? (i + 1) : "";
+      row.className = "subsPairRow";
+      row.dataset.i = i;
       const off = document.createElement("span");
-      off.className = "subsChip off" + (oId != null ? " set" : "");
-      off.innerHTML = '<span class="subsArrow">&#9660;</span>' +
-        (oId != null ? nameOf(oId) + " · " + posOf(oId) : "waiting for a player");
+      off.className = "subsChip off set";
+      off.innerHTML = '<span class="subsArrow">&#9660;</span>' + nameOf(pr.outId);
       const sw = document.createElement("span");
       sw.className = "subsSwap"; sw.innerHTML = "&#8646;";
       const on = document.createElement("span");
-      on.className = "subsChip on" + (iId != null ? " set" : "");
-      on.innerHTML = '<span class="subsArrow">&#9650;</span>' +
-        (iId != null ? nameOf(iId) + " · " + posOf(iId) : "waiting for a sub");
-      row.append(ord, off, sw, on);
-      if (complete) {                     // the spot the incoming player takes
-        const pi = document.createElement("input");
-        pi.className = "pp"; pi.maxLength = 3; pi.setAttribute("list", "posList");
-        pi.value = subsPos[oId] != null ? subsPos[oId] : posOf(oId);
-        pi.addEventListener("input", () => { subsPos[oId] = pi.value; });
-        row.appendChild(pi);
-      }
+      on.className = "subsChip on set";
+      on.innerHTML = '<span class="subsArrow">&#9650;</span>' + nameOf(pr.inId);
+      /* The incoming player takes the vacated position by default; this is the
+         ONE place it can be changed. */
+      const pi = document.createElement("input");
+      pi.className = "pp"; pi.maxLength = 3; pi.setAttribute("list", "posList");
+      pi.setAttribute("aria-label", "Position for " + nameOf(pr.inId));
+      pi.value = pr.pos != null ? pr.pos : posOf(pr.outId);
+      pi.addEventListener("input", () => { pr.pos = pi.value; });
+      pi.addEventListener("click", ev => ev.stopPropagation());
+      const x = document.createElement("button");
+      x.className = "subsDrop"; x.type = "button";
+      x.setAttribute("aria-label", "Remove this change");
+      x.innerHTML = "&times;";
+      row.append(off, sw, on, pi, x);
+      wrap.appendChild(row);
+    });
+    if (pendingOut != null) {
+      const row = document.createElement("div");
+      row.className = "subsPairRow part";
+      row.innerHTML = '<span class="subsChip off set"><span class="subsArrow">&#9660;</span>' +
+        nameOf(pendingOut) + '</span><span class="subsSwap">&#8646;</span>' +
+        '<span class="subsChip on">choose a replacement</span>';
       wrap.appendChild(row);
     }
-    const pairs = subsPairs();
-    document.getElementById("subsPickHint").textContent = pairs.length
-      ? "The player coming on takes that spot — change it if they play elsewhere."
-      : "Tap a player on the pitch, then their replacement. Pick several for a double or triple change.";
+
+    /* ---- the one list, showing whichever side is being chosen ---- */
+    const choosingOn = pendingOut != null;
+    const list = document.getElementById("subsList");
+    list.classList.toggle("pickingOn", choosingOn);
+    let people;
+    if (choosingOn) {
+      /* Least-played first: the fair-rotation nudge belongs at the top of the
+         list, not in a note the coach has to act on themselves. */
+      people = roster().filter(p => !b.placed[p.id] && !isOut(p.id) && !coming.has(p.id))
+        .sort((x, y) => (mins.get(x.id) || 0) - (mins.get(y.id) || 0));
+    } else {
+      /* Most played first, for the mirror-image reason: the player most likely to
+         be coming off is the one who has been out there longest. */
+      people = roster().filter(p => b.placed[p.id] && !taken.has(p.id))
+        .sort((x, y) => (mins.get(y.id) || 0) - (mins.get(x.id) || 0));
+    }
+    list.innerHTML = "";
+    if (!people.length) {
+      const d = document.createElement("div");
+      d.className = "subsEmpty";
+      d.textContent = choosingOn ? "No subs available." : "Nobody left on the pitch to bring off.";
+      list.appendChild(d);
+    } else {
+      people.forEach(p => list.appendChild(subsRow(p, mins.get(p.id) || 0)));
+    }
+
+    document.getElementById("subsStepLbl").textContent = choosingOn
+      ? "Who comes on for " + nameOf(pendingOut) + "?"
+      : (subsPending.length ? "Another change?" : "Who is coming off?");
+    document.getElementById("subsBackBtn").hidden = !choosingOn;
+
+    document.getElementById("subsPickHint").textContent = choosingOn
+      ? "Fewest minutes first. Tap to complete the change."
+      : (subsPending.length
+          ? "Tap another player to add a change, or make them all at once below."
+          : "Most minutes first. Tap a player, then their replacement.");
+
+    const warn = document.getElementById("subsWarn");
+    const msg = keeperWarning(subsPending);
+    warn.hidden = !msg; warn.textContent = msg;
+
     const go = document.getElementById("subsGoBtn");
-    go.disabled = !pairs.length;
-    go.textContent = pairs.length > 1 ? "Make " + pairs.length + " changes" : "Make the swap";
+    go.disabled = !subsPending.length;
+    go.textContent = subsPending.length > 1
+      ? "Make " + subsPending.length + " changes" : "Make the swap";
 
-    const clock = document.getElementById("subsClock");
-    clock.textContent = store.data.gameday ? plabel() + gt.period + " " + fmt(gtElapsed()) : "";
+    document.getElementById("subsClock").textContent =
+      store.data.gameday ? plabel() + gt.period + " " + fmt(gtElapsed()) : "";
 
-    // what has already been changed this game
+    /* ---- what has already been changed this game ---- */
     const log = document.getElementById("subsLog");
     log.innerHTML = "";
     const subs = (store.data.gameday && store.data.gameday.subs) || [];
     subs.slice(-6).forEach(sv => {
-      const o = roster().find(p => p.id === sv.outId), i = roster().find(p => p.id === sv.inId);
       const row = document.createElement("div");
       row.className = "subsLogRow";
       row.innerHTML = '<span class="min">' + sv.min + "'</span>" +
-        '<span class="o">&#9660; ' + (o ? firstName(o.name) : "?") + "</span>" +
-        '<span class="i">&#9650; ' + (i ? firstName(i.name) : "?") + "</span>";
+        '<span class="o">&#9660; ' + nameOf(sv.outId) + "</span>" +
+        '<span class="i">&#9650; ' + nameOf(sv.inId) + "</span>";
       log.appendChild(row);
     });
+    document.getElementById("subsLogHead").hidden = !subs.length;
   }
+
   function openSubsModal() {
-    subsOut = []; subsIn = []; subsPos = {};
+    subsPending = []; pendingOut = null;
     renderSubsModal();
     subsModal?.classList.add("open");
   }
@@ -539,31 +593,38 @@ export function initBoard(store) {
   document.querySelector("#benchZone .benchLabel")?.addEventListener("click", () => {
     if (currentView === "game") openSubsModal();
   });
-  const toggleIn = (arr, id) => {
-    const i = arr.indexOf(id);
-    if (i > -1) arr.splice(i, 1); else arr.push(id);   // tap again to take back out
-  };
-  document.getElementById("subsOnList")?.addEventListener("click", e => {
+
+  document.getElementById("subsList")?.addEventListener("click", e => {
     const r = e.target.closest(".subsRow"); if (!r) return;
     const id = +r.dataset.id;
-    toggleIn(subsOut, id);
-    if (!subsOut.includes(id)) delete subsPos[id];
+    if (pendingOut == null) {
+      pendingOut = id;                                  // first tap: who is off
+    } else {
+      subsPending.push({ outId: pendingOut, inId: id, pos: posOf(pendingOut) });
+      pendingOut = null;                                // second tap: pair locked
+    }
     renderSubsModal();
   });
-  document.getElementById("subsBenchList")?.addEventListener("click", e => {
-    const r = e.target.closest(".subsRow"); if (!r) return;
-    toggleIn(subsIn, +r.dataset.id);
+  document.getElementById("subsBackBtn")?.addEventListener("click", () => {
+    pendingOut = null; renderSubsModal();
+  });
+  document.getElementById("subsPairs")?.addEventListener("click", e => {
+    const btn = e.target.closest(".subsDrop"); if (!btn) return;
+    const row = btn.closest(".subsPairRow");
+    subsPending.splice(+row.dataset.i, 1);
     renderSubsModal();
+  });
+  document.getElementById("subsUndoBtn")?.addEventListener("click", () => {
+    if (undoLastBatch()) renderSubsModal();
   });
   document.getElementById("subsGoBtn")?.addEventListener("click", () => {
-    const pairs = subsPairs();
-    if (!pairs.length) return;
-    applySubs(pairs);                     // one change, one minute, one save
-    subsOut = []; subsIn = []; subsPos = {};
+    if (!subsPending.length) return;
+    applySubs(subsPending);               // one change, one minute, one save
+    subsPending = []; pendingOut = null;
     renderSubsModal();
-    /* Back to the pitch. Multi-select already lets a double or triple change be
-       made in one visit, so there is nothing to stay open for — and the thing a
-       coach wants to see straight after a change is the new shape. */
+    /* Back to the pitch. Several changes can be queued in one visit, so there is
+       nothing to stay open for — and the thing a coach wants to see straight
+       after a change is the new shape. */
     subsModal.classList.remove("open");
   });
   subsModal?.addEventListener("click", e => {

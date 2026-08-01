@@ -1,241 +1,195 @@
-/* Game-day substitutions modal: two columns, pick one from each, confirm.
-   Must stay open for a double change, and must never lose a player. */
+/* Game-day substitutions (v148): ONE full-width list that switches, and a pair
+   locks in the moment both ends are tapped.
+
+   The model this replaced paired by tap order — nth off with nth on across two
+   columns. These tests deliberately cover the case that broke it: picking the
+   second player off BEFORE the first one's replacement. Under tap-order pairing
+   that silently mismatched the pairs; here it cannot arise, because a pair is
+   complete before the next one starts. */
 import { boot } from "./_harness.mjs";
-const roster=[
-  {id:1,name:"Sam Diaz",pos:"GK"},{id:2,name:"Tom Blake",pos:"CB"},
-  {id:3,name:"Jack Reed",pos:"CB"},{id:4,name:"Ali Khan",pos:"CM"},
-  {id:5,name:"Mo Farah",pos:"CM"},{id:6,name:"Leo Diaz",pos:"ST"},
-  {id:7,name:"Ben Wu",pos:"ST"},{id:8,name:"Cal Ryan",pos:"LB"},
-  {id:9,name:"Dan Ives",pos:"RB"}];
-const placed={1:{x:.5,y:.9},2:{x:.3,y:.7},3:{x:.7,y:.7},4:{x:.5,y:.5},5:{x:.3,y:.4},6:{x:.5,y:.2}};
-/* applySubs rewrites a player's position in place, so keep a pristine copy to
-   reset from — deep-copying the live array between sections carries the drift
-   forward and makes correct behaviour look wrong. */
+
+const roster = [
+  { id: 1, name: "Sam Diaz",  pos: "GK" }, { id: 2, name: "Tom Blake", pos: "CB" },
+  { id: 3, name: "Jack Reed", pos: "CB" }, { id: 4, name: "Ali Khan",  pos: "CM" },
+  { id: 5, name: "Mo Farah",  pos: "CM" }, { id: 6, name: "Leo Diaz",  pos: "ST" },
+  { id: 7, name: "Ben Wu",    pos: "ST" }, { id: 8, name: "Cal Ryan",  pos: "LB" },
+  { id: 9, name: "Dan Ives",  pos: "RB" }, { id:10, name: "Kai Moss",  pos: "LM" },
+  { id:11, name: "Rio Vega",  pos: "RM" }];
+const placed = { 1:{x:.5,y:.9}, 2:{x:.3,y:.7}, 3:{x:.7,y:.7},
+                 4:{x:.5,y:.5}, 5:{x:.3,y:.4}, 6:{x:.5,y:.2} };
+/* applySubs rewrites a player's position in place, so reset from a PRISTINE
+   copy between sections — deep-copying the live array carries the drift forward
+   and makes correct behaviour look broken. */
 const ROSTER0 = JSON.parse(JSON.stringify(roster));
-const { window, document, $, click, store, seg } = await boot({});
-store.data.roster = JSON.parse(JSON.stringify(ROSTER0)); store.data.nextId = 10;
-store.data.board = { squad:"11", formation:"4-3-3", showOpp:false, placed:{...placed} };
-store.data.unavailable = [9];                       // one injured, must not appear
-store.data.gameday = { date:"2026-08-01", opp:"Rovers", score:{us:0,them:0}, lineup:null };
-store.listeners.forEach(f=>f(store.data));
-const ok=(c,m)=>console.log((c?"PASS":"FAIL")+" - "+m);
+
+const { window, document, click, store, seg } = await boot({});
+let fails = 0;
+const ok = (c, m) => { if (!c) fails++; console.log((c ? "PASS" : "FAIL") + " - " + m); };
+
+function reset(extra) {
+  store.data.roster = JSON.parse(JSON.stringify(ROSTER0));
+  store.data.nextId = 12;
+  store.data.board = { squad:"11", formation:"4-3-3", showOpp:false, placed:{ ...placed } };
+  store.data.unavailable = [9];                    // injured: must never be offered
+  store.data.gameday = { date:"2026-08-01", opp:"Rovers",
+                         score:{us:0,them:0}, lineup:null, subs:[], ...(extra || {}) };
+  store.listeners.forEach(f => f(store.data));
+}
+reset();
 click(seg("game"));
 
-ok(!!document.getElementById("openSubsBtn"), "a Subs button exists on game day");
-click(document.getElementById("openSubsBtn"));
-ok(document.getElementById("subsModal").classList.contains("open"), "it opens the substitutions modal");
+const $  = s => document.getElementById(s);
+const rows      = () => [...document.querySelectorAll("#subsList .subsRow")];
+const names     = () => rows().map(r => r.querySelector(".who").textContent);
+const pairRows  = () => [...document.querySelectorAll(".subsPairRow")];
+const partRows  = () => [...document.querySelectorAll(".subsPairRow.part")];
+const tap       = name => click(rows().find(r => r.querySelector(".who").textContent === name));
+const onPitch   = () => Object.keys(store.data.board.placed).map(Number).sort((a,b)=>a-b);
+const step      = () => $("subsStepLbl").textContent;
+const open      = () => click($("openSubsBtn"));
 
-const onRows=()=>[...document.querySelectorAll("#subsOnList .subsRow")];
-const benchRows=()=>[...document.querySelectorAll("#subsBenchList .subsRow")];
-const names=rs=>rs.map(r=>r.querySelector(".who").textContent);
-console.log("   on the pitch:", names(onRows()).join(", "));
-console.log("   bench       :", names(benchRows()).join(", "));
-ok(onRows().length===6, "6 players listed as on the pitch ("+onRows().length+")");
-ok(benchRows().length===2, "2 on the bench — the injured player is excluded ("+benchRows().length+")");
-ok(!names(benchRows()).includes("Dan Ives"), "the unavailable player is not offered as a sub");
+/* ---------------------------------------------------------------- 1. basics */
+console.log("\n-- opening --");
+ok(!!$("openSubsBtn"), "a Subs button exists on game day");
+open();
+ok($("subsModal").classList.contains("open"), "it opens the substitutions sheet");
+ok(/coming off/i.test(step()), "it starts by asking who is coming off");
+ok(names().length === 6, "the list shows the six players on the pitch");
+ok(!names().includes("Dan Ives"), "an unavailable player is never offered");
+ok($("subsGoBtn").disabled, "the confirm button starts disabled");
 
-console.log("\n--- picking one from each side ---");
-ok(document.getElementById("subsGoBtn").disabled, "the swap button starts disabled");
-click(onRows().find(r=>r.querySelector(".who").textContent==="Leo Diaz"));
-ok(document.getElementById("subsGoBtn").disabled, "still disabled with only one side chosen");
-ok(onRows().find(r=>r.classList.contains("sel")), "the outgoing player is highlighted");
-ok(document.querySelectorAll("#subsPairs .subsPairRow.part").length===1,
-   "a player picked with no partner yet shows as an incomplete pair");
-click(benchRows()[0]);
-const inName=names(benchRows().filter(r=>r.classList.contains("sel")))[0];
-ok(!document.getElementById("subsGoBtn").disabled, "both chosen -> the swap is enabled");
-const pp=document.querySelector("#subsPairs .subsPairRow input.pp");
-console.log("   pair row position pre-filled with:", pp&&pp.value);
-ok(pp&&pp.value==="ST", "position defaults to the spot being vacated");
-console.log("   button reads:", document.getElementById("subsGoBtn").textContent);
+/* --------------------------------------------------- 2. one pair, two taps */
+console.log("\n-- a single change --");
+tap("Ali Khan");
+ok(/comes on for Ali/i.test(step()), "tapping a player switches the list to the bench");
+ok(partRows().length === 1, "a half-made pair is shown, not hidden");
+ok($("subsGoBtn").disabled, "still disabled with only one end chosen");
+ok(names().includes("Ben Wu") && !names().includes("Ali Khan"),
+   "the bench list is the bench, and does not include the player coming off");
+ok(!names().includes("Dan Ives"), "the injured player is not offered as a sub either");
 
-console.log("\n--- making the swap ---");
-const before=Object.keys(store.data.board.placed).length;
-click(document.getElementById("subsGoBtn"));
-ok(!document.getElementById("subsModal").classList.contains("open"),
-   "the modal closes and returns you to the pitch");
-ok(Object.keys(store.data.board.placed).length===before, "the same number of players are on the pitch");
-ok(!store.data.board.placed[6], "Leo Diaz has come off");
-console.log("   on the pitch now:", names(onRows()).join(", "));
-console.log("   bench now       :", names(benchRows()).join(", "));
-ok(names(onRows()).includes(inName), inName+" is now on the pitch");
-ok(names(benchRows()).includes("Leo Diaz"), "Leo Diaz is now on the bench");
-ok(document.getElementById("subsGoBtn").disabled, "the selection cleared, ready for the next swap");
+tap("Ben Wu");
+ok(pairRows().length === 1 && partRows().length === 0, "the pair locked in on the second tap");
+ok(/coming off|Another change/i.test(step()), "the list went back to the pitch for the next change");
+ok(!$("subsGoBtn").disabled, "a complete pair enables the confirm button");
 
-console.log("\n--- it is recorded with the match minute ---");
-const subs=store.data.gameday.subs||[];
-console.log("   log:", JSON.stringify(subs));
-ok(subs.length===1, "the swap was logged against the game");
-ok(subs[0].outId===6, "logged the right player coming off");
-ok(typeof subs[0].min==="number", "stamped with a match minute");
-ok(document.querySelectorAll("#subsLog .subsLogRow").length===1, "and shown in the modal's log");
+const box = document.querySelector(".subsPairRow input.pp");
+ok(box.value === "CM", "the incoming player inherits the vacated position by default");
+click($("subsGoBtn"));
+ok(onPitch().join() === "1,2,3,5,6,7", "Ben is on, Ali is off");
+ok(store.data.roster.find(p => p.id === 7).pos === "CM",
+   "the position is APPLIED, not just displayed (the v143 bug)");
+ok(!$("subsModal").classList.contains("open"), "the sheet closes and shows the new shape");
+ok(store.data.gameday.subs.length === 1, "the change is on the game's record");
 
-console.log("\n--- a second change, reopening the sheet ---");
-click(document.getElementById("openSubsBtn"));
-ok(document.getElementById("subsModal").classList.contains("open"), "reopens cleanly");
-click(onRows()[0]); click(benchRows()[0]);
-click(document.getElementById("subsGoBtn"));
-ok((store.data.gameday.subs||[]).length===2, "two swaps logged");
-ok(Object.keys(store.data.board.placed).length===before, "still the right number on the pitch");
-const all=names(onRows()).concat(names(benchRows()));
-ok(new Set(all).size===all.length, "nobody has been duplicated or lost");
+/* ------------------------------------------- 3. an overridden position sticks */
+console.log("\n-- overriding the position --");
+reset();
+open();
+tap("Ali Khan"); tap("Ben Wu");
+const box2 = document.querySelector(".subsPairRow input.pp");
+box2.value = "LW";
+box2.dispatchEvent(new window.Event("input", { bubbles: true }));
+click($("subsGoBtn"));
+ok(store.data.roster.find(p => p.id === 7).pos === "LW", "a typed position wins over the default");
 
-console.log("\n=== DOUBLE / TRIPLE CHANGE IN ONE MOVE ===");
-// reset the board so there are enough bodies for a triple
-store.data.board.placed={...placed};
-store.data.unavailable=[];
-store.data.gameday.subs=[];
-store.listeners.forEach(f=>f(store.data));
-click(document.getElementById("openSubsBtn"));
-console.log("   on the pitch:", names(onRows()).join(", "));
-console.log("   bench       :", names(benchRows()).join(", "));
+/* ----------------------------------------------------- 4. a triple change */
+console.log("\n-- a triple change in one action --");
+reset();
+open();
+tap("Jack Reed");  tap("Ben Wu");
+tap("Ali Khan");   tap("Cal Ryan");
+tap("Leo Diaz");   tap("Kai Moss");
+ok(pairRows().length === 3, "three pairs lined up");
+ok(/Make 3 changes/.test($("subsGoBtn").textContent), "the button offers all three");
+const shown = pairRows().map(r => r.textContent.replace(/[×\s]+/g, " ").trim());
+ok(/Jack.*Ben/.test(shown[0]) && /Ali.*Cal/.test(shown[1]) && /Leo.*Kai/.test(shown[2]),
+   "each pair reads as the coach called it: " + JSON.stringify(shown));
+click($("subsGoBtn"));
+ok(onPitch().join() === "1,2,5,7,8,10",
+   "all three swapped together: " + onPitch().join());
+ok(store.data.gameday.subs.length === 3, "all three are logged");
+const mins = store.data.gameday.subs.map(s => s.min);
+ok(new Set(mins).size === 1, "they share one match minute — it was one action");
+ok(new Set(store.data.gameday.subs.map(s => s.batch)).size === 1,
+   "they share one batch id, so Undo takes back the whole change");
 
-const offNames=["Leo Diaz","Mo Farah","Ali Khan"];
-offNames.forEach(n=>click(onRows().find(r=>r.querySelector(".who").textContent===n)));
-ok(onRows().filter(r=>r.classList.contains("sel")).length===3, "three players selected to come off");
-const ords=onRows().filter(r=>r.classList.contains("sel")).map(r=>r.querySelector(".ord").textContent);
-console.log("   order badges on the pitch column:", ords.join(","));
-ok(ords.join(",")==="3,2,1"||new Set(ords).size===3, "each shows its place in the change");
-ok(document.querySelectorAll("#subsPairs .subsPairRow.part").length===3, "three incomplete pairs so far");
-ok(document.getElementById("subsGoBtn").disabled, "cannot apply until they have partners");
+/* ---------------------------------------------- 5. taking a pair back out */
+console.log("\n-- changing your mind --");
+reset();
+open();
+tap("Jack Reed"); tap("Ben Wu");
+tap("Ali Khan");  tap("Cal Ryan");
+ok(pairRows().length === 2, "two pairs lined up");
+click(document.querySelectorAll(".subsPairRow .subsDrop")[0]);
+ok(pairRows().length === 1, "tapping the × drops that pair");
+ok(/Ali.*Cal/.test(pairRows()[0].textContent), "the RIGHT pair was dropped");
+ok(names().includes("Jack Reed"), "the player it freed is back in the list");
+click($("subsGoBtn"));
+ok(onPitch().includes(3), "Jack stayed on the pitch");
+ok(!onPitch().includes(4), "Ali still came off");
 
-const benchNames=names(benchRows()).slice(0,3);
-benchNames.forEach(n=>click(benchRows().find(r=>r.querySelector(".who").textContent===n)));
-console.log("   button reads:", document.getElementById("subsGoBtn").textContent);
-ok(/Make 3 changes/.test(document.getElementById("subsGoBtn").textContent), "the button offers all three");
-ok(document.querySelectorAll("#subsPairs .subsPairRow.part").length===0, "all three pairs complete");
-const pairText=[...document.querySelectorAll("#subsPairs .subsPairRow")].map(r=>r.textContent.replace(/\s+/g," ").trim());
-pairText.forEach((t,i)=>console.log("   pair "+(i+1)+": "+t));
+/* ------------------------------------------------------- 6. Back cancels */
+console.log("\n-- backing out of a half-made pair --");
+reset();
+open();
+tap("Ali Khan");
+ok(!$("subsBackBtn").hidden, "Back appears while choosing a replacement");
+click($("subsBackBtn"));
+ok(partRows().length === 0 && /coming off/i.test(step()), "Back returns to the pitch list");
+ok($("subsBackBtn").hidden, "and Back hides again");
+ok($("subsGoBtn").disabled, "nothing is queued");
 
-const beforeCount=Object.keys(store.data.board.placed).length;
-click(document.getElementById("subsGoBtn"));
-console.log("   on the pitch now:", names(onRows()).join(", "));
-ok(Object.keys(store.data.board.placed).length===beforeCount, "still "+beforeCount+" players on the pitch");
-offNames.forEach(n=>ok(names(benchRows()).includes(n), n+" came off"));
-benchNames.forEach(n=>ok(names(onRows()).includes(n), n+" came on"));
-const all2=names(onRows()).concat(names(benchRows()));
-ok(new Set(all2).size===all2.length, "nobody duplicated or lost across a triple change");
+/* ------------------------------------------------------ 7. keeper guard */
+console.log("\n-- the keeper guard --");
+reset();
+open();
+tap("Sam Diaz");          // the GK
+tap("Ben Wu");            // an ST
+ok(!$("subsWarn").hidden, "taking the keeper off with no keeper on warns the coach");
+ok(!$("subsGoBtn").disabled, "but it does not block the change — the coach decides");
+click(document.querySelector(".subsPairRow .subsDrop"));
+ok($("subsWarn").hidden, "the warning clears when the pair is dropped");
 
-const lg=store.data.gameday.subs;
-console.log("   logged:", JSON.stringify(lg));
-ok(lg.length===3, "all three logged");
-ok(new Set(lg.map(x=>x.min)).size===1, "all three share ONE match minute — it was one change");
-click(document.getElementById("openSubsBtn"));
-ok(document.getElementById("subsGoBtn").disabled, "reopening starts with a clean selection");
+/* -------------------------------------------------- 8. minutes played */
+console.log("\n-- minutes played --");
+reset({ subs: [
+  { outId: 4, inId: 7, min: 20, period: 1, batch: 1 },   // Ali off, Ben on at 20'
+  { outId: 7, inId: 4, min: 35, period: 1, batch: 2 }    // and straight back at 35'
+] });
+/* Rewinding the CURRENT line-up through those two entries puts Ali back in the
+   starting XI and Ben on the bench, which is what makes the sums below right.
 
-console.log("\n--- tapping again takes a player back out of the change ---");
-const first=onRows()[0], nm=first.querySelector(".who").textContent;
-click(first); ok(onRows().find(r=>r.querySelector(".who").textContent===nm).classList.contains("sel"), nm+" selected");
-click(onRows().find(r=>r.querySelector(".who").textContent===nm));
-ok(!onRows().find(r=>r.querySelector(".who").textContent===nm).classList.contains("sel"), "and de-selected on a second tap");
+   The match clock is not running in the harness, so `now` is 0 and only CLOSED
+   intervals contribute. That is the honest answer — with no clock there are no
+   live minutes to add — and it is what makes these numbers checkable at all. */
+open();
+const minOf = name => {
+  const r = rows().find(x => x.querySelector(".who").textContent === name);
+  return r ? parseInt(r.querySelector(".mins").textContent, 10) : null;
+};
+ok(minOf("Ali Khan") === 20, "Ali's closed 0'-20' spell counts (got " + minOf("Ali Khan") + ")");
+tap("Tom Blake");
+ok(minOf("Ben Wu") === 15, "Ben's closed 20'-35' spell counts on the bench list (got " + minOf("Ben Wu") + ")");
+const benchOrder = names();
+ok(minOf(benchOrder[0]) === 0 && benchOrder[benchOrder.length - 1] === "Ben Wu",
+   "the bench is ordered fewest minutes first: " + benchOrder.join(", "));
 
-console.log("\n=== THE SUB INHERITS THE POSITION THEY COME INTO ===");
-store.data.roster = JSON.parse(JSON.stringify(ROSTER0));
-store.data.board.placed = {...placed};
-store.data.unavailable = [];
-store.data.gameday.subs = [];
-store.listeners.forEach(f=>f(store.data));
-click(document.getElementById("openSubsBtn"));
-const posOfName=n=>{const p=store.data.roster.find(x=>x.name===n);return p&&p.pos;};
-// Ben Wu is a striker on the bench; Ali Khan is a centre mid on the pitch
-console.log("   before: Ali Khan is "+posOfName("Ali Khan")+" on the pitch, Ben Wu is "+posOfName("Ben Wu")+" on the bench");
-ok(posOfName("Ali Khan")==="CM" && posOfName("Ben Wu")==="ST", "they start with different positions");
-click(onRows().find(r=>r.querySelector(".who").textContent==="Ali Khan"));
-click(benchRows().find(r=>r.querySelector(".who").textContent==="Ben Wu"));
-const shown=document.querySelector("#subsPairs input.pp").value;
-console.log("   the pair row offers:", shown);
-click(document.getElementById("subsGoBtn"));      // WITHOUT touching the position box
-console.log("   after : Ben Wu is "+posOfName("Ben Wu"));
-ok(posOfName("Ben Wu")==="CM", "Ben Wu took over Ali Khan's position without any extra typing");
-const benTok=[...document.querySelectorAll("#board .tok")].find(t=>/CM/.test(t.textContent));
-ok(!!benTok, "and the pitch shows a CM in that spot");
+/* ------------------------------------------------------------- 9. undo */
+console.log("\n-- undo --");
+reset();
+open();
+tap("Jack Reed"); tap("Ben Wu");
+tap("Ali Khan");  tap("Cal Ryan");
+click($("subsGoBtn"));
+ok(onPitch().join() === "1,2,5,6,7,8", "the double change went on");
+open();
+ok(!$("subsLogHead").hidden, "the log and its Undo are shown once there is a change");
+click($("subsUndoBtn"));
+ok(onPitch().join() === "1,2,3,4,5,6", "Undo restored the whole batch, both players");
+ok(store.data.gameday.subs.length === 0,
+   "and removed it from the record — a mis-tap is not a tactical decision");
+ok($("subsLogHead").hidden, "the log header hides again when there is nothing logged");
 
-console.log("\n--- but an explicit position still wins ---");
-store.data.roster = JSON.parse(JSON.stringify(ROSTER0));
-store.data.board.placed = {...placed};
-store.listeners.forEach(f=>f(store.data));
-click(document.getElementById("openSubsBtn"));
-click(onRows().find(r=>r.querySelector(".who").textContent==="Leo Diaz"));   // ST
-click(benchRows().find(r=>r.querySelector(".who").textContent==="Ben Wu"));
-const box=document.querySelector("#subsPairs input.pp");
-box.value="LW"; box.dispatchEvent(new window.Event("input",{bubbles:true}));
-click(document.getElementById("subsGoBtn"));
-console.log("   typed LW -> Ben Wu is "+posOfName("Ben Wu"));
-ok(posOfName("Ben Wu")==="LW", "typing a position overrides the inherited one");
-
-console.log("\n--- a triple change inherits three positions ---");
-store.data.roster = JSON.parse(JSON.stringify(ROSTER0));
-store.data.board.placed = {...placed};
-store.listeners.forEach(f=>f(store.data));
-click(document.getElementById("openSubsBtn"));
-["Leo Diaz","Mo Farah","Sam Diaz"].forEach(n=>click(onRows().find(r=>r.querySelector(".who").textContent===n)));
-["Ben Wu","Cal Ryan","Dan Ives"].forEach(n=>click(benchRows().find(r=>r.querySelector(".who").textContent===n)));
-click(document.getElementById("subsGoBtn"));
-console.log("   Ben Wu -> "+posOfName("Ben Wu")+"  (was ST, replaced Leo ST)");
-console.log("   Cal Ryan -> "+posOfName("Cal Ryan")+"  (was LB, replaced Mo CM)");
-console.log("   Dan Ives -> "+posOfName("Dan Ives")+"  (was RB, replaced Sam GK)");
-ok(posOfName("Cal Ryan")==="CM", "Cal Ryan inherited CM");
-ok(posOfName("Dan Ives")==="GK", "Dan Ives inherited GK");
-
-console.log("\n=== EDIT A POSITION FROM THE SUBS SCREEN ===");
-store.data.roster = JSON.parse(JSON.stringify(ROSTER0));
-store.data.board.placed = {...placed};
-store.data.unavailable = [];
-store.listeners.forEach(f=>f(store.data));
-click(document.getElementById("openSubsBtn"));
-const rowFor=n=>[...document.querySelectorAll("#subsOnList .subsRow,#subsBenchList .subsRow")]
-  .find(r=>r.querySelector(".who").textContent===n);
-const posSpan=n=>rowFor(n).querySelector(".pos");
-const type=(inp,v)=>{inp.value=v; inp.dispatchEvent(new window.Event("input",{bubbles:true}));};
-const enter=inp=>inp.dispatchEvent(new window.KeyboardEvent("keydown",{key:"Enter",bubbles:true}));
-
-console.log("   Tom Blake shows as:", posSpan("Tom Blake").textContent);
-ok(posSpan("Tom Blake").classList.contains("edit"), "the position label is marked as editable");
-ok(posSpan("Tom Blake").getAttribute("role")==="button", "and is reachable as a button");
-
-// tapping it must NOT select the row for a swap
-const selBefore=document.querySelectorAll("#subsOnList .subsRow.sel").length;
-click(posSpan("Tom Blake"));
-ok(document.querySelectorAll("#subsOnList .subsRow.sel").length===selBefore,
-   "tapping the position does not select the player for a swap");
-const inp=document.querySelector("input.posEdit");
-ok(!!inp, "it turns into an input");
-console.log("   pre-filled with:", inp&&inp.value);
-ok(inp.value==="CB", "pre-filled with the current position");
-type(inp,"lb"); enter(inp);
-console.log("   after typing 'lb':", posOfName("Tom Blake"));
-ok(posOfName("Tom Blake")==="LB", "saved to the squad, upper-cased");
-ok(posSpan("Tom Blake").textContent==="LB", "and the row now reads LB");
-ok(!document.querySelector("input.posEdit"), "the input is gone again");
-
-console.log("\n--- the pitch token follows ---");
-const lbTok=[...document.querySelectorAll("#board .tok")].filter(t=>/LB/.test(t.textContent));
-ok(lbTok.length>0, "a token on the pitch now reads LB");
-
-console.log("\n--- escape abandons the edit ---");
-click(posSpan("Jack Reed"));
-const inp2=document.querySelector("input.posEdit");
-type(inp2,"ZZ");
-inp2.dispatchEvent(new window.KeyboardEvent("keydown",{key:"Escape",bubbles:true}));
-console.log("   Jack Reed is still:", posOfName("Jack Reed"));
-ok(posOfName("Jack Reed")==="CB", "Escape leaves the position alone");
-
-console.log("\n--- it works on the bench too ---");
-click(posSpan("Ben Wu"));
-const inp3=document.querySelector("input.posEdit");
-type(inp3,"RW"); enter(inp3);
-console.log("   Ben Wu (bench) is now:", posOfName("Ben Wu"));
-ok(posOfName("Ben Wu")==="RW", "a bench player's position can be fixed too");
-
-console.log("\n--- and a blank entry keeps the old one ---");
-click(posSpan("Ben Wu"));
-const inp4=document.querySelector("input.posEdit");
-type(inp4,"   "); enter(inp4);
-ok(posOfName("Ben Wu")==="RW", "an empty box does not wipe the position");
-
-console.log("\n--- swapping still works after an edit ---");
-click(rowFor("Ali Khan")); click(rowFor("Cal Ryan"));
-ok(!document.getElementById("subsGoBtn").disabled, "a swap can still be set up");
-click(document.getElementById("subsGoBtn"));
-ok(posOfName("Cal Ryan")==="CM", "and the incoming player still inherits the position");
-process.exit(0);
+console.log(fails ? "\n" + fails + " FAILED" : "\nall substitution guards passed");
+process.exit(fails ? 1 : 0);

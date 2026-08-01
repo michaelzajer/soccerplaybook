@@ -216,97 +216,116 @@ body.gameView #timerRow{display:flex}
 }
 body.paneOpen #drillColors{bottom:calc(var(--dock-h) + 92px + env(safe-area-inset-bottom))}
 #drillColors.open{display:flex}
-/* ---------- substitutions modal ----------
-   Two columns, broadcast language: red down-arrow coming off, green up-arrow
-   coming on. Tall sheet, but .sheet scrolls so nothing can be pushed out of
-   reach on a phone. */
+/* ================= SUBSTITUTIONS SHEET =================
+   Sized for a coach standing pitch-side with one hand on the phone: every
+   target is at least 44px, the list is full width so names do not truncate,
+   and there is NO nested scroll — the sheet scrolls, the list does not, so
+   reaching the confirm button never means scrolling inside a box first.
+   ======================================================== */
 .sheet.subs{gap:10px}
 .subsHead{display:flex;align-items:baseline;gap:10px}
 .subsHead h2{flex:1}
-.subsClock{font-size:13px;font-weight:700;color:var(--ink-dim);font-variant-numeric:tabular-nums}
-.subsCols{display:flex;gap:9px;min-height:0}
-.subsCol{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
-.subsColHead{
-  display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;
-  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);
-}
-.subsColHead.off .subsArrow{color:#ff5c4d}
-.subsColHead.on  .subsArrow{color:#3ddc84}
-.subsArrow{font-size:10px;line-height:1}
-.subsList{
-  display:flex;flex-direction:column;gap:5px;
-  max-height:34dvh;overflow-y:auto;overscroll-behavior:contain;
-  background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:5px;
-}
-.subsRow{
-  display:flex;align-items:center;gap:8px;width:100%;
-  background:var(--surface-2);border:1px solid transparent;border-radius:9px;
-  padding:7px 8px;font-family:inherit;color:var(--ink);text-align:left;cursor:pointer;
-}
-.subsRow .num{
-  width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:var(--team);
-  color:var(--team-ink);display:grid;place-items:center;font-size:11px;font-weight:700;
-}
-.subsRow .who{flex:1;min-width:0;font-size:13.5px;font-weight:600;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.subsRow .pos{font-size:10.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.05em}
-/* tappable: a dashed underline is enough of a hint without shouting */
-.subsRow .pos.edit{
-  border:1px dashed var(--line-strong);border-radius:6px;padding:2px 5px;
-  min-width:30px;text-align:center;cursor:pointer;
-}
-.subsRow .pos.edit:hover,.subsRow .pos.edit:focus-visible{
-  color:var(--ink);border-color:var(--accent);border-style:solid;
-}
-input.posEdit{
-  width:44px;flex:0 0 auto;height:24px;padding:0 4px;text-align:center;text-transform:uppercase;
-  font-family:inherit;font-size:11.5px;font-weight:700;letter-spacing:.05em;
-  background:var(--bg);border:1px solid var(--accent);border-radius:6px;color:var(--ink);
-}
-/* the order you tapped them in, shown once more than one is picked */
-.subsRow .ord{
-  width:17px;height:17px;flex:0 0 auto;border-radius:5px;
-  display:none;place-items:center;font-size:10px;font-weight:800;
-}
-.subsRow.sel .ord{display:grid}
-.subsCol:first-child .subsRow.sel .ord{background:#ff5c4d;color:#fff}
-.subsCol:last-child  .subsRow.sel .ord{background:#3ddc84;color:#08341d}
-.subsRow.sel{border-color:var(--accent);background:rgba(59,130,246,.16)}
-.subsCol:first-child .subsRow.sel{border-color:#ff5c4d;background:rgba(255,92,77,.15)}
-.subsCol:last-child  .subsRow.sel{border-color:#3ddc84;background:rgba(61,220,132,.14)}
-.subsEmpty{padding:14px 8px;text-align:center;font-size:12.5px;color:var(--ink-faint)}
-.subsPick{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 10px}
+.subsClock{font-size:var(--t-sm);font-weight:700;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+
+/* ---- the changes lined up so far ---- */
 .subsPairs{display:flex;flex-direction:column;gap:7px}
 .subsPairs:empty{display:none}
-.subsPairs:empty + .hint{margin:0}
-.subsPairRow{display:flex;align-items:center;gap:8px}
-.subsPairRow .ord{
-  width:18px;height:18px;flex:0 0 auto;border-radius:5px;background:var(--bg);
-  color:var(--ink-faint);display:grid;place-items:center;font-size:10.5px;font-weight:800;
+.subsPairRow{
+  display:flex;align-items:center;gap:7px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:7px 8px;
 }
-.subsPairRow.part .ord{background:transparent}
+.subsPairRow.part{border-style:dashed;background:transparent}
 .subsPairRow input.pp{
-  width:56px;flex:0 0 auto;height:28px;padding:0 5px;text-align:center;text-transform:uppercase;
-  font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+  width:58px;flex:0 0 auto;height:38px;padding:0 5px;text-align:center;text-transform:uppercase;
+  font-family:inherit;font-size:var(--t-sm);font-weight:700;
+  background:var(--bg);border:1px solid var(--line-strong);border-radius:8px;color:var(--ink);
 }
-.subsPairRow.part{opacity:.6}
-.subsPickRow{display:flex;align-items:center;gap:8px}
+.subsPairRow input.pp:focus{outline:none;border-color:var(--accent)}
+.subsDrop{
+  width:38px;height:38px;flex:0 0 auto;border-radius:50%;
+  background:none;border:1px solid var(--line-strong);color:var(--ink-dim);
+  font-size:19px;line-height:1;padding:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.subsDrop:hover{color:#ff5c4d;border-color:#ff5c4d}
 .subsChip{
-  flex:1;min-width:0;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+  flex:1;min-width:0;display:flex;align-items:center;gap:6px;
+  font-size:var(--t-sm);font-weight:600;
   color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .subsChip.off .subsArrow{color:#ff5c4d}
 .subsChip.on  .subsArrow{color:#3ddc84}
 .subsChip.set{color:var(--ink)}
+.subsArrow{font-size:10px;line-height:1;flex:0 0 auto}
 .subsSwap{flex:0 0 auto;color:var(--ink-faint);font-size:15px}
-.subsPos{display:flex;align-items:center;gap:8px;margin-top:8px;
-  font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim)}
-.subsPos input{width:66px;flex:0 0 auto;text-align:center;text-transform:uppercase;
-  height:32px;padding:0 6px;font-size:14px}
+
+/* ---- keeper guard: tells the coach, does not stop them ---- */
+.subsWarn{
+  background:rgba(255,199,117,.12);border:1px solid rgba(255,199,117,.45);
+  border-radius:var(--r-md);padding:8px 10px;
+  font-size:var(--t-sm);font-weight:600;line-height:1.4;color:#ffc775;
+}
+.subsWarn[hidden]{display:none}
+
+/* ---- the step header for the single switching list ---- */
+.subsStep{display:flex;align-items:center;gap:10px}
+.subsStepLbl{
+  flex:1;min-width:0;font-size:var(--t-xs);font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);
+}
+.subsBack{
+  flex:0 0 auto;height:36px;padding:0 14px;border-radius:var(--r-pill);
+  background:none;border:1px solid var(--line-strong);color:var(--ink-dim);
+  font-family:inherit;font-size:var(--t-sm);font-weight:700;
+}
+.subsBack:hover{color:var(--ink)}
+.subsBack[hidden]{display:none}
+
+/* ---- the list itself ---- */
+.subsList{display:flex;flex-direction:column;gap:6px}
+.subsRow{
+  display:flex;align-items:center;gap:10px;width:100%;min-height:56px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:8px 12px;font-family:inherit;color:var(--ink);text-align:left;cursor:pointer;
+}
+.subsRow:active{background:var(--surface)}
+.subsRow .num{
+  width:38px;height:38px;flex:0 0 auto;border-radius:50%;background:var(--team);
+  color:var(--team-ink);display:grid;place-items:center;
+  font-size:var(--t-xs);font-weight:800;letter-spacing:.02em;
+}
+/* the bench list is the players coming ON, so it reads in the "on" colour */
+.subsList.pickingOn .subsRow .num{background:#3ddc84;color:#08341d}
+.subsRow .who{
+  flex:1;min-width:0;font-size:var(--t-md);font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.subsRow .mins{
+  flex:0 0 auto;font-size:var(--t-sm);font-weight:700;color:var(--ink-faint);
+  font-variant-numeric:tabular-nums;
+}
+.subsEmpty{padding:18px 8px;text-align:center;font-size:var(--t-sm);color:var(--ink-faint)}
+
 #subsGoBtn:disabled{opacity:.4}
+
+/* ---- the game's record ---- */
+.subsLogHead{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:2px;font-size:var(--t-xs);font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);
+}
+.subsLogHead[hidden]{display:none}
+.subsUndo{
+  flex:0 0 auto;height:36px;padding:0 14px;border-radius:var(--r-pill);
+  background:none;border:1px solid var(--line-strong);color:var(--ink-dim);
+  font-family:inherit;font-size:var(--t-xs);font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;
+}
+.subsUndo:hover{color:#ff5c4d;border-color:#ff5c4d}
 .subsLog{display:flex;flex-direction:column;gap:4px}
 .subsLog:empty{display:none}
-.subsLogRow{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim)}
+.subsLogRow{display:flex;align-items:center;gap:7px;font-size:var(--t-sm);color:var(--ink-dim)}
 .subsLogRow .min{width:34px;flex:0 0 auto;font-weight:700;color:var(--ink-faint);
   font-variant-numeric:tabular-nums}
 .subsLogRow .o{color:#ff8f84}
