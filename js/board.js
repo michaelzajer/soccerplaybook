@@ -4030,11 +4030,32 @@ export function initBoard(store) {
       });
       return bd < 0.06 ? best : null;
     };
+    /* A pass is aimed at a PERSON; a run or a dribble is aimed at a POSITION.
+       Both are usually the same square — a player is standing on the cone — so
+       preferring the wrong one turns "run to cone 3" into "run to player 3",
+       which reads as a collision rather than as a rotation. */
+    const players = drillItems.filter(i => PLAYER_KINDS.includes(i.kind));
+    const coneName = c => "cone " + (cones.indexOf(c) + 1);
     const nameFor = pt => {
-      const p = near(pt, drillItems.filter(i => PLAYER_KINDS.includes(i.kind)));
-      if (p) return "player " + (p.num || "?");
-      const c = near(pt, cones);
-      if (c) return "cone " + (cones.indexOf(c) + 1);
+      const p = near(pt, players), c = near(pt, cones);
+      if (s.mode === "pass" || s.mode === "passrun") {
+        if (p) return "player " + (p.num || "?");
+        if (c) return coneName(c);
+      } else {
+        if (c) return coneName(c);
+        if (p) return "player " + (p.num || "?");
+      }
+      /* Nothing on the spot. Say what it is NEAR rather than "space", because
+         "run into space" is true of a check-away and tells the coach nothing. */
+      let best = null, bd = Infinity, isCone = false;
+      [...players, ...cones].forEach(i => {
+        const d = Math.hypot(i.x - pt[0], (i.y - pt[1]) * AR);
+        if (d < bd) { bd = d; best = i; isCone = cones.includes(i); }
+      });
+      if (best && bd < 0.2) {
+        const m = Math.round(Math.hypot((best.x - pt[0]) * PITCH_WID, (best.y - pt[1]) * PITCH_LEN));
+        return m + " m off " + (isCone ? coneName(best) : "player " + (best.num || "?"));
+      }
       return "space";
     };
     const verb = { pass:"Pass", run:"Run", dribble:"Dribble", passrun:"Pass and follow" }[s.mode] || s.mode;
@@ -4145,8 +4166,11 @@ export function initBoard(store) {
         : "Starts as soon as the player and the ball are free.";
     }
 
+    /* Offer capture when the drill has no stated ORDERING — an actor alone is
+       not enough, because the notation gives every leg one. What is worth
+       capturing is the timing the inference is working out. */
     document.getElementById("stepsCapture").hidden =
-      ss.some(s => s.actor || s.after || s.with || s.arriveWith != null) || !ss.length;
+      ss.length < 2 || ss.some(s => s.after || s.with || s.arriveWith != null);
   }
 
   /* Remap every reference through a permutation. `map[old] = new`; a reference

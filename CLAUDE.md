@@ -41,8 +41,11 @@ sub-12px type reappears in those rows.
 ## Files
 
 - `app.html` — THE APP. Single page, all views/sheets. Versioned asset URLs (`?v=NN`).
-- `index.html` — the marketing landing page, NOT the app. Has its own hand-rolled
-  hero drill animation (covered by `_landing.mjs`).
+- `index.html` — the marketing landing page, NOT the app. Rewritten v152: static,
+  no JS beyond a demo clock, no shared CSS with the app (its own inline `<style>`
+  plus inline styles). The hand-rolled hero drill animation is GONE, and
+  `_landing.mjs`, which existed only to prove that animation rotated correctly,
+  was deleted with it rather than left as a permanently red check.
 - `styles.css` — hand-rolled theme, CSS variables in `:root`.
 - `js/app.js` — Firebase init, auth flow, store (sync engine), guest mode, SW registration.
 - `js/board.js` — everything else: board, drills, game day, timers, sharing. One big
@@ -65,7 +68,7 @@ drill-text 162, app 172), which makes a deploy non-deterministic:
    download and parse), `js/drills.js?v=NN`, `js/drill-text.js?v=NN`,
    `js/app.js?v=NN`.
 2. In `js/app.js`: `firebase-config.js?v=NN`, `board.js?v=NN`.
-3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v151**.
+3. In `sw.js`: `CACHE = "spb-vNN"`. Currently at **v152**.
 4. `node --check js/*.js sw.js` before declaring done, then the `_*.mjs` suite.
 3. Always give Michael this block at the end (his standing request):
 
@@ -729,10 +732,10 @@ does the jsdom boot: stubs canvas getContext, pointer capture and
 getBoundingClientRect, sets `global.Event` / `requestAnimationFrame`, and stubs
 the timeline with one that buffers every `.to()` and can `settle()` them.
 `node --check js/*.js sw.js` first, always. Run: `for t in _laps _shuttle _align
-_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _landing _subs _chrome _drilltext _gameday _plan
+_c3 _copybtn _fixes128 _seq129 _speed _tidy _notation _subs _chrome _drilltext _gameday _plan
 _smoke _smoke_app; do node $t.mjs; done`
-(`_landing.mjs` covers the marketing page's hero drill demos, which are a
-separate hand-rolled animation in index.html, not the app engine.)
+(There is no landing-page test any more — `index.html` is static as of v152, so
+there is no behaviour left to guard. Nothing in the suite touches it.)
 
 **`_builder.mjs` is currently FAILING and is not in that list.** It asserts on
 `#builderPanel` / "Build from a shape…", and neither exists anywhere in the
@@ -757,6 +760,43 @@ leave it as a permanently red check that trains everyone to ignore the suite.
   (nothing is ever recycled to the back) and looks precisely like an engine bug.
   It is not: with the fourth stroke, all 8 laps match the reference and everyone
   ends on their original cone.
+
+## Drill step list (v152)
+
+Drills → transport bar → **☰**. The drill as data rather than as lines to be
+re-read off the pitch. Each row is one leg in plain English with its length and
+its timing; tapping one traces it on the pitch in accent blue.
+
+**Draw order is semantics**, so this list is the drill's SOURCE and the two
+dangerous operations are reorder and delete — every `after`/`with`/`meets` is an
+INDEX into that order, and a wrong remap does not throw, it silently rewires the
+drill. `remapRefs` takes a permutation and rewrites every reference; a reference
+to a deleted step is dropped rather than left pointing at whatever slid into that
+index.
+
+- **An illegal move is REFUSED with a reason**, not silently repaired. Moving a
+  step above something it depends on would leave a dependency pointing forwards,
+  which is not a drill. The message names the offending step. Quietly dropping
+  the link is the silent-failure behaviour the English parser was deleted for.
+- **Editing timing converts the whole drill to planned**, so `ensureActors`
+  gives every leg a slot first. `buildTimeline` switches paths on "does ANY
+  stroke carry intent", so a half-converted drill would have some legs timed by
+  the graph and the rest starting at zero.
+- **Descriptions follow the verb, not the geometry.** A pass names the PLAYER it
+  reaches; a run or dribble names the CONE. They are usually the same square —
+  a player standing on a cone — and preferring the wrong one turns "run to cone
+  3" into "run to player 3", which reads as a collision rather than a rotation.
+  An endpoint with nothing on it reads "5 m off cone 1" rather than "into
+  space", which is true of every check-away and says nothing.
+- **Capture as steps** plays the drill once on the inference path with
+  `captureIntent` set, and writes the timing it worked out back as explicit
+  links — legs sharing a start become `with`, the rest get `after` whichever leg
+  they were actually waiting on. That converts any hand-drawn or pre-v151 drill
+  into an editable plan that plays identically. It is offered only when a drill
+  has no stated ordering; an actor alone does not count, because the notation
+  gives every leg one.
+- Reorder is ▲▼ buttons, not drag. Dragging a row inside a scrolling sheet on a
+  phone fights the scroll, and draw order is too important to change by accident.
 
 ## Michael's working preferences (observed)
 

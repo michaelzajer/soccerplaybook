@@ -77,9 +77,13 @@ ok(/^10 steps$/.test($("stepsCount").textContent), "with a count: " + $("stepsCo
 
 const w = whats();
 console.log("   " + w.slice(0, 4).map((s, i) => (i+1) + ". " + s).join("\n   "));
-ok(/player 1/i.test(w[0]), "step 1 names where it goes in English: " + w[0]);
+ok(/m off (cone|player)/i.test(w[0]),
+   "a check-away says what it is near, not 'into space': " + w[0]);
 ok(/round the outside/i.test(w[2]), "the dribble round the cone says so: " + w[2]);
-ok(/cone/i.test(w[4]), "a run to a cone names the cone: " + w[4]);
+ok(/^Run to cone/i.test(w[4]),
+   "a RUN names the cone it goes to, not the player standing on it: " + w[4]);
+ok(/^Pass to player/i.test(w[3]),
+   "while a PASS names the player: " + w[3]);
 ok(/\d+ m/.test(metas()[0]), "each step shows its length in metres: " + metas()[0]);
 ok(/after 1/.test(metas()[1]), "and its timing: " + metas()[1]);
 ok(/with 4/.test(metas()[4]), "including 'with': " + metas()[4]);
@@ -101,8 +105,12 @@ ok($("stepEdit").hidden, "tapping again deselects");
 console.log("\n-- reordering remaps every reference --");
 /* Step 6 is "run 1 -> o1 after 5". Moving it later must keep it pointing at the
    SAME step, whose index has not changed; moving step 5 must follow it. */
+/* Steps 6 and 7 depend on 5 and 4 respectively, so swapping them leaves both
+   dependencies pointing backwards. Almost every other adjacent pair in this
+   drill IS dependent, which is the point — the check below proves the refusal
+   is not just "everything is refused". */
 const before = metas();
-moveRow(6, 1);                       // swap steps 7 and 8 (both depend on 4/7)
+moveRow(5, 1);
 const after = metas();
 ok(before.length === after.length, "nothing was lost in the move");
 ok(!$("stepsErr").textContent, "a legal move is allowed: " + JSON.stringify($("stepsErr").textContent));
@@ -146,8 +154,20 @@ ok(!/after|with|meets/.test(metas()[3]), "'On its own' clears it: " + metas()[3]
 
 /* ------------------------------------------- 6. capturing a drawn drill */
 console.log("\n-- capturing a hand-drawn drill --");
-load(fs.readFileSync("./tools/examples/square.txt", "utf8"), "Square");
+/* A LEGACY drill: geometry only, no stated intent — which is every drill saved
+   before v151, and every built-in. Strip the intent off the square to make one
+   deterministically rather than depending on what happens to ship in drills.js. */
+const legacy = window.parseDrillText(fs.readFileSync("./tools/examples/square.txt", "utf8"));
+legacy.strokes = legacy.strokes.map(s => ({ mode: s.mode, pts: s.pts }));
+window.PRESET_DRILLS = [{ ...legacy, name:"Square (legacy)", difficulty:"complex",
+                          info:{ trains:"", setup:"", steps:[], coaching:[] } }];
+click(seg("drills")); click(seg("drills"));
+const tab2 = [...document.querySelectorAll(".drillTab")].find(b => /complex/i.test(b.dataset.diff || ""));
+if (tab2) click(tab2);
+const pi2 = document.querySelector("#presetList .presetItem"); if (pi2) click(pi2);
+const use2 = document.querySelector("#drillInfoPanel .primary"); if (use2) click(use2);
 click($("dpStepsBtn"));
+ok(rows().length === 4, "the legacy drill lists its four lines (" + rows().length + ")");
 ok(!$("stepsCapture").hidden,
    "a drill with no stated timing offers to capture the timing it is playing");
 ok(!/after|with|meets/.test(metas().join(" ")), "and shows no timing yet");
